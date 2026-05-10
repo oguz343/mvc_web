@@ -1,0 +1,121 @@
+@model UserViewModel
+
+@{
+    Layout = "_AdminLayout";
+    ViewData["Title"] = "Kullanıcı Ekle";
+
+    var classes = ViewBag.Classes as List<string> ?? new List<string>();
+}
+
+<div class="form-card">
+    @if (!ViewData.ModelState.IsValid)
+    {
+        <div class="alert alert-danger">
+            @foreach (var error in ViewData.ModelState.Values.SelectMany(v => v.Errors))
+            {
+                <div>@error.ErrorMessage</div>
+            }
+        </div>
+    }
+
+    <form asp-controller="Users" asp-action="Create" method="post">
+        @Html.AntiForgeryToken()
+
+        <div class="form-grid">
+            <div class="form-group">
+                <label class="form-label" asp-for="Role">Rol</label>
+                <select class="form-control" asp-for="Role" id="roleSelect">
+                    <option value="Öğrenci">Öğrenci</option>
+                    <option value="Öğretmen">Öğretmen</option>
+                    <option value="Veli">Veli</option>
+                </select>
+                <span asp-validation-for="Role" class="text-danger"></span>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" asp-for="Name">Ad Soyad</label>
+                <input class="form-control" asp-for="Name" placeholder="Örn: Ahmet Yılmaz" />
+                <span asp-validation-for="Name" class="text-danger"></span>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" asp-for="Tc">T.C. Kimlik No</label>
+                <input class="form-control" asp-for="Tc" maxlength="11" placeholder="11 haneli" />
+                <span asp-validation-for="Tc" class="text-danger"></span>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" asp-for="SchoolNo">Numara</label>
+                <input class="form-control" asp-for="SchoolNo" placeholder="Okul / öğretmen / veli no" />
+                <span asp-validation-for="SchoolNo" class="text-danger"></span>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" asp-for="Phone">Telefon</label>
+                <input class="form-control" asp-for="Phone" maxlength="10" placeholder="5551234567" />
+                <span asp-validation-for="Phone" class="text-danger"></span>
+            </div>
+
+            <div class="form-group role-field student-field">
+                <label class="form-label" asp-for="ClassName">Sınıf</label>
+                <select class="form-control" asp-for="ClassName">
+                    <option value="">Sınıf seç</option>
+                    @foreach (var className in classes)
+                    {
+                        <option value="@className">@className</option>
+                    }
+                </select>
+                <span asp-validation-for="ClassName" class="text-danger"></span>
+            </div>
+
+            <div class="form-group role-field teacher-field">
+                <label class="form-label" asp-for="Branch">Branş</label>
+                <input class="form-control" asp-for="Branch" placeholder="Örn: Matematik" />
+                <span asp-validation-for="Branch" class="text-danger"></span>
+            </div>
+
+            <div class="form-group role-field parent-field">
+                <label class="form-label" asp-for="LinkedStudentNo">Bağlı Öğrenci Numarası</label>
+                <input class="form-control" asp-for="LinkedStudentNo" placeholder="Öğrenci okul no" />
+                <span asp-validation-for="LinkedStudentNo" class="text-danger"></span>
+            </div>
+        </div>
+
+        <div style="height: 22px;"></div>
+
+        <div class="page-actions">
+            <button class="btn btn-primary" type="submit">
+                ✅ Kullanıcıyı Kaydet
+            </button>
+
+            <a class="btn btn-light" asp-controller="Users" asp-action="Index">
+                ← Geri Dön
+            </a>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <script>
+        function updateRoleFields() {
+            const role = document.getElementById("roleSelect").value;
+
+            document.querySelectorAll(".role-field").forEach(x => x.style.display = "none");
+
+            if (role === "Öğrenci") {
+                document.querySelector(".student-field").style.display = "flex";
+            }
+
+            if (role === "Öğretmen") {
+                document.querySelector(".teacher-field").style.display = "flex";
+            }
+
+            if (role === "Veli") {
+                document.querySelector(".parent-field").style.display = "flex";
+            }
+        }
+
+        document.getElementById("roleSelect").addEventListener("change", updateRoleFields);
+        updateRoleFields();
+    </script>
+}

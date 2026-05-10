@@ -1,0 +1,13 @@
+﻿bin/
+obj/
+.vs/
+
+firebase-service-account.json
+
+*.user
+*.suo
+.vscode/
+.idea/
+
+.DS_Store
+Thumbs.db

@@ -1,0 +1,83 @@
+@model List<AnnouncementViewModel>
+
+@{
+    Layout = "_AdminLayout";
+    ViewData["Title"] = "Duyurular";
+}
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success">@TempData["Success"]</div>
+}
+
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger">@TempData["Error"]</div>
+}
+
+<div class="page-actions">
+    <a class="btn btn-primary" asp-controller="Announcements" asp-action="Create">
+        📢 Yeni Duyuru
+    </a>
+</div>
+
+@if (Model.Count == 0)
+{
+    <div class="empty-state">
+        <div class="empty-icon">📢</div>
+        <div class="empty-title">Henüz duyuru yok</div>
+        <div class="empty-text">Yeni duyuru yayınlayarak başlayabilirsiniz.</div>
+    </div>
+}
+else
+{
+    <div class="card-grid">
+        @foreach (var item in Model)
+        {
+            var badgeClass = item.Target == "Veliler"
+                ? "badge-orange"
+                : item.Target == "Öğretmenler"
+                    ? "badge-cyan"
+                    : item.Target == "Öğrenciler"
+                        ? "badge-purple"
+                        : "badge-green";
+
+            <div class="data-card">
+                <div class="data-card-header">
+                    <div class="data-card-icon">📢</div>
+                    <div>
+                        <div class="data-card-title">@item.Title</div>
+                        <div class="data-card-subtitle">@item.Author tarafından yayınlandı</div>
+                    </div>
+                </div>
+
+                <div class="badge-row">
+                    <span class="badge @badgeClass">@item.Target</span>
+                </div>
+
+                <div class="info-line">
+                    <span>👤</span>
+                    <span>Yayınlayan: <strong>@item.Author</strong></span>
+                </div>
+
+                <div class="announcement-preview">
+                    @item.Content
+                </div>
+
+                <div class="card-actions">
+                    <a class="btn btn-light" asp-controller="Announcements" asp-action="Edit" asp-route-id="@item.Id">
+                        ✏️ Düzenle
+                    </a>
+
+                    <form asp-controller="Announcements" asp-action="Delete" method="post" onsubmit="return confirmDelete('Duyuru silinsin mi?');">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="id" value="@item.Id" />
+                        <button class="btn btn-danger" type="submit">
+                            🗑️ Sil
+                        </button>
+                    </form>
+                </div>
+            </div>
+        }
+    </div>
+}

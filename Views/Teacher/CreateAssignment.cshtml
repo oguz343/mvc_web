@@ -1,0 +1,94 @@
+@model AssignmentViewModel
+
+@{
+    Layout = "_TeacherLayout";
+    ViewData["Title"] = "Ödev Oluştur";
+
+    var lessons = ViewBag.TeacherLessons as List<TeacherLessonOptionViewModel> ?? new List<TeacherLessonOptionViewModel>();
+}
+
+<div class="form-card">
+    @if (!ViewData.ModelState.IsValid)
+    {
+        <div class="alert alert-danger">
+            @foreach (var error in ViewData.ModelState.Values.SelectMany(v => v.Errors))
+            {
+                <div>@error.ErrorMessage</div>
+            }
+        </div>
+    }
+
+    @if (lessons.Count == 0)
+    {
+        <div class="alert alert-warning">
+            Size atanmış ders bulunmuyor. Admin panelinden önce öğretmene ders atanmalıdır.
+        </div>
+    }
+
+    <form asp-controller="Teacher" asp-action="CreateAssignment" method="post">
+        @Html.AntiForgeryToken()
+
+        <div class="form-grid">
+            <div class="form-group full">
+                <label class="form-label" asp-for="Title">Ödev Başlığı</label>
+                <input class="form-control" asp-for="Title" placeholder="Örn: Fonksiyonlar çalışma kağıdı" />
+                <span asp-validation-for="Title" class="text-danger"></span>
+            </div>
+
+            <div class="form-group full">
+                <label class="form-label" asp-for="LessonId">Ders</label>
+                <select class="form-control" asp-for="LessonId">
+                    <option value="">Ders seç</option>
+                    @foreach (var lesson in lessons)
+                    {
+                        <option value="@lesson.Id">@lesson.Name • @lesson.ClassName</option>
+                    }
+                </select>
+                <span asp-validation-for="LessonId" class="text-danger"></span>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" asp-for="DueDate">Son Teslim Tarihi</label>
+                <input class="form-control" asp-for="DueDate" type="date" />
+                <span asp-validation-for="DueDate" class="text-danger"></span>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" asp-for="Type">Ödev Türü</label>
+                <select class="form-control" asp-for="Type">
+                    <option value="Metin">Metin</option>
+                    <option value="Dosya">Dosya</option>
+                    <option value="Link">Link</option>
+                    <option value="PDF">PDF</option>
+                    <option value="PPTX">PPTX</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" asp-for="Status">Durum</label>
+                <select class="form-control" asp-for="Status">
+                    <option value="Aktif">Aktif</option>
+                    <option value="Teslim Bekliyor">Teslim Bekliyor</option>
+                    <option value="Pasif">Pasif</option>
+                </select>
+            </div>
+
+            <div class="form-group full">
+                <label class="form-label" asp-for="Description">Ödev Açıklaması</label>
+                <textarea class="form-control" asp-for="Description" placeholder="Öğrencinin yapması gerekenleri yaz"></textarea>
+            </div>
+        </div>
+
+        <div style="height: 22px;"></div>
+
+        <div class="page-actions">
+            <button class="btn btn-teacher" type="submit" @(lessons.Count == 0 ? "disabled" : "")>
+                ✅ Ödevi Oluştur
+            </button>
+
+            <a class="btn btn-light" asp-controller="Teacher" asp-action="Assignments">
+                ← Geri Dön
+            </a>
+        </div>
+    </form>
+</div>

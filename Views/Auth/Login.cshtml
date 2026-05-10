@@ -1,0 +1,146 @@
+@model LoginViewModel
+
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = "Web Panel Girişi";
+}
+
+<div class="auth-page">
+    <div class="auth-shell">
+        <section class="auth-hero">
+            <div class="auth-brand">
+                <div class="auth-brand-icon">🎓</div>
+                <div class="auth-brand-title">Ödev Sistemi</div>
+            </div>
+
+            <div class="auth-hero-title">
+                Web yönetim<br />
+                paneline<br />
+                hoş geldiniz.
+            </div>
+
+            <div class="auth-hero-text">
+                MVC web paneli admin ve öğretmen kullanımı içindir.
+                Öğrenci ve veli işlemleri Flutter uygulamasından devam eder.
+            </div>
+
+            <div class="auth-pills">
+                <div class="auth-pill">🛡️ Admin yönetimi</div>
+                <div class="auth-pill">👨‍🏫 Öğretmen paneli</div>
+                <div class="auth-pill">📝 Ödev oluşturma</div>
+                <div class="auth-pill">⭐ Not & geri dönüş</div>
+            </div>
+        </section>
+
+        <section class="auth-card">
+            <div class="auth-card-icon">🔐</div>
+
+            <div class="auth-card-title">Web Panel Girişi</div>
+            <div class="auth-card-subtitle">
+                Admin veya öğretmen hesabınızla giriş yapın.
+            </div>
+
+            @if (TempData["Info"] != null)
+            {
+                <div class="alert alert-warning">
+                    @TempData["Info"]
+                </div>
+            }
+
+            @if (!ViewData.ModelState.IsValid)
+            {
+                <div class="alert alert-danger">
+                    @foreach (var error in ViewData.ModelState.Values.SelectMany(v => v.Errors))
+                    {
+                        <div>@error.ErrorMessage</div>
+                    }
+                </div>
+            }
+
+            <form asp-controller="Auth" asp-action="Login" method="post">
+                @Html.AntiForgeryToken()
+
+                <label class="form-label">Rol Seçimi</label>
+
+                <div class="role-grid web-role-grid">
+                    <label class="role-option @(Model.Role == "Admin" ? "active" : "")">
+                        <input type="radio" asp-for="Role" value="Admin" hidden />
+                        🛡️ Admin
+                    </label>
+
+                    <label class="role-option @(Model.Role == "Öğretmen" ? "active" : "")">
+                        <input type="radio" asp-for="Role" value="Öğretmen" hidden />
+                        👨‍🏫 Öğretmen
+                    </label>
+
+                    <label class="role-option disabled-role">
+                        <input type="radio" asp-for="Role" value="Öğrenci" hidden />
+                        🎒 Öğrenci
+                        <small>Flutter</small>
+                    </label>
+
+                    <label class="role-option disabled-role">
+                        <input type="radio" asp-for="Role" value="Veli" hidden />
+                        👪 Veli
+                        <small>Flutter</small>
+                    </label>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" asp-for="Number">Numara</label>
+                    <input class="form-control"
+                           asp-for="Number"
+                           placeholder="Admin için 0000, öğretmen için öğretmen no"
+                           autocomplete="off" />
+                    <span asp-validation-for="Number" class="text-danger"></span>
+                </div>
+
+                <div style="height: 14px;"></div>
+
+                <div class="form-group">
+                    <label class="form-label" asp-for="Password">
+                        Şifre / Aktivasyon Kodu
+                    </label>
+                    <input class="form-control"
+                           asp-for="Password"
+                           type="password"
+                           placeholder="Şifreni veya aktivasyon kodunu gir" />
+                    <span asp-validation-for="Password" class="text-danger"></span>
+                </div>
+
+                <div class="auth-help">
+                    Admin test: 0000 / admin123
+                </div>
+
+                <div class="auth-help muted-auth-help">
+                    Öğrenci ve veli girişi Flutter uygulamasından yapılır.
+                </div>
+
+                <div style="height: 24px;"></div>
+
+                <button type="submit" class="btn btn-primary" style="width:100%; height:58px;">
+                    🚀 Web Panele Giriş Yap
+                </button>
+            </form>
+        </section>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        document.querySelectorAll(".role-option").forEach(option => {
+            option.addEventListener("click", () => {
+                if (option.classList.contains("disabled-role")) {
+                    document.querySelectorAll(".role-option").forEach(x => x.classList.remove("active"));
+                    option.classList.add("active");
+                    option.querySelector("input").checked = true;
+                    return;
+                }
+
+                document.querySelectorAll(".role-option").forEach(x => x.classList.remove("active"));
+                option.classList.add("active");
+                option.querySelector("input").checked = true;
+            });
+        });
+    </script>
+}

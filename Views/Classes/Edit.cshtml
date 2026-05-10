@@ -1,0 +1,99 @@
+@model ClassViewModel
+
+@{
+    Layout = "_AdminLayout";
+    ViewData["Title"] = "Sınıf Düzenle";
+
+    var teachers = ViewBag.Teachers as List<TeacherOptionViewModel> ?? new List<TeacherOptionViewModel>();
+}
+
+<div class="form-card">
+    @if (!ViewData.ModelState.IsValid)
+    {
+        <div class="alert alert-danger">
+            @foreach (var error in ViewData.ModelState.Values.SelectMany(v => v.Errors))
+            {
+                <div>@error.ErrorMessage</div>
+            }
+        </div>
+    }
+
+    @if (teachers.Count == 0)
+    {
+        <div class="alert alert-warning">
+            Sınıf düzenlemek için önce <strong>Kullanıcılar</strong> ekranından en az bir öğretmen eklemelisiniz.
+        </div>
+    }
+
+    <form asp-controller="Classes" asp-action="Edit" method="post">
+        @Html.AntiForgeryToken()
+
+        <input type="hidden" asp-for="Id" />
+
+        <div class="form-grid">
+            <div class="form-group">
+                <label class="form-label" asp-for="Grade">Sınıf Seviyesi</label>
+                <select class="form-control" asp-for="Grade">
+                    <option value="9">9</option>
+                    <option value="10">10</option>
+                    <option value="11">11</option>
+                    <option value="12">12</option>
+                </select>
+                <span asp-validation-for="Grade" class="text-danger"></span>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" asp-for="Branch">Şube</label>
+                <select class="form-control" asp-for="Branch">
+                    <option value="A">A</option>
+                    <option value="B">B</option>
+                    <option value="C">C</option>
+                    <option value="D">D</option>
+                    <option value="E">E</option>
+                    <option value="F">F</option>
+                </select>
+                <span asp-validation-for="Branch" class="text-danger"></span>
+            </div>
+
+            <div class="form-group full">
+                <label class="form-label" asp-for="TeacherId">Sınıf Öğretmeni</label>
+                <select class="form-control" asp-for="TeacherId">
+                    <option value="">Öğretmen seç</option>
+                    @foreach (var teacher in teachers)
+                    {
+                        <option value="@teacher.Id">@teacher.Name • @teacher.Branch</option>
+                    }
+                </select>
+                <span asp-validation-for="TeacherId" class="text-danger"></span>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" asp-for="Capacity">Kapasite</label>
+                <input class="form-control" asp-for="Capacity" type="number" min="1" max="999" />
+                <span asp-validation-for="Capacity" class="text-danger"></span>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" asp-for="StudentCount">Öğrenci Sayısı</label>
+                <input class="form-control" asp-for="StudentCount" type="number" min="0" max="999" />
+                <span asp-validation-for="StudentCount" class="text-danger"></span>
+            </div>
+        </div>
+
+        <div style="height: 22px;"></div>
+
+        <div class="alert alert-warning">
+            Güncel sınıf adı otomatik oluşur: <strong>@Model.Grade-@Model.Branch</strong>
+        </div>
+
+        <div class="page-actions">
+            <button class="btn btn-primary" type="submit" @(teachers.Count == 0 ? "disabled" : "")>
+                💾 Değişiklikleri Kaydet
+            </button>
+
+            <a class="btn btn-light" asp-controller="Classes" asp-action="Index">
+                ← Geri Dön
+            </a>
+        </div>
+    </form>
+</div>

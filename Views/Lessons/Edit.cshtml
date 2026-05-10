@@ -1,0 +1,144 @@
+@model LessonViewModel
+
+@{
+    Layout = "_AdminLayout";
+    ViewData["Title"] = "Ders Düzenle";
+
+    var classes = ViewBag.Classes as List<string> ?? new List<string>();
+    var teachers = ViewBag.Teachers as List<TeacherOptionViewModel> ?? new List<TeacherOptionViewModel>();
+
+    var defaultLessons = new List<string>
+    {
+        "Matematik",
+        "Fizik",
+        "Kimya",
+        "Biyoloji",
+        "Edebiyat",
+        "Tarih",
+        "Coğrafya",
+        "İngilizce",
+        "Din Kültürü",
+        "Beden Eğitimi"
+    };
+
+    var isCustomLesson = !defaultLessons.Contains(Model.Name);
+}
+
+<div class="form-card">
+    @if (!ViewData.ModelState.IsValid)
+    {
+        <div class="alert alert-danger">
+            @foreach (var error in ViewData.ModelState.Values.SelectMany(v => v.Errors))
+            {
+                <div>@error.ErrorMessage</div>
+            }
+        </div>
+    }
+
+    @if (classes.Count == 0)
+    {
+        <div class="alert alert-warning">
+            Ders düzenlemek için önce <strong>Sınıflar</strong> ekranından sınıf oluşturmalısınız.
+        </div>
+    }
+
+    @if (teachers.Count == 0)
+    {
+        <div class="alert alert-warning">
+            Ders düzenlemek için önce <strong>Kullanıcılar</strong> ekranından öğretmen oluşturmalısınız.
+        </div>
+    }
+
+    <form asp-controller="Lessons" asp-action="Edit" method="post">
+        @Html.AntiForgeryToken()
+
+        <input type="hidden" asp-for="Id" />
+
+        <div class="form-grid">
+            <div class="form-group">
+                <label class="form-label">Ders Adı</label>
+                <select class="form-control" id="lessonSelect" name="@(isCustomLesson ? "" : "Name")">
+                    @foreach (var lessonName in defaultLessons)
+                    {
+                        <option value="@lessonName" selected="@(Model.Name == lessonName)">
+                            @lessonName
+                        </option>
+                    }
+                    <option value="Diğer" selected="@isCustomLesson">Diğer</option>
+                </select>
+                <span asp-validation-for="Name" class="text-danger"></span>
+            </div>
+
+            <div class="form-group" id="customLessonGroup" style="display:none;">
+                <label class="form-label">Özel Ders Adı</label>
+                <input class="form-control"
+                       id="customLessonInput"
+                       value="@(isCustomLesson ? Model.Name : "")"
+                       placeholder="Ders adını yaz" />
+            </div>
+
+            <div class="form-group full">
+                <label class="form-label" asp-for="ClassName">Sınıf</label>
+                <select class="form-control" asp-for="ClassName">
+                    <option value="">Sınıf seç</option>
+                    @foreach (var className in classes)
+                    {
+                        <option value="@className">@className</option>
+                    }
+                </select>
+                <span asp-validation-for="ClassName" class="text-danger"></span>
+            </div>
+
+            <div class="form-group full">
+                <label class="form-label" asp-for="TeacherId">Öğretmen</label>
+                <select class="form-control" asp-for="TeacherId">
+                    <option value="">Öğretmen seç</option>
+                    @foreach (var teacher in teachers)
+                    {
+                        <option value="@teacher.Id">@teacher.Name • @teacher.Branch</option>
+                    }
+                </select>
+                <span asp-validation-for="TeacherId" class="text-danger"></span>
+            </div>
+        </div>
+
+        <div style="height: 22px;"></div>
+
+        <div class="alert alert-warning">
+            Güncel öğretmen: <strong>@Model.TeacherName</strong> • Branş: <strong>@Model.TeacherBranch</strong>
+        </div>
+
+        <div class="page-actions">
+            <button class="btn btn-primary" type="submit" @(classes.Count == 0 || teachers.Count == 0 ? "disabled" : "")>
+                💾 Değişiklikleri Kaydet
+            </button>
+
+            <a class="btn btn-light" asp-controller="Lessons" asp-action="Index">
+                ← Geri Dön
+            </a>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <script>
+        const lessonSelect = document.getElementById("lessonSelect");
+        const customGroup = document.getElementById("customLessonGroup");
+        const customInput = document.getElementById("customLessonInput");
+
+        function updateLessonInput() {
+            if (lessonSelect.value === "Diğer") {
+                customGroup.style.display = "flex";
+                customInput.setAttribute("name", "Name");
+                lessonSelect.removeAttribute("name");
+            } else {
+                customGroup.style.display = "none";
+                customInput.removeAttribute("name");
+                lessonSelect.setAttribute("name", "Name");
+            }
+        }
+
+        lessonSelect.addEventListener("change", updateLessonInput);
+        updateLessonInput();
+    </script>
+}

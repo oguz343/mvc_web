@@ -1,0 +1,166 @@
+@model List<SubmissionViewModel>
+
+@{
+    Layout = "_AdminLayout";
+    ViewData["Title"] = "Teslimler";
+}
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success">@TempData["Success"]</div>
+}
+
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger">@TempData["Error"]</div>
+}
+
+@if (Model.Count == 0)
+{
+    <div class="empty-state">
+        <div class="empty-icon">📤</div>
+        <div class="empty-title">Henüz teslim yok</div>
+        <div class="empty-text">Öğrenciler ödev teslim ettiğinde burada görünecek.</div>
+    </div>
+}
+else
+{
+    <div class="submissions-summary">
+        <div class="summary-card">
+            <div class="summary-icon">📤</div>
+            <div>
+                <div class="summary-value">@Model.Count</div>
+                <div class="summary-label">Toplam Teslim</div>
+            </div>
+        </div>
+
+        <div class="summary-card">
+            <div class="summary-icon">✅</div>
+            <div>
+                <div class="summary-value">@Model.Count(x => x.Status == "Değerlendirildi")</div>
+                <div class="summary-label">Değerlendirildi</div>
+            </div>
+        </div>
+
+        <div class="summary-card">
+            <div class="summary-icon">⏳</div>
+            <div>
+                <div class="summary-value">@Model.Count(x => x.Status != "Değerlendirildi")</div>
+                <div class="summary-label">Bekleyen</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="table-card">
+        <div class="section-header">
+            <div>
+                <div class="section-title">Teslim Listesi</div>
+                <div class="section-subtitle">
+                    Notlandırma ve geri dönüş öğretmen panelinden yapılır.
+                </div>
+            </div>
+        </div>
+
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Ödev</th>
+                    <th>Ders / Sınıf</th>
+                    <th>Öğrenci No</th>
+                    <th>Öğretmen</th>
+                    <th>Cevap</th>
+                    <th>Link</th>
+                    <th>Durum</th>
+                    <th>Not</th>
+                    <th>Geri Dönüş</th>
+                    <th>İşlem</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in Model)
+                {
+                    var statusBadge = item.Status == "Değerlendirildi"
+                        ? "badge-green"
+                        : item.Status == "Güncellendi"
+                            ? "badge-cyan"
+                            : "badge-orange";
+
+                    <tr>
+                        <td>
+                            <strong>@item.AssignmentTitle</strong>
+                        </td>
+
+                        <td>
+                            <div><strong>@item.Lesson</strong></div>
+                            <div class="muted-text">@item.ClassName</div>
+                        </td>
+
+                        <td>
+                            @item.StudentNo
+                        </td>
+
+                        <td>
+                            @item.TeacherName
+                        </td>
+
+                        <td>
+                            @if (string.IsNullOrWhiteSpace(item.Answer))
+                            {
+                                <span class="muted-text">-</span>
+                            }
+                            else
+                            {
+                                <div class="submission-text">@item.Answer</div>
+                            }
+                        </td>
+
+                        <td>
+                            @if (string.IsNullOrWhiteSpace(item.Link))
+                            {
+                                <span class="muted-text">-</span>
+                            }
+                            else
+                            {
+                                <a href="@item.Link" target="_blank" class="table-link">
+                                    Linki Aç
+                                </a>
+                            }
+                        </td>
+
+                        <td>
+                            <span class="badge @statusBadge">@item.Status</span>
+                        </td>
+
+                        <td>
+                            @(string.IsNullOrWhiteSpace(item.Grade) ? "-" : item.Grade)
+                        </td>
+
+                        <td>
+                            @if (string.IsNullOrWhiteSpace(item.Feedback))
+                            {
+                                <span class="muted-text">-</span>
+                            }
+                            else
+                            {
+                                <div class="submission-text">@item.Feedback</div>
+                            }
+                        </td>
+
+                        <td>
+                            <form asp-controller="Submissions"
+                                  asp-action="Delete"
+                                  method="post"
+                                  onsubmit="return confirmDelete('Teslim silinsin mi?');">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="id" value="@item.Id" />
+                                <button class="btn btn-danger" type="submit">
+                                    🗑️ Sil
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}

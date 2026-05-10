@@ -1,0 +1,67 @@
+@model AnnouncementViewModel
+
+@{
+    Layout = "_AdminLayout";
+    ViewData["Title"] = "Duyuru Düzenle";
+}
+
+<div class="form-card">
+    @if (!ViewData.ModelState.IsValid)
+    {
+        <div class="alert alert-danger">
+            @foreach (var error in ViewData.ModelState.Values.SelectMany(v => v.Errors))
+            {
+                <div>@error.ErrorMessage</div>
+            }
+        </div>
+    }
+
+    <form asp-controller="Announcements" asp-action="Edit" method="post">
+        @Html.AntiForgeryToken()
+
+        <input type="hidden" asp-for="Id" />
+
+        <div class="form-grid">
+            <div class="form-group full">
+                <label class="form-label" asp-for="Title">Başlık</label>
+                <input class="form-control" asp-for="Title" />
+                <span asp-validation-for="Title" class="text-danger"></span>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" asp-for="Author">Yayınlayan</label>
+                <input class="form-control" asp-for="Author" />
+                <span asp-validation-for="Author" class="text-danger"></span>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" asp-for="Target">Hedef Kitle</label>
+                <select class="form-control" asp-for="Target">
+                    <option value="Tüm Okul">Tüm Okul</option>
+                    <option value="Öğrenciler">Öğrenciler</option>
+                    <option value="Öğretmenler">Öğretmenler</option>
+                    <option value="Veliler">Veliler</option>
+                </select>
+                <span asp-validation-for="Target" class="text-danger"></span>
+            </div>
+
+            <div class="form-group full">
+                <label class="form-label" asp-for="Content">Duyuru İçeriği</label>
+                <textarea class="form-control" asp-for="Content"></textarea>
+                <span asp-validation-for="Content" class="text-danger"></span>
+            </div>
+        </div>
+
+        <div style="height: 22px;"></div>
+
+        <div class="page-actions">
+            <button class="btn btn-primary" type="submit">
+                💾 Değişiklikleri Kaydet
+            </button>
+
+            <a class="btn btn-light" asp-controller="Announcements" asp-action="Index">
+                ← Geri Dön
+            </a>
+        </div>
+    </form>
+</div>

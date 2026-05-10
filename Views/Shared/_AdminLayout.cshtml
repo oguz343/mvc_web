@@ -1,0 +1,95 @@
+@{
+    var currentController = ViewContext.RouteData.Values["controller"]?.ToString() ?? "";
+    var name = Context.Session.GetString("Name") ?? "Admin";
+}
+
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - Admin Paneli</title>
+
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/dashboard.css" asp-append-version="true" />
+</head>
+<body>
+    <div class="app-shell">
+        <aside class="sidebar">
+            <div class="brand">
+                <div class="brand-icon">🎓</div>
+                <div>
+                    <div class="brand-title">Ödev Sistemi</div>
+                    <div class="brand-subtitle">Admin Panel</div>
+                </div>
+            </div>
+
+            <nav class="nav-menu">
+                <a class="nav-link @(currentController == "Dashboard" ? "active" : "")" asp-controller="Dashboard" asp-action="Index">
+                    <span>📊</span>
+                    Dashboard
+                </a>
+
+                <a class="nav-link @(currentController == "Users" ? "active" : "")" asp-controller="Users" asp-action="Index">
+                    <span>👥</span>
+                    Kullanıcılar
+                </a>
+
+                <a class="nav-link @(currentController == "Classes" ? "active" : "")" asp-controller="Classes" asp-action="Index">
+                    <span>🏫</span>
+                    Sınıflar
+                </a>
+
+                <a class="nav-link @(currentController == "Lessons" ? "active" : "")" asp-controller="Lessons" asp-action="Index">
+                    <span>📚</span>
+                    Dersler
+                </a>
+
+                <a class="nav-link @(currentController == "Submissions" ? "active" : "")" asp-controller="Submissions" asp-action="Index">
+                    <span>📤</span>
+                    Teslimler
+                </a>
+
+                <a class="nav-link @(currentController == "Announcements" ? "active" : "")" asp-controller="Announcements" asp-action="Index">
+                    <span>📢</span>
+                    Duyurular
+                </a>
+
+                <a class="nav-link @(currentController == "PasswordRequests" ? "active" : "")" asp-controller="PasswordRequests" asp-action="Index">
+                    <span>🔐</span>
+                    Şifre Talepleri
+                </a>
+            </nav>
+
+            <a class="logout-link" asp-controller="Auth" asp-action="Logout">
+                <span>🚪</span>
+                Çıkış Yap
+            </a>
+        </aside>
+
+        <main class="main-content">
+            <header class="topbar">
+                <div>
+                    <div class="topbar-title">@ViewData["PageTitle"]</div>
+                    <div class="topbar-subtitle">@ViewData["PageSubtitle"]</div>
+                </div>
+
+                <div class="user-chip">
+                    <div class="user-avatar">A</div>
+                    <div>
+                        <div class="user-name">@name</div>
+                        <div class="user-role">Admin</div>
+                    </div>
+                </div>
+            </header>
+
+            <section class="content-area">
+                @RenderBody()
+            </section>
+        </main>
+    </div>
+
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

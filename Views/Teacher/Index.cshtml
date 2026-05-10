@@ -1,0 +1,134 @@
+@model TeacherDashboardViewModel
+
+@{
+    Layout = "_TeacherLayout";
+    ViewData["Title"] = "Öğretmen Paneli";
+}
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon cyan">📚</div>
+        <div>
+            <div class="stat-value">@Model.LessonCount</div>
+            <div class="stat-label">Dersim</div>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon purple">📝</div>
+        <div>
+            <div class="stat-value">@Model.AssignmentCount</div>
+            <div class="stat-label">Ödevim</div>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon orange">📤</div>
+        <div>
+            <div class="stat-value">@Model.SubmissionCount</div>
+            <div class="stat-label">Teslim</div>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon green">✅</div>
+        <div>
+            <div class="stat-value">@Model.GradedSubmissionCount</div>
+            <div class="stat-label">Değerlendirildi</div>
+        </div>
+    </div>
+</div>
+
+<div class="teacher-hero-card">
+    <div>
+        <div class="teacher-hero-title">Hoş geldiniz, @Model.TeacherName</div>
+        <div class="teacher-hero-text">
+            Branş: <strong>@(string.IsNullOrWhiteSpace(Model.Branch) ? "Branş yok" : Model.Branch)</strong>
+            • No: <strong>@Model.TeacherNumber</strong>
+        </div>
+    </div>
+
+    <a class="btn btn-teacher" asp-controller="Teacher" asp-action="CreateAssignment">
+        📝 Yeni Ödev Oluştur
+    </a>
+</div>
+
+<div class="dashboard-panels">
+    <div class="table-card">
+        <div class="section-header">
+            <div>
+                <div class="section-title">Derslerim</div>
+                <div class="section-subtitle">Admin tarafından size atanmış dersler</div>
+            </div>
+        </div>
+
+        @if (Model.Lessons.Count == 0)
+        {
+            <div class="empty-mini">Henüz size atanmış ders yok.</div>
+        }
+        else
+        {
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Ders</th>
+                        <th>Sınıf</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var lesson in Model.Lessons)
+                    {
+                        <tr>
+                            <td><strong>@lesson.Name</strong></td>
+                            <td>@lesson.ClassName</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+
+    <div class="table-card">
+        <div class="section-header">
+            <div>
+                <div class="section-title">Son Teslimler</div>
+                <div class="section-subtitle">Öğrencilerden gelen son teslimler</div>
+            </div>
+
+            <a class="btn btn-light" asp-controller="Teacher" asp-action="Submissions">
+                Tümünü Gör
+            </a>
+        </div>
+
+        @if (Model.LatestSubmissions.Count == 0)
+        {
+            <div class="empty-mini">Henüz teslim yok.</div>
+        }
+        else
+        {
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Ödev</th>
+                        <th>Öğrenci</th>
+                        <th>Durum</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var submission in Model.LatestSubmissions)
+                    {
+                        <tr>
+                            <td><strong>@submission.AssignmentTitle</strong></td>
+                            <td>@submission.StudentNo</td>
+                            <td>
+                                <span class="badge @(submission.Status == "Değerlendirildi" ? "badge-green" : "badge-orange")">
+                                    @submission.Status
+                                </span>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>

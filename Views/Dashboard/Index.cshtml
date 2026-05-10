@@ -1,0 +1,212 @@
+@model DashboardViewModel
+
+@{
+    Layout = "_AdminLayout";
+    ViewData["Title"] = "Dashboard";
+}
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon purple">🎒</div>
+        <div>
+            <div class="stat-value">@Model.StudentCount</div>
+            <div class="stat-label">Öğrenci</div>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon cyan">👨‍🏫</div>
+        <div>
+            <div class="stat-value">@Model.TeacherCount</div>
+            <div class="stat-label">Öğretmen</div>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon orange">👪</div>
+        <div>
+            <div class="stat-value">@Model.ParentCount</div>
+            <div class="stat-label">Veli</div>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon green">📤</div>
+        <div>
+            <div class="stat-value">@Model.SubmissionCount</div>
+            <div class="stat-label">Teslim</div>
+        </div>
+    </div>
+</div>
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon purple">🏫</div>
+        <div>
+            <div class="stat-value">@Model.ClassCount</div>
+            <div class="stat-label">Sınıf</div>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon cyan">📚</div>
+        <div>
+            <div class="stat-value">@Model.LessonCount</div>
+            <div class="stat-label">Ders</div>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon orange">📢</div>
+        <div>
+            <div class="stat-value">@Model.AnnouncementCount</div>
+            <div class="stat-label">Duyuru</div>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon green">🔐</div>
+        <div>
+            <div class="stat-value">@Model.PasswordRequestCount</div>
+            <div class="stat-label">Şifre Talebi</div>
+        </div>
+    </div>
+</div>
+
+<div class="dashboard-panels">
+    <div class="table-card">
+        <div class="section-header">
+            <div>
+                <div class="section-title">Son Eklenen Kullanıcılar</div>
+                <div class="section-subtitle">Firestore users koleksiyonundan son kayıtlar</div>
+            </div>
+
+            <a class="btn btn-light" asp-controller="Users" asp-action="Index">
+                Tümünü Gör
+            </a>
+        </div>
+
+        @if (Model.LatestUsers.Count == 0)
+        {
+            <div class="empty-mini">
+                Henüz kullanıcı yok.
+            </div>
+        }
+        else
+        {
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Ad Soyad</th>
+                        <th>Rol</th>
+                        <th>Numara</th>
+                        <th>Detay</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var user in Model.LatestUsers)
+                    {
+                        <tr>
+                            <td>
+                                <strong>@user.Name</strong>
+                            </td>
+                            <td>
+                                <span class="badge @(user.Role == "Öğretmen" ? "badge-cyan" : user.Role == "Veli" ? "badge-orange" : "badge-purple")">
+                                    @user.Role
+                                </span>
+                            </td>
+                            <td>@user.Number</td>
+                            <td>@user.Detail</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+
+    <div class="table-card">
+        <div class="section-header">
+            <div>
+                <div class="section-title">Son Teslimler</div>
+                <div class="section-subtitle">Öğrencilerden gelen son ödev teslimleri</div>
+            </div>
+
+            <a class="btn btn-light" asp-controller="Submissions" asp-action="Index">
+                Tümünü Gör
+            </a>
+        </div>
+
+        @if (Model.LatestSubmissions.Count == 0)
+        {
+            <div class="empty-mini">
+                Henüz teslim yok.
+            </div>
+        }
+        else
+        {
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Ödev</th>
+                        <th>Ders</th>
+                        <th>Öğrenci No</th>
+                        <th>Durum</th>
+                        <th>Not</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var submission in Model.LatestSubmissions)
+                    {
+                        <tr>
+                            <td>
+                                <strong>@submission.AssignmentTitle</strong>
+                            </td>
+                            <td>@submission.Lesson</td>
+                            <td>@submission.StudentNo</td>
+                            <td>
+                                <span class="badge @(submission.Status == "Değerlendirildi" ? "badge-green" : "badge-orange")">
+                                    @submission.Status
+                                </span>
+                            </td>
+                            <td>@submission.Grade</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>
+
+<div class="quick-actions">
+    <a class="quick-action-card" asp-controller="Users" asp-action="Create">
+        <div class="quick-icon">👤</div>
+        <div>
+            <div class="quick-title">Yeni Kullanıcı</div>
+            <div class="quick-text">Öğrenci, öğretmen veya veli ekle</div>
+        </div>
+    </a>
+
+    <a class="quick-action-card" asp-controller="Classes" asp-action="Create">
+        <div class="quick-icon">🏫</div>
+        <div>
+            <div class="quick-title">Yeni Sınıf</div>
+            <div class="quick-text">Sınıf ve şube oluştur</div>
+        </div>
+    </a>
+
+    <a class="quick-action-card" asp-controller="Lessons" asp-action="Create">
+        <div class="quick-icon">📚</div>
+        <div>
+            <div class="quick-title">Yeni Ders</div>
+            <div class="quick-text">Dersi öğretmenle eşleştir</div>
+        </div>
+    </a>
+
+    <a class="quick-action-card" asp-controller="Announcements" asp-action="Create">
+        <div class="quick-icon">📢</div>
+        <div>
+            <div class="quick-title">Yeni Duyuru</div>
+            <div class="quick-text">Okul geneline duyuru yayınla</div>
+        </div>
+    </a>
+</div>

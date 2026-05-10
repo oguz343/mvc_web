@@ -1,0 +1,91 @@
+@model GradeSubmissionViewModel
+
+@{
+    Layout = "_TeacherLayout";
+    ViewData["Title"] = "Teslim Değerlendir";
+}
+
+<div class="grade-layout">
+    <div class="table-card">
+        <div class="section-header">
+            <div>
+                <div class="section-title">@Model.AssignmentTitle</div>
+                <div class="section-subtitle">Öğrenci No: @Model.StudentNo</div>
+            </div>
+        </div>
+
+        <div class="submission-detail-box">
+            <div class="submission-detail-title">Öğrenci Cevabı</div>
+
+            @if (string.IsNullOrWhiteSpace(Model.Answer))
+            {
+                <div class="muted-text">Metin cevabı yok.</div>
+            }
+            else
+            {
+                <div class="submission-detail-text">@Model.Answer</div>
+            }
+        </div>
+
+        <div class="submission-detail-box">
+            <div class="submission-detail-title">Dosya / Link</div>
+
+            @if (string.IsNullOrWhiteSpace(Model.Link))
+            {
+                <div class="muted-text">Link yok.</div>
+            }
+            else
+            {
+                <a class="table-link" href="@Model.Link" target="_blank">@Model.Link</a>
+            }
+        </div>
+    </div>
+
+    <div class="form-card">
+        @if (!ViewData.ModelState.IsValid)
+        {
+            <div class="alert alert-danger">
+                @foreach (var error in ViewData.ModelState.Values.SelectMany(v => v.Errors))
+                {
+                    <div>@error.ErrorMessage</div>
+                }
+            </div>
+        }
+
+        <form asp-controller="Teacher" asp-action="GradeSubmission" method="post">
+            @Html.AntiForgeryToken()
+
+            <input type="hidden" asp-for="Id" />
+            <input type="hidden" asp-for="AssignmentTitle" />
+            <input type="hidden" asp-for="StudentNo" />
+            <input type="hidden" asp-for="Answer" />
+            <input type="hidden" asp-for="Link" />
+
+            <div class="form-grid">
+                <div class="form-group full">
+                    <label class="form-label" asp-for="Grade">Not / Puan</label>
+                    <input class="form-control" asp-for="Grade" placeholder="Örn: 85" />
+                    <span asp-validation-for="Grade" class="text-danger"></span>
+                </div>
+
+                <div class="form-group full">
+                    <label class="form-label" asp-for="Feedback">Geri Dönüş Açıklaması</label>
+                    <textarea class="form-control" asp-for="Feedback" placeholder="Öğrenciye geri bildirim yaz"></textarea>
+                    <span asp-validation-for="Feedback" class="text-danger"></span>
+                </div>
+            </div>
+
+            <div style="height: 22px;"></div>
+
+            <div class="page-actions">
+                <button class="btn btn-teacher" type="submit">
+                    💾 Notu Kaydet
+                </button>
+
+                <a class="btn btn-light" asp-controller="Teacher" asp-action="Submissions">
+                    ← Geri Dön
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
