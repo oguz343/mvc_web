@@ -1,64 +1,74 @@
-namespace mvc_web.Services;
-
-public class SessionService
+namespace mvc_web.Services
 {
-    private readonly IHttpContextAccessor? _contextAccessor;
-
-    public SessionService()
+    public class SessionService
     {
-    }
+        private const string UserIdKey = "UserId";
+        private const string UserNameKey = "UserName";
+        private const string UserRoleKey = "UserRole";
+        private const string UserNumberKey = "UserNumber";
 
-    public string? GetRole(HttpContext httpContext)
-    {
-        return httpContext.Session.GetString("Role");
-    }
+        public void Login(
+            HttpContext context,
+            string userId,
+            string name,
+            string role,
+            string number
+        )
+        {
+            context.Session.SetString(UserIdKey, userId ?? "");
+            context.Session.SetString(UserNameKey, name ?? "");
+            context.Session.SetString(UserRoleKey, role ?? "");
+            context.Session.SetString(UserNumberKey, number ?? "");
+        }
 
-    public string? GetUserId(HttpContext httpContext)
-    {
-        return httpContext.Session.GetString("UserId");
-    }
+        public void Logout(HttpContext context)
+        {
+            context.Session.Clear();
+        }
 
-    public string? GetName(HttpContext httpContext)
-    {
-        return httpContext.Session.GetString("Name");
-    }
+        public string? GetUserId(HttpContext context)
+        {
+            return context.Session.GetString(UserIdKey);
+        }
 
-    public string? GetNumber(HttpContext httpContext)
-    {
-        return httpContext.Session.GetString("Number");
-    }
+        public string? GetName(HttpContext context)
+        {
+            return context.Session.GetString(UserNameKey);
+        }
 
-    public bool IsLoggedIn(HttpContext httpContext)
-    {
-        return !string.IsNullOrWhiteSpace(GetRole(httpContext));
-    }
+        public string? GetRole(HttpContext context)
+        {
+            return context.Session.GetString(UserRoleKey);
+        }
 
-    public bool IsAdmin(HttpContext httpContext)
-    {
-        return GetRole(httpContext) == "Admin";
-    }
+        public string? GetNumber(HttpContext context)
+        {
+            return context.Session.GetString(UserNumberKey);
+        }
 
-    public bool IsTeacher(HttpContext httpContext)
-    {
-        return GetRole(httpContext) == "Öğretmen";
-    }
+        public bool IsLoggedIn(HttpContext context)
+        {
+            return !string.IsNullOrWhiteSpace(GetRole(context));
+        }
 
-    public void Login(
-        HttpContext httpContext,
-        string userId,
-        string role,
-        string name,
-        string number
-    )
-    {
-        httpContext.Session.SetString("UserId", userId);
-        httpContext.Session.SetString("Role", role);
-        httpContext.Session.SetString("Name", name);
-        httpContext.Session.SetString("Number", number);
-    }
+        public bool IsAdmin(HttpContext context)
+        {
+            return GetRole(context) == "Admin";
+        }
 
-    public void Logout(HttpContext httpContext)
-    {
-        httpContext.Session.Clear();
+        public bool IsTeacher(HttpContext context)
+        {
+            return GetRole(context) == "Öğretmen";
+        }
+
+        public bool IsStudent(HttpContext context)
+        {
+            return GetRole(context) == "Öğrenci";
+        }
+
+        public bool IsParent(HttpContext context)
+        {
+            return GetRole(context) == "Veli";
+        }
     }
 }

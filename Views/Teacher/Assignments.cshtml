@@ -1,99 +1,555 @@
-@model List<AssignmentViewModel>
+@using System.Collections
+@using System.Reflection
+@using Microsoft.AspNetCore.Http
+@model dynamic
 
 @{
     Layout = "_TeacherLayout";
     ViewData["Title"] = "Ödevlerim";
+    ViewData["PageTitle"] = "Ödevlerim";
+    ViewData["PageSubtitle"] = "Kendi derslerinize verdiğiniz ödevleri yönetin.";
+
+    var assignments = GetList("Assignments", "Homeworks", "TeacherAssignments", "MyAssignments");
+
+    var teacherName =
+        Context.Session.GetString("UserName") ??
+        Context.Session.GetString("Name") ??
+        "Öğretmen";
 }
 
-@if (TempData["Success"] != null)
-{
-    <div class="alert alert-success">@TempData["Success"]</div>
+@functions {
+    private object? GetPropertyValue(object? item, string key)
+    {
+        if (item == null)
+        {
+            return null;
+        }
+
+        if (item is IDictionary<string, object> objectDict)
+        {
+            foreach (var pair in objectDict)
+            {
+                if (string.Equals(pair.Key, key, StringComparison.OrdinalIgnoreCase))
+                {
+                    return pair.Value;
+                }
+            }
+        }
+
+        var type = item.GetType();
+
+        var prop = type.GetProperty(
+            key,
+            BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase
+        );
+
+        return prop?.GetValue(item);
+    }
+
+    private string GetText(object? item, params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            var value = GetPropertyValue(item, key);
+
+            if (value != null && !string.IsNullOrWhiteSpace(value.ToString()))
+            {
+                return value.ToString() ?? "";
+            }
+        }
+
+        return "";
+    }
+
+    private List<object> GetList(params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            object? raw = null;
+
+            if (ViewData.ContainsKey(key))
+            {
+                raw = ViewData[key];
+            }
+
+            raw ??= GetPropertyValue(Model, key);
+
+            if (raw is IEnumerable enumerable && raw is not string)
+            {
+                return enumerable.Cast<object>().ToList();
+            }
+        }
+
+        if (Model is IEnumerable modelEnumerable && Model is not string)
+        {
+            return modelEnumerable.Cast<object>().ToList();
+        }
+
+        return new List<object>();
+    }
+
+    private string Safe(string value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? "-" : value;
+    }
+
+    private string DateText(object? item)
+    {
+        var raw =
+            GetPropertyValue(item, "DueDate") ??
+            GetPropertyValue(item, "Deadline") ??
+            GetPropertyValue(item, "EndDate");
+
+        if (raw == null)
+        {
+            return "-";
+        }
+
+        if (raw is DateTime date)
+        {
+            return date.ToString("dd.MM.yyyy");
+        }
+
+        if (DateTime.TryParse(raw.ToString(), out var parsed))
+        {
+            return parsed.ToString("dd.MM.yyyy");
+        }
+
+        return raw.ToString() ?? "-";
+    }
+
+    private bool IsSubmitted(object? item)
+    {
+        var status = GetText(item, "Status");
+
+        var normalized = status
+            .ToLowerInvariant()
+            .Replace("ı", "i")
+            .Replace("ğ", "g")
+            .Replace("ü", "u")
+            .Replace("ş", "s")
+            .Replace("ö", "o")
+            .Replace("ç", "c");
+
+        return normalized.Contains("teslim") ||
+               normalized.Contains("submitted") ||
+               normalized.Contains("deger");
+    }
 }
 
-@if (TempData["Error"] != null)
-{
-    <div class="alert alert-danger">@TempData["Error"]</div>
-}
+<div class="assignments-page">
+    <section class="assignments-hero">
+        <div>
+            <div class="hero-kicker">Öğretmen Paneli</div>
+            <h1>Ödevlerim</h1>
+            <p>@teacherName, bu sayfadan oluşturduğunuz ödevleri düzenleyebilir ve teslimleri görüntüleyebilirsiniz.</p>
+        </div>
 
-<div class="page-actions">
-    <a class="btn btn-teacher" asp-controller="Teacher" asp-action="CreateAssignment">
-        📝 Yeni Ödev Oluştur
-    </a>
+        <a asp-controller="Teacher" asp-action="CreateAssignment" class="create-assignment-btn">
+            📝 Yeni Ödev Oluştur
+        </a>
+    </section>
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success">@TempData["Success"]</div>
+    }
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger">@TempData["Error"]</div>
+    }
+
+    @if (!assignments.Any())
+    {
+        <div class="empty-assignment">
+            <div class="empty-icon">📭</div>
+            <h2>Henüz ödev oluşturmadınız</h2>
+            <p>Yeni ödev oluşturduğunuzda burada kart olarak görünecek.</p>
+
+            <a asp-controller="Teacher" asp-action="CreateAssignment">
+                İlk Ödevi Oluştur
+            </a>
+        </div>
+    }
+    else
+    {
+        <section class="assignments-grid">
+            @foreach (var assignment in assignments)
+            {
+                var id = GetText(assignment, "Id");
+                var title = Safe(GetText(assignment, "Title", "Name", "HomeworkTitle", "AssignmentTitle"));
+                var description = Safe(GetText(assignment, "Description", "Content", "Text"));
+                var lessonName = Safe(GetText(assignment, "LessonName", "Lesson", "CourseName", "Course"));
+                var className = Safe(GetText(assignment, "ClassName", "Class", "TargetClass"));
+                var fileType = Safe(GetText(assignment, "FileType", "Type", "SubmissionType"));
+                var status = IsSubmitted(assignment) ? "Teslim Var" : "Teslim Bekliyor";
+                var dueDate = DateText(assignment);
+
+                <article class="assignment-card">
+                    <div class="assignment-head">
+                        <div class="assignment-icon">📝</div>
+
+                        <div>
+                            <h2>@title</h2>
+                            <p>@lessonName • @className</p>
+                        </div>
+                    </div>
+
+                    <div class="assignment-badges">
+                        <span class="badge lesson">@lessonName</span>
+                        <span class="badge class">@className</span>
+
+                        @if (IsSubmitted(assignment))
+                        {
+                            <span class="badge success">@status</span>
+                        }
+                        else
+                        {
+                            <span class="badge warning">@status</span>
+                        }
+                    </div>
+
+                    <div class="assignment-description">
+                        @description
+                    </div>
+
+                    <div class="assignment-meta">
+                        <div>
+                            <span>📅</span>
+                            <strong>Son Teslim:</strong>
+                            <b>@dueDate</b>
+                        </div>
+
+                        <div>
+                            <span>📎</span>
+                            <strong>Tür:</strong>
+                            <b>@fileType</b>
+                        </div>
+                    </div>
+
+                    <div class="assignment-actions">
+                        <a asp-controller="Teacher"
+                           asp-action="EditAssignment"
+                           asp-route-id="@id"
+                           class="action-btn edit">
+                            ✏️ Düzenle
+                        </a>
+
+                        <a href="/Teacher/Submissions"
+                           class="action-btn submissions">
+                            📥 Teslimler
+                        </a>
+
+                        <form asp-controller="Teacher"
+                              asp-action="DeleteAssignment"
+                              method="post"
+                              class="delete-assignment-form"
+                              onsubmit="return confirm('Bu ödev silinsin mi?');">
+
+                            @Html.AntiForgeryToken()
+
+                            <input type="hidden" name="id" value="@id" />
+
+                            <button type="submit" class="action-btn delete">
+                                🗑️ Sil
+                            </button>
+                        </form>
+                    </div>
+                </article>
+            }
+        </section>
+    }
 </div>
 
-@if (Model.Count == 0)
-{
-    <div class="empty-state">
-        <div class="empty-icon">📝</div>
-        <div class="empty-title">Henüz ödev vermediniz</div>
-        <div class="empty-text">Size atanmış derslere ödev oluşturarak başlayabilirsiniz.</div>
-    </div>
-}
-else
-{
-    <div class="card-grid">
-        @foreach (var item in Model)
-        {
-            var statusBadge = item.Status == "Aktif"
-                ? "badge-green"
-                : item.Status == "Pasif"
-                    ? "badge-red"
-                    : "badge-orange";
+<style>
+    .assignments-page {
+        display: grid;
+        gap: 20px;
+    }
 
-            <div class="data-card">
-                <div class="data-card-header">
-                    <div class="data-card-icon">📝</div>
-                    <div>
-                        <div class="data-card-title">@item.Title</div>
-                        <div class="data-card-subtitle">@item.Lesson • @item.ClassName</div>
-                    </div>
-                </div>
+    .assignments-hero {
+        background:
+            radial-gradient(circle at top left, rgba(79, 70, 229, .14), transparent 34%),
+            linear-gradient(135deg, #ffffff, #f8fafc);
+        border: 1px solid rgba(255,255,255,.75);
+        box-shadow: 0 22px 55px rgba(15, 23, 42, .08);
+        border-radius: 32px;
+        padding: 28px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 22px;
+    }
 
-                <div class="badge-row">
-                    <span class="badge badge-cyan">@item.Lesson</span>
-                    <span class="badge badge-purple">@item.ClassName</span>
-                    <span class="badge @statusBadge">@item.Status</span>
-                </div>
+    .hero-kicker {
+        color: #4f46e5;
+        font-size: 13px;
+        font-weight: 950;
+        margin-bottom: 4px;
+    }
 
-                <div class="info-line">
-                    <span>📅</span>
-                    <span>Son teslim: <strong>@item.DueDate</strong></span>
-                </div>
+    .assignments-hero h1 {
+        margin: 0;
+        color: #0f172a;
+        font-size: 34px;
+        font-weight: 950;
+        letter-spacing: -.8px;
+    }
 
-                <div class="info-line">
-                    <span>📎</span>
-                    <span>Tür: @item.Type</span>
-                </div>
+    .assignments-hero p {
+        margin: 8px 0 0;
+        color: #64748b;
+        font-weight: 800;
+        line-height: 1.5;
+        max-width: 680px;
+    }
 
-                @if (!string.IsNullOrWhiteSpace(item.Description))
-                {
-                    <div class="announcement-preview">@item.Description</div>
-                }
+    .create-assignment-btn {
+        min-height: 54px;
+        padding: 0 18px;
+        border-radius: 18px;
+        background: linear-gradient(135deg, #4f46e5, #06b6d4);
+        color: #fff;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 950;
+        box-shadow: 0 18px 34px rgba(79, 70, 229, .22);
+        white-space: nowrap;
+    }
 
-                <div class="card-actions">
-                    <a class="btn btn-light"
-                       asp-controller="Teacher"
-                       asp-action="EditAssignment"
-                       asp-route-id="@item.Id">
-                        ✏️ Düzenle
-                    </a>
+    .alert {
+        padding: 14px 18px;
+        border-radius: 18px;
+        font-weight: 900;
+    }
 
-                    <a class="btn btn-success" asp-controller="Teacher" asp-action="Submissions">
-                        📤 Teslimler
-                    </a>
+    .alert-success {
+        background: #dcfce7;
+        color: #166534;
+    }
 
-                    <form asp-controller="Teacher"
-                          asp-action="DeleteAssignment"
-                          method="post"
-                          onsubmit="return confirmDelete('Ödev silinsin mi?');">
-                        @Html.AntiForgeryToken()
-                        <input type="hidden" name="id" value="@item.Id" />
-                        <button class="btn btn-danger" type="submit">
-                            🗑️ Sil
-                        </button>
-                    </form>
-                </div>
-            </div>
+    .alert-danger {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+
+    .assignments-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+        gap: 18px;
+    }
+
+    .assignment-card {
+        background: #fff;
+        border: 1px solid #eef2f7;
+        border-radius: 30px;
+        padding: 22px;
+        display: grid;
+        gap: 16px;
+        box-shadow: 0 18px 42px rgba(15, 23, 42, .07);
+        transition: .18s ease;
+    }
+
+    .assignment-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 24px 55px rgba(15, 23, 42, .10);
+    }
+
+    .assignment-head {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+    }
+
+    .assignment-icon {
+        width: 58px;
+        height: 58px;
+        border-radius: 20px;
+        background: #eef2ff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 27px;
+        flex: 0 0 auto;
+    }
+
+    .assignment-head h2 {
+        margin: 0;
+        color: #0f172a;
+        font-size: 22px;
+        font-weight: 950;
+        word-break: break-word;
+    }
+
+    .assignment-head p {
+        margin: 4px 0 0;
+        color: #64748b;
+        font-weight: 850;
+    }
+
+    .assignment-badges {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .badge {
+        border-radius: 999px;
+        padding: 8px 12px;
+        font-size: 12px;
+        font-weight: 950;
+    }
+
+    .badge.lesson {
+        background: #eef2ff;
+        color: #3730a3;
+    }
+
+    .badge.class {
+        background: #cffafe;
+        color: #155e75;
+    }
+
+    .badge.success {
+        background: #dcfce7;
+        color: #166534;
+    }
+
+    .badge.warning {
+        background: #ffedd5;
+        color: #9a3412;
+    }
+
+    .assignment-description {
+        background: #f8fafc;
+        border: 1px solid #eef2f7;
+        color: #334155;
+        border-radius: 18px;
+        padding: 14px;
+        min-height: 70px;
+        font-weight: 800;
+        line-height: 1.5;
+        word-break: break-word;
+    }
+
+    .assignment-meta {
+        display: grid;
+        gap: 10px;
+    }
+
+    .assignment-meta div {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: #475569;
+        font-weight: 850;
+    }
+
+    .assignment-meta b {
+        margin-left: auto;
+        color: #0f172a;
+        font-weight: 950;
+    }
+
+    .assignment-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 10px;
+    }
+
+    .action-btn {
+        min-height: 48px;
+        border: 0;
+        border-radius: 16px;
+        text-decoration: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 950;
+        cursor: pointer;
+        width: 100%;
+    }
+
+    .action-btn.edit {
+        background: #eef2ff;
+        color: #4338ca;
+    }
+
+    .action-btn.submissions {
+        background: #dcfce7;
+        color: #166534;
+    }
+
+    .action-btn.delete {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+
+    .delete-assignment-form {
+        margin: 0;
+    }
+
+    .empty-assignment {
+        background: #fff;
+        border: 1px dashed #cbd5e1;
+        border-radius: 30px;
+        padding: 42px;
+        text-align: center;
+        box-shadow: 0 18px 42px rgba(15, 23, 42, .07);
+    }
+
+    .empty-icon {
+        font-size: 44px;
+        margin-bottom: 12px;
+    }
+
+    .empty-assignment h2 {
+        margin: 0;
+        color: #0f172a;
+        font-size: 25px;
+        font-weight: 950;
+    }
+
+    .empty-assignment p {
+        color: #64748b;
+        font-weight: 850;
+    }
+
+    .empty-assignment a {
+        margin-top: 10px;
+        min-height: 50px;
+        padding: 0 18px;
+        border-radius: 17px;
+        background: #4f46e5;
+        color: #fff;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 950;
+    }
+
+    @@media (max-width: 860px) {
+        .assignments-hero {
+            flex-direction: column;
+            align-items: flex-start;
         }
-    </div>
-}
+
+        .create-assignment-btn {
+            width: 100%;
+        }
+
+        .assignment-actions {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @@media (max-width: 520px) {
+        .assignments-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>

@@ -1,146 +1,1619 @@
-@model LoginViewModel
-
 @{
-    Layout = "_Layout";
-    ViewData["Title"] = "Web Panel Girişi";
+    Layout = null;
+    ViewData["Title"] = "Giriş Yap";
+
+    var selectedRole = Context.Request.HasFormContentType
+        ? Context.Request.Form["Role"].ToString()
+        : "";
+
+    if (string.IsNullOrWhiteSpace(selectedRole))
+    {
+        selectedRole = "Öğrenci";
+    }
+
+    var postedNumber = Context.Request.HasFormContentType
+        ? Context.Request.Form["Number"].ToString()
+        : "";
 }
 
-<div class="auth-page">
-    <div class="auth-shell">
-        <section class="auth-hero">
-            <div class="auth-brand">
-                <div class="auth-brand-icon">🎓</div>
-                <div class="auth-brand-title">Ödev Sistemi</div>
-            </div>
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Giriş Yap - Ödev Sistemi</title>
 
-            <div class="auth-hero-title">
-                Web yönetim<br />
-                paneline<br />
-                hoş geldiniz.
-            </div>
+    <style>
+        :root {
+            --dark-950: #020617;
+            --dark-900: #07111f;
+            --dark-850: #0a1324;
+            --dark-800: #0f172a;
+            --dark-700: #111827;
 
-            <div class="auth-hero-text">
-                MVC web paneli admin ve öğretmen kullanımı içindir.
-                Öğrenci ve veli işlemleri Flutter uygulamasından devam eder.
-            </div>
+            --white: #ffffff;
+            --soft-white: rgba(255, 255, 255, .92);
+            --glass: rgba(255, 255, 255, .70);
+            --glass-strong: rgba(255, 255, 255, .88);
+            --glass-border: rgba(255, 255, 255, .36);
 
-            <div class="auth-pills">
-                <div class="auth-pill">🛡️ Admin yönetimi</div>
-                <div class="auth-pill">👨‍🏫 Öğretmen paneli</div>
-                <div class="auth-pill">📝 Ödev oluşturma</div>
-                <div class="auth-pill">⭐ Not & geri dönüş</div>
-            </div>
-        </section>
+            --slate-50: #f8fafc;
+            --slate-100: #f1f5f9;
+            --slate-200: #e2e8f0;
+            --slate-300: #cbd5e1;
+            --slate-400: #94a3b8;
+            --slate-500: #64748b;
+            --slate-600: #475569;
+            --slate-700: #334155;
+            --slate-800: #1e293b;
+            --slate-900: #0f172a;
 
-        <section class="auth-card">
-            <div class="auth-card-icon">🔐</div>
+            --indigo-50: #eef2ff;
+            --indigo-100: #e0e7ff;
+            --indigo-200: #c7d2fe;
+            --indigo-400: #818cf8;
+            --indigo-500: #6366f1;
+            --indigo-600: #4f46e5;
+            --indigo-700: #4338ca;
 
-            <div class="auth-card-title">Web Panel Girişi</div>
-            <div class="auth-card-subtitle">
-                Admin veya öğretmen hesabınızla giriş yapın.
-            </div>
+            --cyan-50: #ecfeff;
+            --cyan-100: #cffafe;
+            --cyan-300: #67e8f9;
+            --cyan-400: #22d3ee;
+            --cyan-500: #06b6d4;
+            --cyan-600: #0891b2;
 
-            @if (TempData["Info"] != null)
-            {
-                <div class="alert alert-warning">
-                    @TempData["Info"]
-                </div>
+            --emerald-50: #ecfdf5;
+            --emerald-100: #d1fae5;
+            --emerald-400: #34d399;
+            --emerald-500: #10b981;
+            --emerald-600: #059669;
+
+            --amber-50: #fffbeb;
+            --amber-100: #fef3c7;
+            --amber-400: #fbbf24;
+            --amber-500: #f59e0b;
+
+            --rose-50: #fff1f2;
+            --rose-100: #ffe4e6;
+            --rose-500: #f43f5e;
+            --rose-600: #e11d48;
+
+            --violet-400: #a78bfa;
+            --violet-500: #8b5cf6;
+            --violet-600: #7c3aed;
+
+            --blue-400: #60a5fa;
+            --blue-500: #3b82f6;
+            --blue-600: #2563eb;
+
+            --shadow-black-xl: 0 50px 140px rgba(0, 0, 0, .48);
+            --shadow-black-lg: 0 34px 90px rgba(0, 0, 0, .36);
+            --shadow-card: 0 30px 80px rgba(15, 23, 42, .20);
+            --shadow-soft: 0 18px 44px rgba(15, 23, 42, .13);
+            --shadow-indigo: 0 24px 58px rgba(79, 70, 229, .30);
+            --shadow-cyan: 0 24px 58px rgba(6, 182, 212, .24);
+
+            --radius-huge: 48px;
+            --radius-xxl: 42px;
+            --radius-xl: 34px;
+            --radius-lg: 28px;
+            --radius-md: 22px;
+            --radius-sm: 16px;
+
+            --ease: cubic-bezier(.2, .8, .2, 1);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        *::before,
+        *::after {
+            box-sizing: border-box;
+        }
+
+        html {
+            min-height: 100%;
+            scroll-behavior: smooth;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            color: var(--slate-900);
+            font-family:
+                Inter,
+                ui-sans-serif,
+                system-ui,
+                -apple-system,
+                BlinkMacSystemFont,
+                "Segoe UI",
+                Arial,
+                Helvetica,
+                sans-serif;
+            background:
+                radial-gradient(circle at 12% 16%, rgba(79, 70, 229, .48), transparent 30%),
+                radial-gradient(circle at 88% 12%, rgba(6, 182, 212, .36), transparent 30%),
+                radial-gradient(circle at 54% 98%, rgba(16, 185, 129, .22), transparent 42%),
+                linear-gradient(135deg, #020617 0%, #07111f 42%, #0f172a 100%);
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+            text-rendering: geometricPrecision;
+        }
+
+        button,
+        input {
+            font: inherit;
+        }
+
+        button {
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        a {
+            color: inherit;
+        }
+
+        .page {
+            position: relative;
+            min-height: 100vh;
+            padding: 28px;
+            display: grid;
+            place-items: center;
+            overflow: hidden;
+            isolation: isolate;
+        }
+
+        .page::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 0;
+            opacity: .10;
+            background-image:
+                repeating-radial-gradient(circle at 0 0, rgba(255,255,255,.28) 0, rgba(255,255,255,.28) 1px, transparent 1px, transparent 5px);
+            mix-blend-mode: screen;
+        }
+
+        .page::after {
+            content: "";
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 0;
+            opacity: .17;
+            background-image:
+                linear-gradient(rgba(255,255,255,.24) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,.24) 1px, transparent 1px);
+            background-size: 72px 72px;
+            mask-image: radial-gradient(circle at center, black 0%, transparent 72%);
+        }
+
+        .orb-layer {
+            position: fixed;
+            inset: -160px;
+            pointer-events: none;
+            z-index: 0;
+            filter: blur(2px);
+            opacity: .96;
+        }
+
+        .orb {
+            position: absolute;
+            width: 520px;
+            height: 520px;
+            border-radius: 999px;
+            mix-blend-mode: screen;
+            animation: orbFloat 16s var(--ease) infinite;
+        }
+
+        .orb.one {
+            left: 0;
+            top: 2%;
+            background: radial-gradient(circle, rgba(99, 102, 241, .58), rgba(99, 102, 241, 0) 68%);
+        }
+
+        .orb.two {
+            right: 0;
+            top: 8%;
+            background: radial-gradient(circle, rgba(34, 211, 238, .50), rgba(34, 211, 238, 0) 68%);
+            animation-delay: -4.5s;
+        }
+
+        .orb.three {
+            left: 34%;
+            bottom: -10%;
+            background: radial-gradient(circle, rgba(16, 185, 129, .34), rgba(16, 185, 129, 0) 70%);
+            animation-delay: -8.5s;
+        }
+
+        .orb.four {
+            right: 18%;
+            bottom: 12%;
+            background: radial-gradient(circle, rgba(139, 92, 246, .38), rgba(139, 92, 246, 0) 70%);
+            animation-delay: -12s;
+        }
+
+        @@keyframes orbFloat {
+            0%, 100% {
+                transform: translate3d(0, 0, 0) scale(1);
             }
 
-            @if (!ViewData.ModelState.IsValid)
-            {
-                <div class="alert alert-danger">
-                    @foreach (var error in ViewData.ModelState.Values.SelectMany(v => v.Errors))
+            35% {
+                transform: translate3d(46px, -34px, 0) scale(1.08);
+            }
+
+            70% {
+                transform: translate3d(-32px, 26px, 0) scale(.98);
+            }
+        }
+
+        .beam {
+            position: fixed;
+            z-index: 0;
+            pointer-events: none;
+            width: 320px;
+            height: 1px;
+            opacity: 0;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,.85), transparent);
+            transform: rotate(-24deg);
+            animation: beamMove 8s ease-in-out infinite;
+        }
+
+        .beam.one {
+            left: 4%;
+            top: 18%;
+        }
+
+        .beam.two {
+            right: 4%;
+            top: 72%;
+            animation-delay: -3.6s;
+        }
+
+        .beam.three {
+            left: 28%;
+            bottom: 10%;
+            animation-delay: -6.1s;
+        }
+
+        @@keyframes beamMove {
+            0%, 72%, 100% {
+                opacity: 0;
+                transform: translate3d(-80px, 0, 0) rotate(-24deg);
+            }
+
+            78% {
+                opacity: .85;
+            }
+
+            88% {
+                opacity: 0;
+                transform: translate3d(240px, 0, 0) rotate(-24deg);
+            }
+        }
+
+        .brand-mobile {
+            display: none;
+            position: relative;
+            z-index: 3;
+            width: min(1280px, 100%);
+            margin-bottom: 18px;
+            color: #fff;
+        }
+
+        .brand-row {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .brand-logo {
+            position: relative;
+            width: 72px;
+            height: 72px;
+            border-radius: 28px;
+            display: grid;
+            place-items: center;
+            overflow: hidden;
+            background:
+                linear-gradient(135deg, rgba(79,70,229,1), rgba(6,182,212,1));
+            box-shadow:
+                0 24px 54px rgba(79,70,229,.38),
+                inset 0 1px 0 rgba(255,255,255,.32);
+        }
+
+        .brand-logo::before {
+            content: "";
+            position: absolute;
+            inset: -42%;
+            background: conic-gradient(from 180deg, transparent, rgba(255,255,255,.38), transparent 34%);
+            animation: spinLogo 5.8s linear infinite;
+        }
+
+        .brand-logo span {
+            position: relative;
+            z-index: 1;
+            font-size: 36px;
+        }
+
+        @@keyframes spinLogo {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .brand-text strong {
+            display: block;
+            color: #fff;
+            font-size: 24px;
+            font-weight: 1000;
+            letter-spacing: -.5px;
+        }
+
+        .brand-text small {
+            display: block;
+            margin-top: 3px;
+            color: rgba(226, 232, 240, .78);
+            font-size: 14px;
+            font-weight: 850;
+        }
+
+        .shell {
+            position: relative;
+            z-index: 2;
+            width: min(1280px, 100%);
+            display: grid;
+            grid-template-columns: minmax(0, 1.15fr) minmax(430px, .85fr);
+            gap: 30px;
+            align-items: stretch;
+        }
+
+        .showcase {
+            position: relative;
+            min-height: 760px;
+            padding: 36px;
+            border-radius: var(--radius-huge);
+            color: #fff;
+            background:
+                linear-gradient(135deg, rgba(15, 23, 42, .96), rgba(15, 23, 42, .66)),
+                radial-gradient(circle at 16% 12%, rgba(99,102,241,.48), transparent 38%),
+                radial-gradient(circle at 86% 78%, rgba(6,182,212,.28), transparent 44%);
+            border: 1px solid rgba(255,255,255,.15);
+            box-shadow: var(--shadow-black-xl);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            isolation: isolate;
+        }
+
+        .showcase::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            z-index: -2;
+            background:
+                radial-gradient(circle at 25% 24%, rgba(255,255,255,.13), transparent 18%),
+                radial-gradient(circle at 76% 72%, rgba(255,255,255,.09), transparent 22%),
+                linear-gradient(120deg, rgba(255,255,255,.06), transparent 42%);
+        }
+
+        .showcase::after {
+            content: "";
+            position: absolute;
+            width: 720px;
+            height: 720px;
+            right: -280px;
+            bottom: -300px;
+            border-radius: 999px;
+            z-index: -1;
+            background:
+                conic-gradient(
+                    from 140deg,
+                    rgba(255,255,255,0),
+                    rgba(6,182,212,.38),
+                    rgba(99,102,241,.42),
+                    rgba(16,185,129,.18),
+                    rgba(255,255,255,0)
+                );
+            opacity: .94;
+            animation: haloSpin 20s linear infinite;
+        }
+
+        @@keyframes haloSpin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .showcase-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 18px;
+        }
+
+        .live-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 9px;
+            padding: 10px 14px;
+            border-radius: 999px;
+            color: #dbeafe;
+            background: rgba(255, 255, 255, .10);
+            border: 1px solid rgba(255, 255, 255, .14);
+            font-size: 13px;
+            font-weight: 950;
+            backdrop-filter: blur(16px);
+            white-space: nowrap;
+        }
+
+        .live-dot {
+            width: 9px;
+            height: 9px;
+            border-radius: 999px;
+            background: #22c55e;
+            box-shadow: 0 0 0 0 rgba(34,197,94,.62);
+            animation: pulseDot 1.8s ease-out infinite;
+        }
+
+        @@keyframes pulseDot {
+            0% {
+                box-shadow: 0 0 0 0 rgba(34,197,94,.62);
+            }
+
+            100% {
+                box-shadow: 0 0 0 13px rgba(34,197,94,0);
+            }
+        }
+
+        .hero {
+            max-width: 720px;
+            padding: 52px 0 40px;
+        }
+
+        .eyebrow {
+            width: fit-content;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 16px;
+            border-radius: 999px;
+            color: #cffafe;
+            background: rgba(8, 145, 178, .15);
+            border: 1px solid rgba(165, 243, 252, .18);
+            font-size: 13px;
+            font-weight: 1000;
+            backdrop-filter: blur(14px);
+        }
+
+        .hero-title {
+            margin: 26px 0 0;
+            color: #fff;
+            font-size: clamp(48px, 6.4vw, 88px);
+            line-height: .88;
+            letter-spacing: -3.4px;
+            font-weight: 1000;
+        }
+
+        .hero-title .shine {
+            display: inline-block;
+            color: transparent;
+            background:
+                linear-gradient(90deg, #ffffff, #a5f3fc, #c7d2fe, #ffffff);
+            background-size: 280% 100%;
+            -webkit-background-clip: text;
+            background-clip: text;
+            animation: textFlow 5.8s ease-in-out infinite;
+        }
+
+        @@keyframes textFlow {
+            0%, 100% {
+                background-position: 0% 50%;
+            }
+
+            50% {
+                background-position: 100% 50%;
+            }
+        }
+
+        .hero-desc {
+            max-width: 610px;
+            margin: 25px 0 0;
+            color: rgba(226, 232, 240, .86);
+            font-size: 17px;
+            line-height: 1.82;
+            font-weight: 760;
+        }
+
+        .hero-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 28px;
+        }
+
+        .hero-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            min-height: 42px;
+            padding: 0 14px;
+            border-radius: 999px;
+            color: rgba(255,255,255,.92);
+            background: rgba(255,255,255,.10);
+            border: 1px solid rgba(255,255,255,.13);
+            font-size: 13px;
+            font-weight: 930;
+            backdrop-filter: blur(16px);
+        }
+
+        .feature-grid {
+            margin-top: 32px;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 14px;
+        }
+
+        .feature-card {
+            position: relative;
+            min-height: 118px;
+            padding: 18px;
+            border-radius: 30px;
+            background: rgba(255, 255, 255, .094);
+            border: 1px solid rgba(255,255,255,.14);
+            backdrop-filter: blur(18px);
+            overflow: hidden;
+            transition:
+                transform .22s var(--ease),
+                background .22s var(--ease),
+                border-color .22s var(--ease);
+        }
+
+        .feature-card:hover {
+            transform: translateY(-4px);
+            background: rgba(255,255,255,.135);
+            border-color: rgba(255,255,255,.22);
+        }
+
+        .feature-card::after {
+            content: "";
+            position: absolute;
+            inset: auto -30px -50px auto;
+            width: 130px;
+            height: 130px;
+            border-radius: 999px;
+            background: rgba(255,255,255,.06);
+        }
+
+        .feature-icon {
+            width: 46px;
+            height: 46px;
+            border-radius: 18px;
+            display: grid;
+            place-items: center;
+            margin-bottom: 13px;
+            font-size: 23px;
+            background: rgba(255,255,255,.13);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,.16);
+        }
+
+        .feature-card strong {
+            display: block;
+            color: #fff;
+            font-size: 15px;
+            font-weight: 1000;
+        }
+
+        .feature-card span {
+            display: block;
+            margin-top: 6px;
+            color: rgba(226,232,240,.74);
+            font-size: 12px;
+            line-height: 1.55;
+            font-weight: 760;
+        }
+
+        .showcase-footer {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 12px;
+        }
+
+        .metric {
+            min-height: 96px;
+            padding: 17px;
+            border-radius: 28px;
+            background: rgba(255,255,255,.094);
+            border: 1px solid rgba(255,255,255,.14);
+            backdrop-filter: blur(18px);
+        }
+
+        .metric strong {
+            display: block;
+            color: #fff;
+            font-size: 28px;
+            line-height: 1;
+            font-weight: 1000;
+        }
+
+        .metric span {
+            display: block;
+            margin-top: 8px;
+            color: rgba(226,232,240,.74);
+            font-size: 12px;
+            font-weight: 900;
+        }
+
+        .floating-widget {
+            position: absolute;
+            right: 32px;
+            bottom: 138px;
+            width: 260px;
+            padding: 17px;
+            border-radius: 30px;
+            color: #fff;
+            background: rgba(255,255,255,.115);
+            border: 1px solid rgba(255,255,255,.17);
+            backdrop-filter: blur(20px);
+            box-shadow: 0 30px 76px rgba(0,0,0,.22);
+            animation: floatWidget 5.4s var(--ease) infinite;
+        }
+
+        @@keyframes floatWidget {
+            0%, 100% {
+                transform: translate3d(0,0,0);
+            }
+
+            50% {
+                transform: translate3d(0,-13px,0);
+            }
+        }
+
+        .widget-dots {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 14px;
+        }
+
+        .widget-dots i {
+            display: block;
+            width: 10px;
+            height: 10px;
+            border-radius: 999px;
+        }
+
+        .widget-dots i:nth-child(1) {
+            background: #10b981;
+        }
+
+        .widget-dots i:nth-child(2) {
+            background: #06b6d4;
+        }
+
+        .widget-dots i:nth-child(3) {
+            background: #6366f1;
+        }
+
+        .floating-widget strong {
+            display: block;
+            color: #fff;
+            font-size: 15px;
+            font-weight: 1000;
+        }
+
+        .floating-widget span {
+            display: block;
+            margin-top: 7px;
+            color: rgba(226,232,240,.76);
+            font-size: 12px;
+            font-weight: 760;
+            line-height: 1.5;
+        }
+
+        .login-wrap {
+            position: relative;
+            min-height: 760px;
+            padding: 18px;
+            border-radius: var(--radius-huge);
+            background: rgba(255,255,255,.62);
+            border: 1px solid rgba(255,255,255,.34);
+            box-shadow: var(--shadow-black-lg);
+            backdrop-filter: blur(30px);
+            overflow: hidden;
+        }
+
+        .login-wrap::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background:
+                radial-gradient(circle at top right, rgba(79,70,229,.18), transparent 34%),
+                radial-gradient(circle at bottom left, rgba(6,182,212,.15), transparent 34%),
+                linear-gradient(135deg, rgba(255,255,255,.20), rgba(255,255,255,.05));
+            pointer-events: none;
+        }
+
+        .login-card {
+            position: relative;
+            z-index: 1;
+            min-height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 30px;
+            border-radius: 36px;
+            background: rgba(255,255,255,.91);
+            border: 1px solid rgba(255,255,255,.86);
+            box-shadow: var(--shadow-card);
+            overflow: hidden;
+        }
+
+        .login-card::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background:
+                radial-gradient(circle at 92% 8%, rgba(99,102,241,.15), transparent 25%),
+                radial-gradient(circle at 10% 94%, rgba(6,182,212,.14), transparent 28%);
+        }
+
+        .login-card > * {
+            position: relative;
+            z-index: 1;
+        }
+
+        .login-glow {
+            position: absolute;
+            width: 210px;
+            height: 210px;
+            right: -78px;
+            top: -78px;
+            border-radius: 999px;
+            background:
+                radial-gradient(circle, rgba(79,70,229,.15), transparent 64%);
+            pointer-events: none;
+        }
+
+        .login-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 16px;
+            margin-bottom: 25px;
+        }
+
+        .login-symbol {
+            width: 74px;
+            height: 74px;
+            border-radius: 28px;
+            display: grid;
+            place-items: center;
+            color: #fff;
+            font-size: 34px;
+            background:
+                linear-gradient(135deg, var(--indigo-600), var(--cyan-500));
+            box-shadow: var(--shadow-indigo);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .login-symbol::after {
+            content: "";
+            position: absolute;
+            inset: -42%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,.36), transparent);
+            transform: rotate(35deg) translateX(-80%);
+            animation: symbolSweep 4.5s ease-in-out infinite;
+        }
+
+        @@keyframes symbolSweep {
+            0%, 55%, 100% {
+                transform: rotate(35deg) translateX(-90%);
+            }
+
+            72% {
+                transform: rotate(35deg) translateX(90%);
+            }
+        }
+
+        .login-title {
+            margin: 0;
+            color: var(--slate-900);
+            font-size: 36px;
+            line-height: 1;
+            letter-spacing: -1.2px;
+            font-weight: 1000;
+        }
+
+        .login-subtitle {
+            margin: 9px 0 0;
+            color: var(--slate-500);
+            font-size: 14px;
+            font-weight: 820;
+            line-height: 1.55;
+        }
+
+        .secure-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 10px 12px;
+            border-radius: 999px;
+            color: #0e7490;
+            background: #ecfeff;
+            border: 1px solid rgba(6,182,212,.12);
+            font-size: 12px;
+            font-weight: 1000;
+            white-space: nowrap;
+        }
+
+        .alert {
+            border-radius: 21px;
+            padding: 14px 16px;
+            margin-bottom: 16px;
+            font-size: 13px;
+            font-weight: 900;
+            line-height: 1.5;
+            border: 1px solid transparent;
+        }
+
+        .alert-success {
+            color: #166534;
+            background: #dcfce7;
+            border-color: rgba(22, 101, 52, .12);
+        }
+
+        .alert-danger {
+            color: #991b1b;
+            background: #fee2e2;
+            border-color: rgba(153, 27, 27, .10);
+        }
+
+        .form {
+            display: grid;
+            gap: 16px;
+        }
+
+        .role-switcher {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 9px;
+            padding: 8px;
+            border-radius: 28px;
+            background:
+                linear-gradient(135deg, #f8fafc, #eef2ff);
+            border: 1px solid rgba(148, 163, 184, .18);
+        }
+
+        .role-item {
+            position: relative;
+        }
+
+        .role-item input {
+            position: absolute;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .role-item label {
+            min-height: 68px;
+            border-radius: 20px;
+            display: grid;
+            place-items: center;
+            gap: 5px;
+            color: var(--slate-600);
+            cursor: pointer;
+            user-select: none;
+            font-size: 12px;
+            font-weight: 1000;
+            transition:
+                transform .18s var(--ease),
+                box-shadow .18s var(--ease),
+                background .18s var(--ease),
+                color .18s var(--ease);
+        }
+
+        .role-item label span {
+            display: block;
+            font-size: 24px;
+            line-height: 1;
+        }
+
+        .role-item input:checked + label {
+            color: #fff;
+            background:
+                linear-gradient(135deg, var(--indigo-600), var(--cyan-500));
+            box-shadow: 0 15px 30px rgba(79,70,229,.25);
+            transform: translateY(-1px);
+        }
+
+        .field {
+            display: grid;
+            gap: 8px;
+        }
+
+        .field-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .field-head label {
+            color: var(--slate-800);
+            font-size: 14px;
+            font-weight: 1000;
+        }
+
+        .field-hint {
+            color: var(--slate-400);
+            font-size: 12px;
+            font-weight: 880;
+            white-space: nowrap;
+        }
+
+        .input-box {
+            position: relative;
+        }
+
+        .input-icon {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 42px;
+            height: 42px;
+            border-radius: 17px;
+            color: var(--indigo-600);
+            background: var(--indigo-50);
+            display: grid;
+            place-items: center;
+            font-size: 18px;
+            pointer-events: none;
+            border: 1px solid rgba(79,70,229,.08);
+        }
+
+        .input-control {
+            width: 100%;
+            min-height: 64px;
+            border: 1px solid #e5e7eb;
+            outline: none;
+            border-radius: 23px;
+            background: rgba(248,250,252,.94);
+            color: var(--slate-900);
+            padding: 0 56px 0 66px;
+            font-size: 15px;
+            font-weight: 870;
+            transition:
+                border-color .18s var(--ease),
+                box-shadow .18s var(--ease),
+                background .18s var(--ease);
+        }
+
+        .input-control::placeholder {
+            color: var(--slate-400);
+        }
+
+        .input-control:focus {
+            background: #fff;
+            border-color: var(--indigo-600);
+            box-shadow:
+                0 0 0 5px rgba(79,70,229,.11),
+                0 14px 28px rgba(15,23,42,.08);
+        }
+
+        .password-toggle {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 46px;
+            height: 46px;
+            border: 0;
+            border-radius: 17px;
+            display: grid;
+            place-items: center;
+            cursor: pointer;
+            color: var(--slate-600);
+            background: var(--slate-100);
+            font-size: 17px;
+            transition:
+                background .18s var(--ease),
+                color .18s var(--ease);
+        }
+
+        .password-toggle:hover {
+            color: var(--indigo-700);
+            background: var(--indigo-100);
+        }
+
+        .submit-area {
+            display: grid;
+            gap: 12px;
+            margin-top: 4px;
+        }
+
+        .login-button {
+            position: relative;
+            width: 100%;
+            min-height: 66px;
+            border: 0;
+            border-radius: 23px;
+            color: #fff;
+            cursor: pointer;
+            overflow: hidden;
+            font-size: 16px;
+            font-weight: 1000;
+            letter-spacing: -.2px;
+            background:
+                radial-gradient(circle at var(--button-x, 50%) var(--button-y, 50%), rgba(255,255,255,.22), transparent 26%),
+                linear-gradient(135deg, var(--indigo-600), var(--cyan-500));
+            box-shadow: var(--shadow-indigo);
+            transition:
+                transform .18s var(--ease),
+                box-shadow .18s var(--ease),
+                filter .18s var(--ease);
+        }
+
+        .login-button::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: -120%;
+            width: 65%;
+            height: 100%;
+            background:
+                linear-gradient(90deg, transparent, rgba(255,255,255,.34), transparent);
+            transform: skewX(-20deg);
+            transition: left .58s var(--ease);
+        }
+
+        .login-button:hover {
+            transform: translateY(-2px);
+            filter: brightness(1.04);
+            box-shadow:
+                0 28px 60px rgba(79,70,229,.32),
+                0 14px 30px rgba(6,182,212,.20);
+        }
+
+        .login-button:hover::before {
+            left: 132%;
+        }
+
+        .forgot-only {
+            min-height: 56px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 9px;
+            color: var(--indigo-700);
+            background: var(--indigo-50);
+            border: 1px solid rgba(79,70,229,.09);
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 1000;
+            transition:
+                transform .18s var(--ease),
+                background .18s var(--ease),
+                box-shadow .18s var(--ease);
+        }
+
+        .forgot-only:hover {
+            background: var(--indigo-100);
+            transform: translateY(-1px);
+            box-shadow: 0 12px 28px rgba(79,70,229,.12);
+        }
+
+        .login-note {
+            margin-top: 18px;
+            padding: 15px;
+            border-radius: 23px;
+            color: var(--slate-500);
+            background: rgba(248,250,252,.88);
+            border: 1px solid rgba(148,163,184,.18);
+            font-size: 12px;
+            line-height: 1.6;
+            font-weight: 830;
+        }
+
+        .login-note b {
+            color: var(--slate-700);
+            font-weight: 1000;
+        }
+
+        .micro-footer {
+            margin-top: 18px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: center;
+        }
+
+        .micro-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            min-height: 35px;
+            padding: 0 11px;
+            border-radius: 999px;
+            color: var(--slate-500);
+            background: rgba(255,255,255,.76);
+            border: 1px solid rgba(148,163,184,.14);
+            font-size: 11px;
+            font-weight: 900;
+        }
+
+        @@media (max-width: 1160px) {
+            .page {
+                display: block;
+                padding: 20px;
+            }
+
+            .brand-mobile {
+                display: block;
+            }
+
+            .shell {
+                grid-template-columns: 1fr;
+            }
+
+            .showcase {
+                min-height: auto;
+            }
+
+            .showcase .brand-row {
+                display: none;
+            }
+
+            .hero {
+                padding: 34px 0 26px;
+            }
+
+            .floating-widget {
+                display: none;
+            }
+
+            .login-wrap {
+                min-height: auto;
+            }
+
+            .login-card {
+                min-height: auto;
+            }
+        }
+
+        @@media (max-width: 760px) {
+            .page {
+                padding: 14px;
+            }
+
+            .showcase {
+                padding: 23px;
+                border-radius: 34px;
+            }
+
+            .login-wrap {
+                padding: 12px;
+                border-radius: 34px;
+            }
+
+            .login-card {
+                padding: 23px;
+                border-radius: 30px;
+            }
+
+            .login-header {
+                flex-direction: column;
+            }
+
+            .secure-chip {
+                align-self: flex-start;
+            }
+
+            .role-switcher {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .feature-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .showcase-footer {
+                grid-template-columns: 1fr;
+            }
+
+            .field-head {
+                align-items: flex-start;
+                flex-direction: column;
+                gap: 4px;
+            }
+        }
+
+        @@media (max-width: 460px) {
+            .brand-logo {
+                width: 58px;
+                height: 58px;
+                border-radius: 22px;
+            }
+
+            .brand-logo span {
+                font-size: 29px;
+            }
+
+            .brand-text strong {
+                font-size: 20px;
+            }
+
+            .hero-title {
+                letter-spacing: -2.2px;
+            }
+
+            .login-title {
+                font-size: 30px;
+            }
+
+            .input-control {
+                padding-left: 62px;
+                padding-right: 52px;
+            }
+        }
+
+        @@media (prefers-reduced-motion: reduce) {
+            *,
+            *::before,
+            *::after {
+                animation-duration: .01ms !important;
+                animation-iteration-count: 1 !important;
+                scroll-behavior: auto !important;
+                transition-duration: .01ms !important;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <main class="page">
+        <div class="orb-layer" aria-hidden="true">
+            <div class="orb one"></div>
+            <div class="orb two"></div>
+            <div class="orb three"></div>
+            <div class="orb four"></div>
+        </div>
+
+        <div class="beam one" aria-hidden="true"></div>
+        <div class="beam two" aria-hidden="true"></div>
+        <div class="beam three" aria-hidden="true"></div>
+
+        <div class="brand-mobile">
+            <div class="brand-row">
+                <div class="brand-logo">
+                    <span>🎓</span>
+                </div>
+
+                <div class="brand-text">
+                    <strong>Ödev Sistemi</strong>
+                    <small>Modern okul paneli</small>
+                </div>
+            </div>
+        </div>
+
+        <section class="shell">
+            <aside class="showcase">
+                <div class="showcase-top">
+                    <div class="brand-row">
+                        <div class="brand-logo">
+                            <span>🎓</span>
+                        </div>
+
+                        <div class="brand-text">
+                            <strong>Ödev Sistemi</strong>
+                            <small>Okul yönetimi için premium giriş deneyimi</small>
+                        </div>
+                    </div>
+
+                    <div class="live-pill">
+                        <span class="live-dot"></span>
+                        Sistem hazır
+                    </div>
+                </div>
+
+                <div class="hero">
+                    <div class="eyebrow">
+                        ⚡ Akıllı okul paneli
+                    </div>
+
+                    <h1 class="hero-title">
+                        Her rol için tek, hızlı ve <span class="shine">efsane giriş.</span>
+                    </h1>
+
+                    <p class="hero-desc">
+                        Öğrenci, öğretmen, veli ve admin hesapları aynı sistemde güvenli şekilde buluşur.
+                        Ödevler, teslimler, duyurular ve sınıf yönetimi rolünüze özel panelde temizce görünür.
+                    </p>
+
+                    <div class="hero-tags">
+                        <div class="hero-tag">🛡️ Güvenli erişim</div>
+                        <div class="hero-tag">📚 Ders takibi</div>
+                        <div class="hero-tag">📝 Ödev yönetimi</div>
+                        <div class="hero-tag">📣 Duyurular</div>
+                    </div>
+
+                    <div class="feature-grid">
+                        <div class="feature-card">
+                            <div class="feature-icon">🎒</div>
+                            <strong>Öğrenci Paneli</strong>
+                            <span>Ödevleri görür, teslim eder, not ve geri dönüşlerini takip eder.</span>
+                        </div>
+
+                        <div class="feature-card">
+                            <div class="feature-icon">👨‍🏫</div>
+                            <strong>Öğretmen Paneli</strong>
+                            <span>Derslerine ödev verir, teslimleri değerlendirir, duyuruları görür.</span>
+                        </div>
+
+                        <div class="feature-card">
+                            <div class="feature-icon">👨‍👩‍👧</div>
+                            <strong>Veli Paneli</strong>
+                            <span>Bağlı öğrencinin ödev, teslim ve değerlendirme durumunu takip eder.</span>
+                        </div>
+
+                        <div class="feature-card">
+                            <div class="feature-icon">🛡️</div>
+                            <strong>Admin Paneli</strong>
+                            <span>Kullanıcı, sınıf, ders, duyuru ve şifre taleplerini yönetir.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="showcase-footer">
+                    <div class="metric">
+                        <strong>4</strong>
+                        <span>Rol desteği</span>
+                    </div>
+
+                    <div class="metric">
+                        <strong>Tek</strong>
+                        <span>Merkezi giriş</span>
+                    </div>
+
+                    <div class="metric">
+                        <strong>Canlı</strong>
+                        <span>Panel yapısı</span>
+                    </div>
+                </div>
+
+                <div class="floating-widget">
+                    <div class="widget-dots">
+                        <i></i>
+                        <i></i>
+                        <i></i>
+                    </div>
+
+                    <strong>Rolünü seç, paneline geç</strong>
+                    <span>Giriş yaptıktan sonra sistem seni otomatik olarak doğru panele yönlendirir.</span>
+                </div>
+            </aside>
+
+            <section class="login-wrap">
+                <div class="login-card">
+                    <div class="login-glow" aria-hidden="true"></div>
+
+                    <div class="login-header">
+                        <div>
+                            <div class="login-symbol">🔑</div>
+
+                            <h2 class="login-title">
+                                Giriş Yap
+                            </h2>
+
+                            <p class="login-subtitle">
+                                Rolünüzü seçin, numaranızı ve şifrenizi girerek panele devam edin.
+                            </p>
+                        </div>
+
+                        <div class="secure-chip">
+                            🛡️ Güvenli giriş
+                        </div>
+                    </div>
+
+                    @if (TempData["Success"] != null)
                     {
-                        <div>@error.ErrorMessage</div>
+                        <div class="alert alert-success">
+                            @TempData["Success"]
+                        </div>
                     }
+
+                    @if (TempData["Error"] != null)
+                    {
+                        <div class="alert alert-danger">
+                            @TempData["Error"]
+                        </div>
+                    }
+
+                    @if (!ViewData.ModelState.IsValid)
+                    {
+                        <div class="alert alert-danger">
+                            @foreach (var error in ViewData.ModelState.Values.SelectMany(x => x.Errors))
+                            {
+                                <div>@error.ErrorMessage</div>
+                            }
+                        </div>
+                    }
+
+                    <form asp-controller="Auth" asp-action="Login" method="post" class="form" novalidate>
+                        @Html.AntiForgeryToken()
+
+                        <div class="role-switcher" aria-label="Rol seçimi">
+                            <div class="role-item">
+                                <input type="radio"
+                                       id="role-student"
+                                       name="Role"
+                                       value="Öğrenci"
+                                       @(selectedRole == "Öğrenci" ? "checked" : "") />
+                                <label for="role-student">
+                                    <span>🎒</span>
+                                    Öğrenci
+                                </label>
+                            </div>
+
+                            <div class="role-item">
+                                <input type="radio"
+                                       id="role-teacher"
+                                       name="Role"
+                                       value="Öğretmen"
+                                       @(selectedRole == "Öğretmen" ? "checked" : "") />
+                                <label for="role-teacher">
+                                    <span>👨‍🏫</span>
+                                    Öğretmen
+                                </label>
+                            </div>
+
+                            <div class="role-item">
+                                <input type="radio"
+                                       id="role-parent"
+                                       name="Role"
+                                       value="Veli"
+                                       @(selectedRole == "Veli" ? "checked" : "") />
+                                <label for="role-parent">
+                                    <span>👨‍👩‍👧</span>
+                                    Veli
+                                </label>
+                            </div>
+
+                            <div class="role-item">
+                                <input type="radio"
+                                       id="role-admin"
+                                       name="Role"
+                                       value="Admin"
+                                       @(selectedRole == "Admin" ? "checked" : "") />
+                                <label for="role-admin">
+                                    <span>🛡️</span>
+                                    Admin
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="field">
+                            <div class="field-head">
+                                <label for="numberInput">Numara</label>
+                                <span class="field-hint">Okul / kullanıcı numarası</span>
+                            </div>
+
+                            <div class="input-box">
+                                <div class="input-icon">#</div>
+
+                                <input id="numberInput"
+                                       class="input-control"
+                                       type="text"
+                                       name="Number"
+                                       value="@postedNumber"
+                                       inputmode="numeric"
+                                       autocomplete="username"
+                                       placeholder="Numaranızı yazın" />
+                            </div>
+                        </div>
+
+                        <div class="field">
+                            <div class="field-head">
+                                <label for="passwordInput">Şifre</label>
+                                <span class="field-hint">Gizli tutulur</span>
+                            </div>
+
+                            <div class="input-box">
+                                <div class="input-icon">🔒</div>
+
+                                <input id="passwordInput"
+                                       class="input-control"
+                                       type="password"
+                                       name="Password"
+                                       autocomplete="current-password"
+                                       placeholder="Şifrenizi yazın" />
+
+                                <button class="password-toggle"
+                                        type="button"
+                                        aria-label="Şifreyi göster"
+                                        onclick="togglePassword()">
+                                    👁️
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="submit-area">
+                            <button type="submit" class="login-button">
+                                Panele Giriş Yap →
+                            </button>
+
+                            <a asp-controller="ForgotPassword"
+                               asp-action="Index"
+                               class="forgot-only">
+                                🔐 Şifremi Unuttum
+                            </a>
+                        </div>
+                    </form>
+
+                    <div class="login-note">
+                        <b>Bilgilendirme:</b>
+                        İlk girişte aktivasyon kodu istenirse size verilen kodla giriş yapıp yeni şifrenizi oluşturabilirsiniz.
+                    </div>
+
+                    <div class="micro-footer">
+                        <div class="micro-pill">⚡ Hızlı giriş</div>
+                        <div class="micro-pill">🔐 Aktivasyon destekli</div>
+                        <div class="micro-pill">🎯 Role özel panel</div>
+                    </div>
                 </div>
+            </section>
+        </section>
+    </main>
+
+    <script>
+        function togglePassword() {
+            const input = document.getElementById("passwordInput");
+            const button = document.querySelector(".password-toggle");
+
+            if (!input) {
+                return;
             }
 
-            <form asp-controller="Auth" asp-action="Login" method="post">
-                @Html.AntiForgeryToken()
-
-                <label class="form-label">Rol Seçimi</label>
-
-                <div class="role-grid web-role-grid">
-                    <label class="role-option @(Model.Role == "Admin" ? "active" : "")">
-                        <input type="radio" asp-for="Role" value="Admin" hidden />
-                        🛡️ Admin
-                    </label>
-
-                    <label class="role-option @(Model.Role == "Öğretmen" ? "active" : "")">
-                        <input type="radio" asp-for="Role" value="Öğretmen" hidden />
-                        👨‍🏫 Öğretmen
-                    </label>
-
-                    <label class="role-option disabled-role">
-                        <input type="radio" asp-for="Role" value="Öğrenci" hidden />
-                        🎒 Öğrenci
-                        <small>Flutter</small>
-                    </label>
-
-                    <label class="role-option disabled-role">
-                        <input type="radio" asp-for="Role" value="Veli" hidden />
-                        👪 Veli
-                        <small>Flutter</small>
-                    </label>
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label" asp-for="Number">Numara</label>
-                    <input class="form-control"
-                           asp-for="Number"
-                           placeholder="Admin için 0000, öğretmen için öğretmen no"
-                           autocomplete="off" />
-                    <span asp-validation-for="Number" class="text-danger"></span>
-                </div>
-
-                <div style="height: 14px;"></div>
-
-                <div class="form-group">
-                    <label class="form-label" asp-for="Password">
-                        Şifre / Aktivasyon Kodu
-                    </label>
-                    <input class="form-control"
-                           asp-for="Password"
-                           type="password"
-                           placeholder="Şifreni veya aktivasyon kodunu gir" />
-                    <span asp-validation-for="Password" class="text-danger"></span>
-                </div>
-
-                <div class="auth-help">
-                    Admin test: 0000 / admin123
-                </div>
-
-                <div class="auth-help muted-auth-help">
-                    Öğrenci ve veli girişi Flutter uygulamasından yapılır.
-                </div>
-
-                <div style="height: 24px;"></div>
-
-                <button type="submit" class="btn btn-primary" style="width:100%; height:58px;">
-                    🚀 Web Panele Giriş Yap
-                </button>
-            </form>
-        </section>
-    </div>
-</div>
-
-@section Scripts {
-    <script>
-        document.querySelectorAll(".role-option").forEach(option => {
-            option.addEventListener("click", () => {
-                if (option.classList.contains("disabled-role")) {
-                    document.querySelectorAll(".role-option").forEach(x => x.classList.remove("active"));
-                    option.classList.add("active");
-                    option.querySelector("input").checked = true;
-                    return;
+            if (input.type === "password") {
+                input.type = "text";
+                if (button) {
+                    button.textContent = "🙈";
                 }
+            } else {
+                input.type = "password";
+                if (button) {
+                    button.textContent = "👁️";
+                }
+            }
+        }
 
-                document.querySelectorAll(".role-option").forEach(x => x.classList.remove("active"));
-                option.classList.add("active");
-                option.querySelector("input").checked = true;
+        const numberInput = document.getElementById("numberInput");
+
+        if (numberInput) {
+            numberInput.addEventListener("input", function () {
+                this.value = this.value.replace(/[^\d]/g, "");
             });
-        });
+        }
+
+        const loginButton = document.querySelector(".login-button");
+
+        if (loginButton) {
+            loginButton.addEventListener("mousemove", function (event) {
+                const rect = loginButton.getBoundingClientRect();
+                const x = event.clientX - rect.left;
+                const y = event.clientY - rect.top;
+
+                loginButton.style.setProperty("--button-x", x + "px");
+                loginButton.style.setProperty("--button-y", y + "px");
+            });
+        }
     </script>
-}
+</body>
+</html>

@@ -1,0 +1,361 @@
+@model List<mvc_web.Models.PasswordRequestViewModel>
+
+@{
+    Layout = "_AdminLayout";
+    ViewData["Title"] = "Şifre Talepleri";
+}
+
+<div class="request-page">
+    <div class="page-header">
+        <div>
+            <h1>Şifre Talepleri</h1>
+            <p>Şifresini unutan kullanıcıların taleplerini yönetin.</p>
+        </div>
+    </div>
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success">
+            @TempData["Success"]
+        </div>
+    }
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger">
+            @TempData["Error"]
+        </div>
+    }
+
+    @if (Model == null || !Model.Any())
+    {
+        <div class="empty-panel">
+            <div class="empty-icon">🔐</div>
+            <h3>Henüz şifre talebi yok</h3>
+            <p>Kullanıcılar Şifremi Unuttum formunu gönderince burada görünür.</p>
+        </div>
+    }
+    else
+    {
+        <div class="request-grid">
+            @foreach (var item in Model)
+            {
+                var isPending = item.Status == "Bekliyor";
+                var isApproved = item.Status == "Onaylandı";
+                var isRejected = item.Status == "Reddedildi";
+
+                <div class="request-card">
+                    <div class="request-top">
+                        <div class="avatar">
+                            @(item.Role == "Öğretmen" ? "👨‍🏫" : item.Role == "Veli" ? "👪" : "🎒")
+                        </div>
+
+                        <div class="request-title">
+                            <h3>@(string.IsNullOrWhiteSpace(item.Name) ? "-" : item.Name)</h3>
+                            <span>@item.Role • No: @item.Number</span>
+                        </div>
+
+                        <span class="status @(isApproved ? "approved" : isRejected ? "rejected" : "pending")">
+                            @item.Status
+                        </span>
+                    </div>
+
+                    <div class="request-info">
+                        <div>
+                            <strong>Açıklama:</strong>
+                            <span>@(string.IsNullOrWhiteSpace(item.Note) ? "-" : item.Note)</span>
+                        </div>
+
+                        <div>
+                            <strong>Talep:</strong>
+                            <span>@(item.CreatedAt?.ToString("dd.MM.yyyy HH:mm") ?? "-")</span>
+                        </div>
+
+                        @if (item.ApprovedAt != null)
+                        {
+                            <div>
+                                <strong>Onay:</strong>
+                                <span>@item.ApprovedAt?.ToString("dd.MM.yyyy HH:mm")</span>
+                            </div>
+                        }
+
+                        @if (!string.IsNullOrWhiteSpace(item.ActivationCode))
+                        {
+                            <div class="activation-box">
+                                <strong>Yeni Aktivasyon Kodu:</strong>
+                                <span>@item.ActivationCode</span>
+                            </div>
+                        }
+
+                        @if (isApproved)
+                        {
+                            <div class="locked-info approved-text">
+                                Bu talep onaylandı. Tekrar işlem yapılamaz.
+                            </div>
+                        }
+
+                        @if (isRejected)
+                        {
+                            <div class="locked-info rejected-text">
+                                Bu talep reddedildi. Tekrar işlem yapılamaz.
+                            </div>
+                        }
+                    </div>
+
+                    <div class="actions">
+                        @if (isPending)
+                        {
+                            <form asp-controller="PasswordRequests" asp-action="Approve" method="post">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="id" value="@item.Id" />
+                                <button type="submit" class="btn-approve">
+                                    ✅ Onayla
+                                </button>
+                            </form>
+
+                            <form asp-controller="PasswordRequests" asp-action="Reject" method="post">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="id" value="@item.Id" />
+                                <button type="submit" class="btn-reject">
+                                    ❌ Reddet
+                                </button>
+                            </form>
+                        }
+
+                        <form asp-controller="PasswordRequests"
+                              asp-action="Delete"
+                              method="post"
+                              onsubmit="return confirm('Bu talep silinsin mi?');">
+
+                            @Html.AntiForgeryToken()
+
+                            <input type="hidden" name="id" value="@item.Id" />
+
+                            <button type="submit" class="btn-delete">
+                                🗑️ Sil
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<style>
+    .page-header {
+        background: #fff;
+        border-radius: 28px;
+        padding: 24px;
+        margin-bottom: 20px;
+        box-shadow: 0 18px 40px rgba(15, 23, 42, .06);
+    }
+
+    .page-header h1 {
+        margin: 0;
+        color: #111827;
+        font-size: 32px;
+        font-weight: 900;
+    }
+
+    .page-header p {
+        margin: 8px 0 0;
+        color: #64748b;
+        font-weight: 700;
+    }
+
+    .alert {
+        padding: 14px 18px;
+        border-radius: 18px;
+        margin-bottom: 18px;
+        font-weight: 800;
+    }
+
+    .alert-success {
+        background: #dcfce7;
+        color: #166534;
+    }
+
+    .alert-danger {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+
+    .empty-panel {
+        background: #fff;
+        border-radius: 28px;
+        padding: 40px;
+        text-align: center;
+        box-shadow: 0 18px 40px rgba(15, 23, 42, .06);
+    }
+
+    .empty-icon {
+        font-size: 48px;
+        margin-bottom: 12px;
+    }
+
+    .empty-panel h3 {
+        margin: 0;
+        color: #111827;
+        font-size: 24px;
+        font-weight: 900;
+    }
+
+    .empty-panel p {
+        color: #64748b;
+        font-weight: 700;
+    }
+
+    .request-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+        gap: 20px;
+    }
+
+    .request-card {
+        background: #fff;
+        border-radius: 28px;
+        padding: 24px;
+        box-shadow: 0 18px 40px rgba(15, 23, 42, .06);
+    }
+
+    .request-top {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin-bottom: 18px;
+    }
+
+    .avatar {
+        width: 56px;
+        height: 56px;
+        border-radius: 18px;
+        background: #eef2ff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 26px;
+    }
+
+    .request-title {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .request-title h3 {
+        margin: 0;
+        color: #111827;
+        font-size: 20px;
+        font-weight: 900;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .request-title span {
+        color: #64748b;
+        font-weight: 800;
+    }
+
+    .status {
+        border-radius: 999px;
+        padding: 8px 12px;
+        font-size: 12px;
+        font-weight: 900;
+        white-space: nowrap;
+    }
+
+    .status.pending {
+        background: #ffedd5;
+        color: #c2410c;
+    }
+
+    .status.approved {
+        background: #dcfce7;
+        color: #166534;
+    }
+
+    .status.rejected {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+
+    .request-info {
+        display: grid;
+        gap: 10px;
+        color: #334155;
+        font-weight: 700;
+        margin-bottom: 18px;
+    }
+
+    .request-info strong {
+        color: #111827;
+    }
+
+    .activation-box {
+        background: #eef2ff;
+        color: #3730a3;
+        padding: 14px;
+        border-radius: 18px;
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: center;
+    }
+
+    .activation-box span {
+        font-size: 18px;
+        font-weight: 900;
+        letter-spacing: 1px;
+    }
+
+    .locked-info {
+        padding: 12px 14px;
+        border-radius: 16px;
+        font-weight: 900;
+    }
+
+    .approved-text {
+        background: #dcfce7;
+        color: #166534;
+    }
+
+    .rejected-text {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+
+    .actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .actions form {
+        flex: 1;
+        min-width: 100px;
+        margin: 0;
+    }
+
+    .actions button {
+        width: 100%;
+        border: 0;
+        border-radius: 16px;
+        padding: 13px;
+        color: #fff;
+        font-weight: 900;
+        cursor: pointer;
+    }
+
+    .btn-approve {
+        background: #10b981;
+    }
+
+    .btn-reject {
+        background: #f59e0b;
+    }
+
+    .btn-delete {
+        background: #ef4444;
+    }
+</style>

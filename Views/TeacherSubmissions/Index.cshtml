@@ -1,0 +1,535 @@
+@model List<mvc_web.Models.TeacherSubmissionViewModel>
+
+@{
+    Layout = "_TeacherLayout";
+    ViewData["Title"] = "Öğrenci Teslimleri";
+    ViewData["PageTitle"] = "Öğrenci Teslimleri";
+    ViewData["PageSubtitle"] = "Öğrencilerin teslimlerini değerlendirin, not ve geri dönüş yazın.";
+
+    var total = Model?.Count ?? 0;
+    var evaluated = Model?.Count(x => x.Status == "Değerlendirildi") ?? 0;
+    var pending = total - evaluated;
+}
+
+<div class="teacher-submissions-page">
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success">
+            @TempData["Success"]
+        </div>
+    }
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger">
+            @TempData["Error"]
+        </div>
+    }
+
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon">📥</div>
+            <div>
+                <strong>@total</strong>
+                <span>Toplam Teslim</span>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon success">✅</div>
+            <div>
+                <strong>@evaluated</strong>
+                <span>Değerlendirildi</span>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon warning">⏳</div>
+            <div>
+                <strong>@pending</strong>
+                <span>Bekleyen</span>
+            </div>
+        </div>
+    </div>
+
+    @if (Model == null || !Model.Any())
+    {
+        <div class="empty-panel">
+            <div class="empty-icon">📭</div>
+            <h3>Henüz teslim yok</h3>
+            <p>Öğrenciler ödev teslim ettiğinde burada görünecek.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-card">
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Ödev</th>
+                            <th>Ders / Sınıf</th>
+                            <th>Öğrenci</th>
+                            <th>Cevap</th>
+                            <th>Dosya</th>
+                            <th>Durum</th>
+                            <th>Not</th>
+                            <th>Geri Dönüş</th>
+                            <th>İşlem</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @foreach (var item in Model)
+                        {
+                            var isEvaluated = item.Status == "Değerlendirildi";
+
+                            <tr>
+                                <td>
+                                    <strong>@(string.IsNullOrWhiteSpace(item.HomeworkTitle) ? "Ödev" : item.HomeworkTitle)</strong>
+                                    <small>@(item.SubmittedAt?.ToString("dd.MM.yyyy HH:mm") ?? "-")</small>
+                                </td>
+
+                                <td>
+                                    <strong>@(string.IsNullOrWhiteSpace(item.LessonName) ? "-" : item.LessonName)</strong>
+                                    <small>@(string.IsNullOrWhiteSpace(item.ClassName) ? "-" : item.ClassName)</small>
+                                </td>
+
+                                <td>
+                                    <strong>@(string.IsNullOrWhiteSpace(item.StudentName) ? "-" : item.StudentName)</strong>
+                                    <small>No: @(string.IsNullOrWhiteSpace(item.StudentNo) ? "-" : item.StudentNo)</small>
+                                </td>
+
+                                <td>
+                                    <div class="answer-box">
+                                        @(string.IsNullOrWhiteSpace(item.AnswerText) ? "-" : item.AnswerText)
+                                    </div>
+                                </td>
+
+                                <td>
+                                    @if (!string.IsNullOrWhiteSpace(item.FileUrl))
+                                    {
+                                        <a href="@item.FileUrl" target="_blank" class="file-link">
+                                            Linki Aç
+                                        </a>
+                                    }
+                                    else
+                                    {
+                                        <span>-</span>
+                                    }
+                                </td>
+
+                                <td>
+                                    @if (isEvaluated)
+                                    {
+                                        <span class="status evaluated">Değerlendirildi</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="status pending">Bekliyor</span>
+                                    }
+                                </td>
+
+                                <td>
+                                    @(string.IsNullOrWhiteSpace(item.Grade) ? "-" : item.Grade)
+                                </td>
+
+                                <td>
+                                    @(string.IsNullOrWhiteSpace(item.Feedback) ? "-" : item.Feedback)
+                                </td>
+
+                                <td>
+                                    <button type="button"
+                                            class="evaluate-btn"
+                                            data-submission-id="@item.Id"
+                                            data-submission-collection="@item.SubmissionCollection"
+                                            data-student="@item.StudentName"
+                                            data-homework="@item.HomeworkTitle"
+                                            data-grade="@item.Grade"
+                                            data-feedback="@item.Feedback">
+                                        ⭐ Değerlendir
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+<div id="evaluateModal" class="modal-backdrop">
+    <div class="modal-card">
+        <div class="modal-icon">⭐</div>
+
+        <h3>Teslimi Değerlendir</h3>
+
+        <p id="evaluateInfo">Öğrenci teslimi</p>
+
+        <form asp-controller="TeacherSubmissions"
+              asp-action="Evaluate"
+              method="post">
+
+            @Html.AntiForgeryToken()
+
+            <input type="hidden" name="submissionId" id="submissionIdInput" />
+            <input type="hidden" name="submissionCollection" id="submissionCollectionInput" />
+
+            <div class="form-group">
+                <label>Not</label>
+                <input name="grade" id="gradeInput" placeholder="Örn: 100" />
+            </div>
+
+            <div class="form-group">
+                <label>Geri Dönüş</label>
+                <textarea name="feedback" id="feedbackInput" placeholder="Öğrenciye geri dönüş yazın..."></textarea>
+            </div>
+
+            <div class="modal-actions">
+                <button type="button" id="cancelEvaluateBtn" class="cancel-btn">
+                    Vazgeç
+                </button>
+
+                <button type="submit" class="save-btn">
+                    Kaydet
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+    .teacher-submissions-page {
+        width: 100%;
+    }
+
+    .alert {
+        padding: 14px 18px;
+        border-radius: 18px;
+        margin-bottom: 18px;
+        font-weight: 900;
+    }
+
+    .alert-success {
+        background: #dcfce7;
+        color: #166534;
+    }
+
+    .alert-danger {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+        margin-bottom: 20px;
+    }
+
+    .stat-card {
+        background: #fff;
+        border-radius: 24px;
+        padding: 22px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        box-shadow: 0 18px 40px rgba(15, 23, 42, .06);
+    }
+
+    .stat-icon {
+        width: 52px;
+        height: 52px;
+        border-radius: 18px;
+        background: #eef2ff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 24px;
+    }
+
+    .stat-icon.success {
+        background: #dcfce7;
+    }
+
+    .stat-icon.warning {
+        background: #ffedd5;
+    }
+
+    .stat-card strong {
+        display: block;
+        color: #111827;
+        font-size: 28px;
+        font-weight: 900;
+    }
+
+    .stat-card span {
+        color: #64748b;
+        font-weight: 800;
+    }
+
+    .table-card,
+    .empty-panel {
+        background: #fff;
+        border-radius: 28px;
+        padding: 24px;
+        box-shadow: 0 18px 40px rgba(15, 23, 42, .06);
+    }
+
+    .empty-panel {
+        text-align: center;
+    }
+
+    .empty-icon {
+        font-size: 44px;
+        margin-bottom: 12px;
+    }
+
+    .empty-panel h3 {
+        margin: 0;
+        color: #111827;
+        font-size: 24px;
+        font-weight: 900;
+    }
+
+    .empty-panel p {
+        color: #64748b;
+        font-weight: 800;
+    }
+
+    .table-responsive {
+        overflow-x: auto;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 1050px;
+    }
+
+    th {
+        text-align: left;
+        color: #64748b;
+        font-weight: 900;
+        padding: 14px 10px;
+        border-bottom: 1px solid #e5e7eb;
+        white-space: nowrap;
+    }
+
+    td {
+        padding: 16px 10px;
+        color: #111827;
+        font-weight: 800;
+        vertical-align: top;
+        border-bottom: 1px solid #f1f5f9;
+    }
+
+    td strong {
+        display: block;
+        font-weight: 900;
+    }
+
+    td small {
+        display: block;
+        color: #64748b;
+        font-weight: 800;
+        margin-top: 3px;
+    }
+
+    .answer-box {
+        max-width: 260px;
+        white-space: normal;
+        word-break: break-word;
+    }
+
+    .file-link {
+        color: #4f46e5;
+        font-weight: 900;
+        text-decoration: none;
+    }
+
+    .file-link:hover {
+        text-decoration: underline;
+    }
+
+    .status {
+        border-radius: 999px;
+        padding: 8px 12px;
+        font-size: 12px;
+        font-weight: 900;
+        white-space: nowrap;
+    }
+
+    .status.evaluated {
+        background: #dcfce7;
+        color: #166534;
+    }
+
+    .status.pending {
+        background: #ffedd5;
+        color: #c2410c;
+    }
+
+    .evaluate-btn {
+        border: 0;
+        border-radius: 16px;
+        background: #06b6d4;
+        color: #fff;
+        padding: 12px 16px;
+        font-weight: 900;
+        cursor: pointer;
+        white-space: nowrap;
+    }
+
+    .evaluate-btn:hover {
+        background: #0891b2;
+    }
+
+    .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, .62);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 99999;
+        padding: 18px;
+    }
+
+    .modal-backdrop.show {
+        display: flex;
+    }
+
+    .modal-card {
+        width: 100%;
+        max-width: 500px;
+        background: #fff;
+        border-radius: 30px;
+        padding: 28px;
+        box-shadow: 0 30px 90px rgba(0, 0, 0, .35);
+    }
+
+    .modal-icon {
+        width: 72px;
+        height: 72px;
+        border-radius: 24px;
+        background: #eef2ff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 34px;
+        margin: 0 auto 16px;
+    }
+
+    .modal-card h3 {
+        margin: 0;
+        text-align: center;
+        color: #111827;
+        font-size: 25px;
+        font-weight: 900;
+    }
+
+    .modal-card p {
+        text-align: center;
+        color: #64748b;
+        font-weight: 800;
+    }
+
+    .form-group {
+        margin-bottom: 14px;
+    }
+
+    .form-group label {
+        display: block;
+        color: #111827;
+        font-weight: 900;
+        margin-bottom: 8px;
+    }
+
+    .form-group input,
+    .form-group textarea {
+        width: 100%;
+        border: 1px solid #e5e7eb;
+        background: #f8fafc;
+        border-radius: 18px;
+        padding: 14px;
+        font-weight: 800;
+        outline: none;
+    }
+
+    .form-group textarea {
+        min-height: 110px;
+        resize: vertical;
+    }
+
+    .modal-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+    }
+
+    .cancel-btn,
+    .save-btn {
+        min-height: 52px;
+        border: 0;
+        border-radius: 16px;
+        font-weight: 900;
+        cursor: pointer;
+    }
+
+    .cancel-btn {
+        background: #eef2ff;
+        color: #4338ca;
+    }
+
+    .save-btn {
+        background: #06b6d4;
+        color: #fff;
+    }
+
+    @@media (max-width: 780px) {
+        .stats-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+@section Scripts {
+    <script>
+        const modal = document.getElementById("evaluateModal");
+        const cancelBtn = document.getElementById("cancelEvaluateBtn");
+
+        const submissionIdInput = document.getElementById("submissionIdInput");
+        const submissionCollectionInput = document.getElementById("submissionCollectionInput");
+        const gradeInput = document.getElementById("gradeInput");
+        const feedbackInput = document.getElementById("feedbackInput");
+        const evaluateInfo = document.getElementById("evaluateInfo");
+
+        document.querySelectorAll(".evaluate-btn").forEach(btn => {
+            btn.addEventListener("click", function () {
+                submissionIdInput.value = this.dataset.submissionId || "";
+                submissionCollectionInput.value = this.dataset.submissionCollection || "homework_submissions";
+                gradeInput.value = this.dataset.grade || "";
+                feedbackInput.value = this.dataset.feedback || "";
+
+                const student = this.dataset.student || "Öğrenci";
+                const homework = this.dataset.homework || "Ödev";
+
+                evaluateInfo.innerText = `${student} • ${homework}`;
+
+                modal.classList.add("show");
+            });
+        });
+
+        cancelBtn.addEventListener("click", function () {
+            modal.classList.remove("show");
+        });
+
+        modal.addEventListener("click", function (event) {
+            if (event.target === modal) {
+                modal.classList.remove("show");
+            }
+        });
+    </script>
+}

@@ -1,0 +1,308 @@
+<div id="globalDeleteModalBackdrop" class="global-delete-modal-backdrop">
+    <div class="global-delete-modal">
+        <div class="global-delete-icon">🗑️</div>
+
+        <h3>Silme işlemini onayla</h3>
+
+        <p>
+            <strong id="globalDeleteName">Bu kayıt</strong> silinecek.
+            Bu işlem geri alınamaz.
+        </p>
+
+        <div class="global-delete-actions">
+            <button type="button" id="globalCancelDeleteBtn" class="global-delete-cancel">
+                Vazgeç
+            </button>
+
+            <button type="button" id="globalConfirmDeleteBtn" class="global-delete-confirm">
+                Evet, Sil
+            </button>
+        </div>
+    </div>
+</div>
+
+<style>
+    .global-delete-modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, .62);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999999;
+        padding: 18px;
+        backdrop-filter: blur(5px);
+    }
+
+    .global-delete-modal-backdrop.show {
+        display: flex;
+    }
+
+    .global-delete-modal {
+        width: 100%;
+        max-width: 440px;
+        background: #fff;
+        border-radius: 30px;
+        padding: 28px;
+        box-shadow: 0 30px 90px rgba(0,0,0,.35);
+        text-align: center;
+        animation: globalDeletePop .18s ease-out;
+    }
+
+    @@keyframes globalDeletePop {
+        from {
+            opacity: 0;
+            transform: scale(.94) translateY(10px);
+        }
+
+        to {
+            opacity: 1;
+            transform: scale(1) translateY(0);
+        }
+    }
+
+    .global-delete-icon {
+        width: 78px;
+        height: 78px;
+        border-radius: 26px;
+        background: #fee2e2;
+        color: #ef4444;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 36px;
+        margin: 0 auto 18px;
+    }
+
+    .global-delete-modal h3 {
+        margin: 0;
+        color: #111827;
+        font-size: 25px;
+        font-weight: 900;
+    }
+
+    .global-delete-modal p {
+        margin: 12px 0 24px;
+        color: #64748b;
+        font-weight: 700;
+        line-height: 1.5;
+    }
+
+    .global-delete-modal p strong {
+        color: #111827;
+    }
+
+    .global-delete-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+    }
+
+    .global-delete-cancel,
+    .global-delete-confirm {
+        border: 0;
+        border-radius: 17px;
+        min-height: 52px;
+        font-weight: 900;
+        cursor: pointer;
+        font-size: 15px;
+    }
+
+    .global-delete-cancel {
+        background: #eef2ff;
+        color: #4338ca;
+    }
+
+    .global-delete-confirm {
+        background: #ef4444;
+        color: #fff;
+    }
+
+    .global-delete-cancel:hover {
+        background: #e0e7ff;
+    }
+
+    .global-delete-confirm:hover {
+        background: #dc2626;
+    }
+
+    @@media (max-width: 520px) {
+        .global-delete-actions {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+<script>
+    (function () {
+        const modal = document.getElementById("globalDeleteModalBackdrop");
+        const nameText = document.getElementById("globalDeleteName");
+        const cancelBtn = document.getElementById("globalCancelDeleteBtn");
+        const confirmBtn = document.getElementById("globalConfirmDeleteBtn");
+
+        if (!modal || !nameText || !cancelBtn || !confirmBtn) return;
+
+        let pendingForm = null;
+        let pendingHref = null;
+
+        function lower(value) {
+            return (value || "").toString().toLowerCase();
+        }
+
+        function isDeleteForm(form) {
+            if (!form) return false;
+
+            const action = lower(form.getAttribute("action") || form.action || "");
+            const text = lower(form.innerText || "");
+
+            if (form.dataset.delete === "true") return true;
+            if (form.querySelector("[data-delete]")) return true;
+            if (form.querySelector(".btn-delete")) return true;
+            if (action.includes("delete")) return true;
+            if (text.includes("sil")) return true;
+
+            return false;
+        }
+
+        function isDeleteTrigger(trigger) {
+            if (!trigger) return false;
+
+            const form = trigger.closest("form");
+            const href = lower(trigger.getAttribute("href") || "");
+            const action = lower(form ? (form.getAttribute("action") || form.action || "") : "");
+            const text = lower(trigger.innerText || trigger.value || "");
+
+            if (trigger.dataset.delete === "true") return true;
+            if (trigger.classList.contains("btn-delete")) return true;
+            if (href.includes("delete")) return true;
+            if (action.includes("delete")) return true;
+            if (text.includes("sil") && form) return true;
+
+            return false;
+        }
+
+        function findDeleteName(form, trigger) {
+            const explicitName =
+                form?.getAttribute("data-delete-name") ||
+                form?.getAttribute("data-user-name") ||
+                form?.getAttribute("data-name") ||
+                trigger?.getAttribute("data-delete-name") ||
+                trigger?.getAttribute("data-user-name") ||
+                trigger?.getAttribute("data-name");
+
+            if (explicitName && explicitName.trim().length > 0) {
+                return explicitName.trim();
+            }
+
+            const card =
+                form?.closest(".user-card") ||
+                form?.closest(".request-card") ||
+                form?.closest(".class-card") ||
+                form?.closest(".homework-card") ||
+                form?.closest(".announcement-card") ||
+                form?.closest(".card") ||
+                form?.closest("tr") ||
+                trigger?.closest(".user-card") ||
+                trigger?.closest(".request-card") ||
+                trigger?.closest(".class-card") ||
+                trigger?.closest(".homework-card") ||
+                trigger?.closest(".announcement-card") ||
+                trigger?.closest(".card") ||
+                trigger?.closest("tr");
+
+            if (card) {
+                const title =
+                    card.querySelector(".user-title h3") ||
+                    card.querySelector(".request-title h3") ||
+                    card.querySelector("h3") ||
+                    card.querySelector("h2") ||
+                    card.querySelector("h1") ||
+                    card.querySelector(".title");
+
+                if (title && title.textContent.trim().length > 0) {
+                    return title.textContent.trim();
+                }
+            }
+
+            return "Bu kayıt";
+        }
+
+        function openDeleteModal(form, trigger, href) {
+            pendingForm = form || null;
+            pendingHref = href || null;
+
+            nameText.textContent = findDeleteName(form, trigger);
+            modal.classList.add("show");
+        }
+
+        function closeDeleteModal() {
+            pendingForm = null;
+            pendingHref = null;
+            modal.classList.remove("show");
+        }
+
+        document.addEventListener("click", function (event) {
+            const trigger = event.target.closest("button, input[type='submit'], a, [data-delete]");
+
+            if (!trigger) return;
+            if (!isDeleteTrigger(trigger)) return;
+
+            const form = trigger.closest("form");
+            const href = trigger.tagName.toLowerCase() === "a"
+                ? trigger.getAttribute("href")
+                : null;
+
+            if (form && form.dataset.confirmedDelete === "true") {
+                return;
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+            event.stopImmediatePropagation();
+
+            openDeleteModal(form, trigger, href);
+        }, true);
+
+        document.addEventListener("submit", function (event) {
+            const form = event.target;
+
+            if (!isDeleteForm(form)) return;
+
+            if (form.dataset.confirmedDelete === "true") {
+                return;
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+            event.stopImmediatePropagation();
+
+            openDeleteModal(form, null, null);
+        }, true);
+
+        cancelBtn.addEventListener("click", closeDeleteModal);
+
+        modal.addEventListener("click", function (event) {
+            if (event.target === modal) {
+                closeDeleteModal();
+            }
+        });
+
+        document.addEventListener("keydown", function (event) {
+            if (event.key === "Escape") {
+                closeDeleteModal();
+            }
+        });
+
+        confirmBtn.addEventListener("click", function () {
+            if (pendingForm) {
+                pendingForm.dataset.confirmedDelete = "true";
+                HTMLFormElement.prototype.submit.call(pendingForm);
+                return;
+            }
+
+            if (pendingHref) {
+                window.location.href = pendingHref;
+            }
+        });
+    })();
+</script>

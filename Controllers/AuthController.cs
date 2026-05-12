@@ -3,29 +3,316 @@ using Microsoft.AspNetCore.Mvc;
 using mvc_web.Models;
 using mvc_web.Services;
 
-namespace mvc_web.Controllers;
-
-public class AuthController : Controller
+namespace mvc_web.Controllers
 {
-    private readonly FirestoreService _firestore;
-    private readonly SessionService _session;
-
-    public AuthController(
-        FirestoreService firestore,
-        SessionService session
-    )
+    public class AuthController : Controller
     {
-        _firestore = firestore;
-        _session = session;
-    }
+        private readonly FirestoreDb _firestore;
+        private readonly SessionService _session;
 
-    [HttpGet]
-    public IActionResult Login()
-    {
-        if (_session.IsLoggedIn(HttpContext))
+        public AuthController(
+            FirestoreDb firestore,
+            SessionService session
+        )
         {
-            var role = _session.GetRole(HttpContext);
+            _firestore = firestore;
+            _session = session;
+        }
 
+        [HttpGet]
+        public IActionResult Login()
+        {
+            if (_session.IsLoggedIn(HttpContext))
+            {
+                return RedirectByRole(_session.GetRole(HttpContext) ?? "");
+            }
+
+            return View(new LoginViewModel
+            {
+                Role = "Admin"
+            });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Login(LoginViewModel model)
+        {
+            if (string.IsNullOrWhiteSpace(model.Role))
+            {
+                ModelState.AddModelError("", "Rol seçilmelidir.");
+            }
+
+            if (string.IsNullOrWhiteSpace(model.Number))
+            {
+                ModelState.AddModelError("", "Numara boş bırakılamaz.");
+            }
+
+            if (string.IsNullOrWhiteSpace(model.Password))
+            {
+                ModelState.AddModelError("", "Şifre veya aktivasyon kodu boş bırakılamaz.");
+            }
+
+            if (!ModelState.IsValid)
+            {
+                return View(model);
+            }
+
+            var role = model.Role.Trim();
+            var number = OnlyDigits(model.Number);
+            var password = model.Password.Trim();
+
+            if (role == "Admin")
+            {
+                var admin = await GetAdminCredentials();
+
+                if (number == admin.Number && password == admin.Password)
+                {
+                    await EnsureAdminDocumentExists(admin.Password);
+
+                    _session.Login(
+                        HttpContext,
+                        "admin",
+                        "Admin",
+                        "Admin",
+                        admin.Number
+                    );
+
+                    return RedirectToAction("Index", "Dashboard");
+                }
+
+                ModelState.AddModelError("", "Admin bilgileri hatalı.");
+                return View(model);
+            }
+
+            var userDoc = await FindUser(role, number);
+
+            if (userDoc == null)
+            {
+                ModelState.AddModelError("", $"{role} rolünde {number} numaralı kullanıcı bulunamadı.");
+                return View(model);
+            }
+
+            var data = userDoc.ToDictionary();
+
+            var name = GetString(data, "name", "Name");
+            var savedPassword = GetString(data, "password", "Password");
+            var activationCode = GetString(data, "activationCode", "ActivationCode");
+            var mustChangePassword = GetBool(data, "mustChangePassword", "MustChangePassword");
+
+            if (mustChangePassword)
+            {
+                if (string.IsNullOrWhiteSpace(activationCode))
+                {
+                    ModelState.AddModelError("", "Bu kullanıcı için aktivasyon kodu yok. Admin ile iletişime geçin.");
+                    return View(model);
+                }
+
+                if (password != activationCode)
+                {
+                    ModelState.AddModelError("", "Aktivasyon kodu hatalı.");
+                    return View(model);
+                }
+
+                TempData["SetPasswordUserId"] = userDoc.Id;
+                TempData["SetPasswordName"] = string.IsNullOrWhiteSpace(name) ? role : name;
+                TempData["SetPasswordRole"] = role;
+                TempData["SetPasswordNumber"] = number;
+
+                return RedirectToAction(nameof(SetPassword));
+            }
+
+            if (string.IsNullOrWhiteSpace(savedPassword))
+            {
+                ModelState.AddModelError("", "Bu kullanıcı için şifre oluşturulmamış. Aktivasyon kodu ile giriş yapın.");
+                return View(model);
+            }
+
+            if (password != savedPassword)
+            {
+                ModelState.AddModelError("", "Şifre hatalı.");
+                return View(model);
+            }
+
+            _session.Login(
+                HttpContext,
+                userDoc.Id,
+                string.IsNullOrWhiteSpace(name) ? role : name,
+                role,
+                number
+            );
+
+            return RedirectByRole(role);
+        }
+
+        [HttpGet]
+        public IActionResult SetPassword()
+        {
+            var userId = TempData["SetPasswordUserId"]?.ToString();
+            var name = TempData["SetPasswordName"]?.ToString();
+            var role = TempData["SetPasswordRole"]?.ToString();
+            var number = TempData["SetPasswordNumber"]?.ToString();
+
+            if (string.IsNullOrWhiteSpace(userId))
+            {
+                TempData["Info"] = "Şifre oluşturmak için önce aktivasyon kodu ile giriş yapmalısınız.";
+                return RedirectToAction(nameof(Login));
+            }
+
+            TempData.Keep("SetPasswordUserId");
+            TempData.Keep("SetPasswordName");
+            TempData.Keep("SetPasswordRole");
+            TempData.Keep("SetPasswordNumber");
+
+            ViewBag.Name = name ?? "Kullanıcı";
+            ViewBag.Role = role ?? "";
+            ViewBag.Number = number ?? "";
+
+            return View();
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SetPassword(string password, string repeatPassword)
+        {
+            var userId = TempData["SetPasswordUserId"]?.ToString();
+            var name = TempData["SetPasswordName"]?.ToString();
+            var role = TempData["SetPasswordRole"]?.ToString();
+            var number = TempData["SetPasswordNumber"]?.ToString();
+
+            if (string.IsNullOrWhiteSpace(userId))
+            {
+                TempData["Info"] = "Şifre oluşturmak için önce aktivasyon kodu ile giriş yapmalısınız.";
+                return RedirectToAction(nameof(Login));
+            }
+
+            if (string.IsNullOrWhiteSpace(password) || password.Length < 4)
+            {
+                TempData.Keep();
+
+                ViewBag.Name = name ?? "Kullanıcı";
+                ViewBag.Role = role ?? "";
+                ViewBag.Number = number ?? "";
+
+                ModelState.AddModelError("", "Şifre en az 4 karakter olmalıdır.");
+                return View();
+            }
+
+            if (password != repeatPassword)
+            {
+                TempData.Keep();
+
+                ViewBag.Name = name ?? "Kullanıcı";
+                ViewBag.Role = role ?? "";
+                ViewBag.Number = number ?? "";
+
+                ModelState.AddModelError("", "Şifreler eşleşmiyor.");
+                return View();
+            }
+
+            await _firestore.Collection("users").Document(userId).UpdateAsync(new Dictionary<string, object>
+            {
+                { "password", password.Trim() },
+                { "activationCode", "" },
+                { "mustChangePassword", false },
+                { "passwordUpdatedAt", Timestamp.GetCurrentTimestamp() },
+                { "updatedAt", Timestamp.GetCurrentTimestamp() }
+            });
+
+            _session.Login(
+                HttpContext,
+                userId,
+                name ?? "Kullanıcı",
+                role ?? "",
+                number ?? ""
+            );
+
+            return RedirectByRole(role ?? "");
+        }
+
+        public IActionResult Logout()
+        {
+            _session.Logout(HttpContext);
+            return RedirectToAction(nameof(Login));
+        }
+
+        private async Task<(string Number, string Password)> GetAdminCredentials()
+        {
+            var doc = await _firestore
+                .Collection("system")
+                .Document("admin_account")
+                .GetSnapshotAsync();
+
+            if (!doc.Exists)
+            {
+                return ("0000", "admin123");
+            }
+
+            var data = doc.ToDictionary();
+
+            var number = GetString(data, "number", "Number");
+            var password = GetString(data, "password", "Password");
+
+            if (string.IsNullOrWhiteSpace(number))
+            {
+                number = "0000";
+            }
+
+            if (string.IsNullOrWhiteSpace(password))
+            {
+                password = "admin123";
+            }
+
+            return (number, password);
+        }
+
+        private async Task EnsureAdminDocumentExists(string password)
+        {
+            var docRef = _firestore
+                .Collection("system")
+                .Document("admin_account");
+
+            var doc = await docRef.GetSnapshotAsync();
+
+            if (doc.Exists)
+            {
+                return;
+            }
+
+            await docRef.SetAsync(new Dictionary<string, object>
+            {
+                { "number", "0000" },
+                { "password", password },
+                { "createdAt", Timestamp.GetCurrentTimestamp() },
+                { "updatedAt", Timestamp.GetCurrentTimestamp() }
+            });
+        }
+
+        private async Task<DocumentSnapshot?> FindUser(string role, string number)
+        {
+            var snapshot = await _firestore
+                .Collection("users")
+                .WhereEqualTo("role", role)
+                .GetSnapshotAsync();
+
+            foreach (var doc in snapshot.Documents)
+            {
+                var data = doc.ToDictionary();
+
+                var schoolNo = OnlyDigits(
+                    GetString(data, "schoolNo", "SchoolNo", "number", "Number")
+                );
+
+                if (schoolNo == number)
+                {
+                    return doc;
+                }
+            }
+
+            return null;
+        }
+
+        private IActionResult RedirectByRole(string role)
+        {
             if (role == "Admin")
             {
                 return RedirectToAction("Index", "Dashboard");
@@ -35,260 +322,52 @@ public class AuthController : Controller
             {
                 return RedirectToAction("Index", "Teacher");
             }
-        }
 
-        return View(new LoginViewModel());
-    }
-
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Login(LoginViewModel model)
-    {
-        if (!ModelState.IsValid)
-        {
-            return View(model);
-        }
-
-        var role = model.Role.Trim();
-        var number = model.Number.Trim();
-        var password = model.Password.Trim();
-
-        if (role == "Öğrenci")
-        {
-            ModelState.AddModelError(
-                "",
-                "Öğrenci girişi Flutter uygulamasından yapılır. MVC web paneli sadece admin ve öğretmen içindir."
-            );
-            return View(model);
-        }
-
-        if (role == "Veli")
-        {
-            ModelState.AddModelError(
-                "",
-                "Veli girişi Flutter uygulamasından yapılır. MVC web paneli sadece admin ve öğretmen içindir."
-            );
-            return View(model);
-        }
-
-        if (role == "Admin")
-        {
-            if (number == "0000" && password == "admin123")
+            if (role == "Öğrenci" || role == "Veli")
             {
-                _session.Login(
-                    HttpContext,
-                    userId: "admin",
-                    role: "Admin",
-                    name: "Admin",
-                    number: "0000"
-                );
-
-                return RedirectToAction("Index", "Dashboard");
+                return RedirectToAction("Index", "Portal");
             }
 
-            ModelState.AddModelError("", "Admin bilgileri hatalı.");
-            return View(model);
+            return RedirectToAction(nameof(Login));
         }
 
-        if (role != "Öğretmen")
+        private static string GetString(Dictionary<string, object> data, params string[] keys)
         {
-            ModelState.AddModelError("", "Geçersiz rol seçimi.");
-            return View(model);
-        }
-
-        var snapshot = await _firestore.Users
-            .WhereEqualTo("schoolNo", number)
-            .WhereEqualTo("role", "Öğretmen")
-            .Limit(1)
-            .GetSnapshotAsync();
-
-        if (snapshot.Documents.Count == 0)
-        {
-            ModelState.AddModelError("", "Bu bilgilere ait öğretmen bulunamadı.");
-            return View(model);
-        }
-
-        var userDoc = snapshot.Documents.First();
-        var data = userDoc.ToDictionary();
-
-        var name = GetValue(data, "name", "Öğretmen");
-        var activationCode = GetValue(data, "activationCode");
-        var savedPassword = GetValue(data, "password");
-        var mustChangePassword = GetBool(data, "mustChangePassword");
-
-        if (mustChangePassword)
-        {
-            if (password != activationCode)
+            foreach (var key in keys)
             {
-                ModelState.AddModelError("", "Aktivasyon kodu hatalı.");
-                return View(model);
-            }
-
-            return RedirectToAction(
-                "CreatePassword",
-                "Auth",
-                new
+                if (data.TryGetValue(key, out var value) && value != null)
                 {
-                    userId = userDoc.Id,
-                    role = "Öğretmen",
-                    name,
-                    number
+                    return value.ToString() ?? "";
                 }
-            );
+            }
+
+            return "";
         }
 
-        if (string.IsNullOrWhiteSpace(savedPassword))
+        private static bool GetBool(Dictionary<string, object> data, params string[] keys)
         {
-            ModelState.AddModelError(
-                "",
-                "Bu öğretmen hesabı için şifre oluşturulmamış. Aktivasyon kodu ile giriş yapın."
-            );
-            return View(model);
+            foreach (var key in keys)
+            {
+                if (data.TryGetValue(key, out var value) && value != null)
+                {
+                    if (value is bool boolValue)
+                    {
+                        return boolValue;
+                    }
+
+                    if (bool.TryParse(value.ToString(), out var parsed))
+                    {
+                        return parsed;
+                    }
+                }
+            }
+
+            return false;
         }
 
-        if (password != savedPassword)
+        private static string OnlyDigits(string value)
         {
-            ModelState.AddModelError("", "Şifre hatalı.");
-            return View(model);
+            return new string((value ?? "").Where(char.IsDigit).ToArray());
         }
-
-        _session.Login(
-            HttpContext,
-            userId: userDoc.Id,
-            role: "Öğretmen",
-            name: name,
-            number: number
-        );
-
-        return RedirectToAction("Index", "Teacher");
-    }
-
-    [HttpGet]
-    public IActionResult CreatePassword(
-        string userId,
-        string role,
-        string name,
-        string number
-    )
-    {
-        if (string.IsNullOrWhiteSpace(userId))
-        {
-            return RedirectToAction("Login");
-        }
-
-        if (role != "Öğretmen")
-        {
-            TempData["Info"] = "MVC web panelinde sadece öğretmen şifre oluşturabilir.";
-            return RedirectToAction("Login");
-        }
-
-        return View(new CreatePasswordViewModel
-        {
-            UserId = userId,
-            Role = role,
-            Name = name,
-            Number = number
-        });
-    }
-
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> CreatePassword(CreatePasswordViewModel model)
-    {
-        if (!ModelState.IsValid)
-        {
-            return View(model);
-        }
-
-        if (model.Role != "Öğretmen")
-        {
-            ModelState.AddModelError("", "MVC web panelinde sadece öğretmen şifre oluşturabilir.");
-            return View(model);
-        }
-
-        if (model.NewPassword != model.RepeatPassword)
-        {
-            ModelState.AddModelError("", "Şifreler eşleşmiyor.");
-            return View(model);
-        }
-
-        var userRef = _firestore.Users.Document(model.UserId);
-        var userDoc = await userRef.GetSnapshotAsync();
-
-        if (!userDoc.Exists)
-        {
-            ModelState.AddModelError("", "Kullanıcı bulunamadı.");
-            return View(model);
-        }
-
-        var data = userDoc.ToDictionary();
-        var userRole = GetValue(data, "role");
-
-        if (userRole != "Öğretmen")
-        {
-            ModelState.AddModelError("", "Bu hesap öğretmen hesabı değil.");
-            return View(model);
-        }
-
-        await userRef.UpdateAsync(new Dictionary<string, object?>
-        {
-            { "password", model.NewPassword.Trim() },
-            { "mustChangePassword", false },
-            { "activationCode", "" },
-            { "passwordUpdatedAt", Timestamp.GetCurrentTimestamp() },
-            { "updatedAt", Timestamp.GetCurrentTimestamp() }
-        });
-
-        _session.Login(
-            HttpContext,
-            userId: model.UserId,
-            role: "Öğretmen",
-            name: model.Name,
-            number: model.Number
-        );
-
-        return RedirectToAction("Index", "Teacher");
-    }
-
-    [HttpGet]
-    public IActionResult Logout()
-    {
-        _session.Logout(HttpContext);
-        return RedirectToAction("Login", "Auth");
-    }
-
-    private static string GetValue(
-        Dictionary<string, object> data,
-        string key,
-        string defaultValue = ""
-    )
-    {
-        if (!data.ContainsKey(key) || data[key] == null)
-        {
-            return defaultValue;
-        }
-
-        return data[key]?.ToString() ?? defaultValue;
-    }
-
-    private static bool GetBool(
-        Dictionary<string, object> data,
-        string key,
-        bool defaultValue = false
-    )
-    {
-        if (!data.ContainsKey(key) || data[key] == null)
-        {
-            return defaultValue;
-        }
-
-        if (data[key] is bool boolValue)
-        {
-            return boolValue;
-        }
-
-        return bool.TryParse(data[key].ToString(), out var result)
-            ? result
-            : defaultValue;
     }
 }

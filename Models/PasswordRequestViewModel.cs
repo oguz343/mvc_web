@@ -1,21 +1,28 @@
-using System.ComponentModel.DataAnnotations;
-
-namespace mvc_web.Models;
-
-public class PasswordRequestViewModel
+namespace mvc_web.Models
 {
-    public string Id { get; set; } = "";
+    public class PasswordRequestViewModel
+    {
+        public string Id { get; set; } = "";
+        public string CollectionName { get; set; } = "";
 
-    [Required(ErrorMessage = "Ad soyad boş bırakılamaz.")]
-    public string Name { get; set; } = "";
+        public string RequestKey { get; set; } = "";
 
-    [Required(ErrorMessage = "Numara boş bırakılamaz.")]
-    public string Number { get; set; } = "";
+        public string UserId { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string Role { get; set; } = "";
+        public string Number { get; set; } = "";
+        public string Note { get; set; } = "";
 
-    [Required(ErrorMessage = "Rol seçilmelidir.")]
-    public string Role { get; set; } = "Öğrenci";
+        public string Status { get; set; } = "Bekliyor";
+        public string ActivationCode { get; set; } = "";
 
-    public string Status { get; set; } = "Bekliyor";
+        public DateTime? CreatedAt { get; set; }
+        public DateTime? ApprovedAt { get; set; }
+        public DateTime? RejectedAt { get; set; }
 
-    public string Note { get; set; } = "";
+        public bool IsPending =>
+            Status == "Bekliyor" ||
+            Status == "Pending" ||
+            string.IsNullOrWhiteSpace(Status);
+    }
 }

@@ -1,7 +1,28 @@
+@using Microsoft.AspNetCore.Http
+
 @{
+    var currentController = ViewContext.RouteData.Values["controller"]?.ToString() ?? "";
     var currentAction = ViewContext.RouteData.Values["action"]?.ToString() ?? "";
-    var name = Context.Session.GetString("Name") ?? "Öğretmen";
-    var number = Context.Session.GetString("Number") ?? "-";
+
+    var name =
+        Context.Session.GetString("UserName") ??
+        Context.Session.GetString("Name") ??
+        "Öğretmen";
+
+    var number =
+        Context.Session.GetString("UserNumber") ??
+        Context.Session.GetString("Number") ??
+        "-";
+
+    string ActiveTeacher(string action)
+    {
+        return currentController == "Teacher" && currentAction == action ? "active teacher-active" : "";
+    }
+
+    string ActiveController(string controller)
+    {
+        return currentController == controller ? "active teacher-active" : "";
+    }
 }
 
 <!DOCTYPE html>
@@ -9,57 +30,95 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
     <title>@ViewData["Title"] - Öğretmen Paneli</title>
 
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/dashboard.css" asp-append-version="true" />
 </head>
+
 <body>
     <div class="app-shell">
         <aside class="sidebar teacher-sidebar">
             <div class="brand">
-                <div class="brand-icon teacher">👨‍🏫</div>
+                <div class="brand-icon teacher">
+                    👨‍🏫
+                </div>
+
                 <div>
-                    <div class="brand-title">Ödev Sistemi</div>
-                    <div class="brand-subtitle">Öğretmen Panel</div>
+                    <div class="brand-title">
+                        Ödev Sistemi
+                    </div>
+
+                    <div class="brand-subtitle">
+                        Öğretmen Panel
+                    </div>
                 </div>
             </div>
 
             <nav class="nav-menu">
-                <a class="nav-link @(currentAction == "Index" ? "active teacher-active" : "")" asp-controller="Teacher" asp-action="Index">
+                <a class="nav-link @ActiveTeacher("Index")"
+                   asp-controller="Teacher"
+                   asp-action="Index">
                     <span>📊</span>
-                    Dashboard
+                    <strong>Dashboard</strong>
                 </a>
 
-                <a class="nav-link @(currentAction == "Assignments" || currentAction == "CreateAssignment" ? "active teacher-active" : "")" asp-controller="Teacher" asp-action="Assignments">
+                <a class="nav-link @(currentController == "Teacher" && (currentAction == "Assignments" || currentAction == "CreateAssignment" || currentAction == "EditAssignment") ? "active teacher-active" : "")"
+                   asp-controller="Teacher"
+                   asp-action="Assignments">
                     <span>📝</span>
-                    Ödevlerim
+                    <strong>Ödevlerim</strong>
                 </a>
 
-                <a class="nav-link @(currentAction == "Submissions" ? "active teacher-active" : "")" asp-controller="Teacher" asp-action="Submissions">
-                    <span>📤</span>
-                    Teslimler
+                <a class="nav-link @ActiveTeacher("Submissions")"
+                   asp-controller="Teacher"
+                   asp-action="Submissions">
+                    <span>📥</span>
+                    <strong>Teslimler</strong>
+                </a>
+
+                <a class="nav-link @ActiveController("TeacherAnnouncements")"
+                   asp-controller="TeacherAnnouncements"
+                   asp-action="Index">
+                    <span>📣</span>
+                    <strong>Duyurular</strong>
                 </a>
             </nav>
 
-            <a class="logout-link teacher-logout" asp-controller="Auth" asp-action="Logout">
+            <a class="logout-link teacher-logout"
+               asp-controller="Auth"
+               asp-action="Logout">
                 <span>🚪</span>
-                Çıkış Yap
+                <strong>Çıkış Yap</strong>
             </a>
         </aside>
 
         <main class="main-content">
             <header class="topbar">
                 <div>
-                    <div class="topbar-title">@ViewData["PageTitle"]</div>
-                    <div class="topbar-subtitle">@ViewData["PageSubtitle"]</div>
+                    <div class="topbar-title">
+                        @ViewData["PageTitle"]
+                    </div>
+
+                    <div class="topbar-subtitle">
+                        @ViewData["PageSubtitle"]
+                    </div>
                 </div>
 
                 <div class="user-chip">
-                    <div class="user-avatar teacher">Ö</div>
+                    <div class="user-avatar teacher">
+                        Ö
+                    </div>
+
                     <div>
-                        <div class="user-name">@name</div>
-                        <div class="user-role">No: @number</div>
+                        <div class="user-name">
+                            @name
+                        </div>
+
+                        <div class="user-role">
+                            No: @number
+                        </div>
                     </div>
                 </div>
             </header>
@@ -71,6 +130,9 @@
     </div>
 
     <script src="~/js/site.js" asp-append-version="true"></script>
+
     @await RenderSectionAsync("Scripts", required: false)
+
+    @await Html.PartialAsync("_DeleteConfirmModal")
 </body>
 </html>

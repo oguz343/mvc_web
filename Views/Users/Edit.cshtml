@@ -1,127 +1,367 @@
-@model UserViewModel
+@model mvc_web.Models.UserViewModel
 
 @{
     Layout = "_AdminLayout";
-    ViewData["Title"] = "Kullanıcı Düzenle";
-
-    var classes = ViewBag.Classes as List<string> ?? new List<string>();
+    ViewData["Title"] = "Kullanıcıyı Düzenle";
 }
 
-<div class="form-card">
-    @if (!ViewData.ModelState.IsValid)
-    {
-        <div class="alert alert-danger">
-            @foreach (var error in ViewData.ModelState.Values.SelectMany(v => v.Errors))
-            {
-                <div>@error.ErrorMessage</div>
-            }
+<div class="form-page">
+    <div class="form-card">
+        <div class="form-header">
+            <h1>Kullanıcıyı Düzenle</h1>
+            <p>Kullanıcı bilgilerini güncelleyin.</p>
         </div>
+
+        @if (!ViewData.ModelState.IsValid)
+        {
+            <div class="alert alert-danger">
+                @foreach (var error in ViewData.ModelState.Values.SelectMany(v => v.Errors))
+                {
+                    <div>@error.ErrorMessage</div>
+                }
+            </div>
+        }
+
+        <form asp-controller="Users" asp-action="Edit" method="post">
+            @Html.AntiForgeryToken()
+
+            <input type="hidden" asp-for="Id" />
+            <input type="hidden" asp-for="ClassName" />
+
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Rol</label>
+                    <select asp-for="Role" id="roleSelect" class="form-control">
+                        <option value="Öğrenci">Öğrenci</option>
+                        <option value="Öğretmen">Öğretmen</option>
+                        <option value="Veli">Veli</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Ad Soyad</label>
+                    <input asp-for="Name" class="form-control" placeholder="Ad Soyad" />
+                </div>
+
+                <div class="form-group">
+                    <label>T.C. Kimlik No</label>
+                    <input asp-for="Tc"
+                           class="form-control tc-input"
+                           placeholder="11 haneli T.C. kimlik no"
+                           inputmode="numeric"
+                           maxlength="11" />
+                </div>
+
+                <div class="form-group">
+                    <label id="numberLabel">Numara</label>
+                    <input asp-for="SchoolNo"
+                           class="form-control number-input"
+                           placeholder="Numara"
+                           inputmode="numeric"
+                           maxlength="12" />
+                </div>
+
+                <div class="form-group">
+                    <label>Telefon</label>
+                    <input asp-for="Phone"
+                           class="form-control phone-input"
+                           placeholder="0 555 123 45 67"
+                           inputmode="numeric"
+                           maxlength="15" />
+                </div>
+
+                <div class="form-group student-field">
+                    <label>Sınıf Seviyesi</label>
+                    <select id="gradeSelect" class="form-control">
+                        <option value="9">9</option>
+                        <option value="10">10</option>
+                        <option value="11">11</option>
+                        <option value="12">12</option>
+                    </select>
+                </div>
+
+                <div class="form-group student-field">
+                    <label>Şube</label>
+                    <select id="branchSelect" class="form-control">
+                        <option value="A">A</option>
+                        <option value="B">B</option>
+                        <option value="C">C</option>
+                        <option value="D">D</option>
+                        <option value="E">E</option>
+                        <option value="F">F</option>
+                    </select>
+                </div>
+
+                <div class="form-group teacher-field">
+                    <label>Branş</label>
+                    <input asp-for="Branch" class="form-control" placeholder="Örn: Matematik" />
+                </div>
+
+                <div class="form-group parent-field">
+                    <label>Bağlı Öğrenci Numarası</label>
+                    <input asp-for="LinkedStudentNo"
+                           class="form-control number-input"
+                           placeholder="Öğrenci numarası"
+                           inputmode="numeric"
+                           maxlength="12" />
+                </div>
+            </div>
+
+            <div class="class-preview student-field">
+                Sınıf otomatik oluşturulur:
+                <strong id="classPreview">9-A</strong>
+            </div>
+
+            <div class="actions">
+                <button type="submit" class="btn-save">
+                    💾 Değişiklikleri Kaydet
+                </button>
+
+                <a asp-controller="Users" asp-action="Index" class="btn-back">
+                    ← Geri Dön
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+    .form-page {
+        max-width: 900px;
     }
 
-    <form asp-controller="Users" asp-action="Edit" method="post">
-        @Html.AntiForgeryToken()
+    .form-card {
+        background: #fff;
+        border-radius: 30px;
+        padding: 28px;
+        box-shadow: 0 18px 40px rgba(15, 23, 42, .06);
+    }
 
-        <input type="hidden" asp-for="Id" />
+    .form-header h1 {
+        margin: 0;
+        color: #111827;
+        font-size: 32px;
+        font-weight: 900;
+    }
 
-        <div class="form-grid">
-            <div class="form-group">
-                <label class="form-label" asp-for="Role">Rol</label>
-                <select class="form-control" asp-for="Role" id="roleSelect">
-                    <option value="Öğrenci">Öğrenci</option>
-                    <option value="Öğretmen">Öğretmen</option>
-                    <option value="Veli">Veli</option>
-                </select>
-                <span asp-validation-for="Role" class="text-danger"></span>
-            </div>
+    .form-header p {
+        margin: 8px 0 24px;
+        color: #64748b;
+        font-weight: 700;
+    }
 
-            <div class="form-group">
-                <label class="form-label" asp-for="Name">Ad Soyad</label>
-                <input class="form-control" asp-for="Name" />
-                <span asp-validation-for="Name" class="text-danger"></span>
-            </div>
+    .alert {
+        padding: 14px 18px;
+        border-radius: 18px;
+        margin-bottom: 18px;
+        font-weight: 800;
+    }
 
-            <div class="form-group">
-                <label class="form-label" asp-for="Tc">T.C. Kimlik No</label>
-                <input class="form-control" asp-for="Tc" maxlength="11" />
-                <span asp-validation-for="Tc" class="text-danger"></span>
-            </div>
+    .alert-danger {
+        background: #fee2e2;
+        color: #991b1b;
+    }
 
-            <div class="form-group">
-                <label class="form-label" asp-for="SchoolNo">Numara</label>
-                <input class="form-control" asp-for="SchoolNo" />
-                <span asp-validation-for="SchoolNo" class="text-danger"></span>
-            </div>
+    .form-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 18px;
+    }
 
-            <div class="form-group">
-                <label class="form-label" asp-for="Phone">Telefon</label>
-                <input class="form-control" asp-for="Phone" maxlength="10" />
-                <span asp-validation-for="Phone" class="text-danger"></span>
-            </div>
+    .form-group label {
+        display: block;
+        color: #111827;
+        font-weight: 900;
+        margin-bottom: 8px;
+    }
 
-            <div class="form-group role-field student-field">
-                <label class="form-label" asp-for="ClassName">Sınıf</label>
-                <select class="form-control" asp-for="ClassName">
-                    <option value="">Sınıf seç</option>
-                    @foreach (var className in classes)
-                    {
-                        <option value="@className">@className</option>
-                    }
-                </select>
-                <span asp-validation-for="ClassName" class="text-danger"></span>
-            </div>
+    .form-control {
+        width: 100%;
+        border: 1px solid #e5e7eb;
+        background: #f8fafc;
+        border-radius: 18px;
+        padding: 16px 18px;
+        font-weight: 700;
+        outline: none;
+        color: #111827;
+    }
 
-            <div class="form-group role-field teacher-field">
-                <label class="form-label" asp-for="Branch">Branş</label>
-                <input class="form-control" asp-for="Branch" />
-                <span asp-validation-for="Branch" class="text-danger"></span>
-            </div>
+    .form-control:focus {
+        background: #fff;
+        border-color: #4f46e5;
+        box-shadow: 0 0 0 4px rgba(79, 70, 229, .12);
+    }
 
-            <div class="form-group role-field parent-field">
-                <label class="form-label" asp-for="LinkedStudentNo">Bağlı Öğrenci Numarası</label>
-                <input class="form-control" asp-for="LinkedStudentNo" />
-                <span asp-validation-for="LinkedStudentNo" class="text-danger"></span>
-            </div>
-        </div>
+    .class-preview {
+        margin-top: 20px;
+        background: #ffedd5;
+        color: #9a3412;
+        border-radius: 18px;
+        padding: 14px 16px;
+        font-weight: 900;
+    }
 
-        <div style="height: 22px;"></div>
+    .actions {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-top: 26px;
+    }
 
-        <div class="alert alert-warning">
-            Aktivasyon kodu bu sayfadan değişmez. Kod yenilemek için kullanıcı listesindeki <strong>Kod Yenile</strong> butonunu kullan.
-        </div>
+    .btn-save,
+    .btn-back {
+        min-height: 52px;
+        border: 0;
+        border-radius: 16px;
+        padding: 0 22px;
+        font-weight: 900;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+    }
 
-        <div class="page-actions">
-            <button class="btn btn-primary" type="submit">
-                💾 Değişiklikleri Kaydet
-            </button>
+    .btn-save {
+        background: #4f46e5;
+        color: #fff;
+    }
 
-            <a class="btn btn-light" asp-controller="Users" asp-action="Index">
-                ← Geri Dön
-            </a>
-        </div>
-    </form>
-</div>
+    .btn-back {
+        background: #eef2ff;
+        color: #4338ca;
+    }
+
+    @@media (max-width: 720px) {
+        .form-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .actions {
+            flex-direction: column;
+        }
+    }
+</style>
 
 @section Scripts {
     <script>
-        function updateRoleFields() {
-            const role = document.getElementById("roleSelect").value;
+        const roleSelect = document.getElementById("roleSelect");
+        const gradeSelect = document.getElementById("gradeSelect");
+        const branchSelect = document.getElementById("branchSelect");
+        const classNameInput = document.getElementById("ClassName");
+        const classPreview = document.getElementById("classPreview");
 
-            document.querySelectorAll(".role-field").forEach(x => x.style.display = "none");
+        function parseExistingClassName() {
+            const value = (classNameInput.value || "").trim().toUpperCase().replace(/\s+/g, "");
 
-            if (role === "Öğrenci") {
-                document.querySelector(".student-field").style.display = "flex";
-            }
+            const match = value.match(/^(\d{1,2})[-_]?([A-F])$/);
 
-            if (role === "Öğretmen") {
-                document.querySelector(".teacher-field").style.display = "flex";
-            }
-
-            if (role === "Veli") {
-                document.querySelector(".parent-field").style.display = "flex";
+            if (match) {
+                gradeSelect.value = match[1];
+                branchSelect.value = match[2];
             }
         }
 
-        document.getElementById("roleSelect").addEventListener("change", updateRoleFields);
+        function updateClassName() {
+            const className = `${gradeSelect.value}-${branchSelect.value}`;
+            classNameInput.value = className;
+            classPreview.innerText = className;
+        }
+
+        function updateRoleFields() {
+            const role = roleSelect.value;
+
+            document.querySelectorAll(".student-field").forEach(x => x.style.display = role === "Öğrenci" ? "block" : "none");
+            document.querySelectorAll(".teacher-field").forEach(x => x.style.display = role === "Öğretmen" ? "block" : "none");
+            document.querySelectorAll(".parent-field").forEach(x => x.style.display = role === "Veli" ? "block" : "none");
+
+            const numberLabel = document.getElementById("numberLabel");
+
+            if (role === "Öğrenci") {
+                numberLabel.innerText = "Okul Numarası";
+                updateClassName();
+            } else if (role === "Öğretmen") {
+                numberLabel.innerText = "Öğretmen Numarası";
+                classNameInput.value = "";
+            } else {
+                numberLabel.innerText = "Veli Numarası";
+                classNameInput.value = "";
+            }
+        }
+
+        function onlyDigits(value) {
+            return (value || "").replace(/\D/g, "");
+        }
+
+        function formatPhone(value) {
+            let digits = onlyDigits(value);
+
+            if (digits.length === 0) {
+                return "";
+            }
+
+            if (!digits.startsWith("0")) {
+                digits = "0" + digits;
+            }
+
+            digits = digits.substring(0, 11);
+
+            const zero = digits.substring(0, 1);
+            const p1 = digits.substring(1, 4);
+            const p2 = digits.substring(4, 7);
+            const p3 = digits.substring(7, 9);
+            const p4 = digits.substring(9, 11);
+
+            let result = zero;
+
+            if (p1) result += " " + p1;
+            if (p2) result += " " + p2;
+            if (p3) result += " " + p3;
+            if (p4) result += " " + p4;
+
+            return result;
+        }
+
+        roleSelect.addEventListener("change", updateRoleFields);
+        gradeSelect.addEventListener("change", updateClassName);
+        branchSelect.addEventListener("change", updateClassName);
+
+        document.querySelectorAll(".tc-input").forEach(input => {
+            input.addEventListener("input", function () {
+                this.value = onlyDigits(this.value).substring(0, 11);
+            });
+        });
+
+        document.querySelectorAll(".number-input").forEach(input => {
+            input.addEventListener("input", function () {
+                this.value = onlyDigits(this.value).substring(0, 12);
+            });
+        });
+
+        document.querySelectorAll(".phone-input").forEach(input => {
+            input.addEventListener("focus", function () {
+                if (this.value.trim() === "") {
+                    this.value = "0";
+                }
+            });
+
+            input.addEventListener("input", function () {
+                this.value = formatPhone(this.value);
+            });
+
+            input.addEventListener("blur", function () {
+                if (this.value.trim() === "0") {
+                    this.value = "";
+                }
+            });
+
+            if (input.value.trim() !== "") {
+                input.value = formatPhone(input.value);
+            }
+        });
+
+        parseExistingClassName();
+        updateClassName();
         updateRoleFields();
     </script>
 }

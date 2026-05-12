@@ -1,13 +1,12 @@
 ﻿bin/
 obj/
 .vs/
-
-firebase-service-account.json
-
+.vscode/
 *.user
 *.suo
-.vscode/
-.idea/
 
-.DS_Store
-Thumbs.db
+appsettings.Development.json
+firebase-service-account.json
+*.pfx
+*.key
+*.pem

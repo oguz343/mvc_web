@@ -1,341 +1,465 @@
 using Google.Cloud.Firestore;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Rendering;
 using mvc_web.Models;
-using mvc_web.Services;
+using System.Text.RegularExpressions;
 
-namespace mvc_web.Controllers;
-
-public class ClassesController : Controller
+namespace mvc_web.Controllers
 {
-    private readonly FirestoreService _firestore;
-    private readonly SessionService _session;
-
-    public ClassesController(
-        FirestoreService firestore,
-        SessionService session
-    )
+    public class ClassesController : Controller
     {
-        _firestore = firestore;
-        _session = session;
-    }
+        private readonly FirestoreDb _firestore;
 
-    public async Task<IActionResult> Index()
-    {
-        if (!_session.IsAdmin(HttpContext))
+        public ClassesController(FirestoreDb firestore)
         {
-            return RedirectToAction("Login", "Auth");
+            _firestore = firestore;
         }
 
-        ViewData["Title"] = "Sınıflar";
-        ViewData["PageTitle"] = "Sınıflar";
-        ViewData["PageSubtitle"] = "Okuldaki sınıf ve şube bilgilerini yönetin.";
-
-        var snapshot = await _firestore.Classes
-            .OrderByDescending("createdAt")
-            .GetSnapshotAsync();
-
-        var classes = new List<ClassViewModel>();
-
-        foreach (var doc in snapshot.Documents)
+        public async Task<IActionResult> Index()
         {
-            var data = doc.ToDictionary();
+            var snapshot = await _firestore
+                .Collection("classes")
+                .OrderBy("grade")
+                .GetSnapshotAsync();
 
-            classes.Add(new ClassViewModel
+            var classes = new List<ClassViewModel>();
+
+            foreach (var doc in snapshot.Documents)
             {
-                Id = doc.Id,
-                Name = GetValue(data, "name", "-"),
-                Grade = GetValue(data, "grade", "-"),
-                Branch = GetValue(data, "branch", "-"),
-                TeacherId = GetValue(data, "teacherId"),
-                Teacher = GetValue(data, "teacher", "Atanmadı"),
-                TeacherBranch = GetValue(data, "teacherBranch", "Branş yok"),
-                Capacity = GetInt(data, "capacity"),
-                StudentCount = GetInt(data, "studentCount")
-            });
+                var data = doc.ToDictionary();
+
+                var name = NormalizeClassName(
+                    GetString(data, "name", "Name", "className", "ClassName")
+                );
+
+                var gradeText = GetString(data, "grade", "Grade", "level", "Level");
+                var branch = GetString(data, "branch", "Branch", "section", "Section");
+
+                if (string.IsNullOrWhiteSpace(name))
+                {
+                    name = NormalizeClassName($"{gradeText}-{branch}");
+                }
+
+                var parsed = ParseClassName(name);
+
+                var model = new ClassViewModel
+                {
+                    Id = doc.Id,
+                    Name = name,
+                    Grade = parsed.grade,
+                    Branch = parsed.branch,
+                    TeacherId = GetString(data, "teacherId", "TeacherId"),
+                    TeacherName = GetString(data, "teacherName", "TeacherName"),
+                    Capacity = GetInt(data, 30, "capacity", "Capacity"),
+                    StudentCount = await CountStudentsByClass(name)
+                };
+
+                classes.Add(model);
+            }
+
+            return View(classes);
         }
 
-        return View(classes);
-    }
-
-    [HttpGet]
-    public async Task<IActionResult> Create()
-    {
-        if (!_session.IsAdmin(HttpContext))
+        [HttpGet]
+        public async Task<IActionResult> Create()
         {
-            return RedirectToAction("Login", "Auth");
-        }
+            var model = new ClassViewModel
+            {
+                Grade = 9,
+                Branch = "A",
+                Name = "9-A",
+                Capacity = 30,
+                Teachers = await GetTeachers()
+            };
 
-        ViewData["Title"] = "Sınıf Ekle";
-        ViewData["PageTitle"] = "Yeni Sınıf";
-        ViewData["PageSubtitle"] = "Sınıf, şube, kapasite ve sınıf öğretmeni belirleyin.";
-
-        await LoadTeacherOptions();
-
-        return View(new ClassViewModel());
-    }
-
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Create(ClassViewModel model)
-    {
-        if (!_session.IsAdmin(HttpContext))
-        {
-            return RedirectToAction("Login", "Auth");
-        }
-
-        await LoadTeacherOptions();
-
-        await FillTeacherInfo(model);
-        ValidateClass(model);
-
-        if (!ModelState.IsValid)
-        {
-            ViewData["Title"] = "Sınıf Ekle";
-            ViewData["PageTitle"] = "Yeni Sınıf";
-            ViewData["PageSubtitle"] = "Sınıf, şube, kapasite ve sınıf öğretmeni belirleyin.";
             return View(model);
         }
 
-        var className = $"{model.Grade}-{model.Branch}";
-
-        await _firestore.Classes.AddAsync(new Dictionary<string, object?>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Create(ClassViewModel model)
         {
-            { "name", className },
-            { "grade", model.Grade.Trim() },
-            { "branch", model.Branch.Trim() },
-            { "teacherId", model.TeacherId.Trim() },
-            { "teacher", model.Teacher.Trim() },
-            { "teacherBranch", string.IsNullOrWhiteSpace(model.TeacherBranch) ? "Branş yok" : model.TeacherBranch.Trim() },
-            { "capacity", model.Capacity },
-            { "studentCount", model.StudentCount },
-            { "createdAt", Timestamp.GetCurrentTimestamp() },
-            { "updatedAt", Timestamp.GetCurrentTimestamp() }
-        });
+            ModelState.Clear();
 
-        TempData["Success"] = $"{className} sınıfı oluşturuldu.";
-        return RedirectToAction("Index");
-    }
+            model.Branch = CleanText(model.Branch).ToUpperInvariant();
+            model.Name = NormalizeClassName($"{model.Grade}-{model.Branch}");
 
-    [HttpGet]
-    public async Task<IActionResult> Edit(string id)
-    {
-        if (!_session.IsAdmin(HttpContext))
-        {
-            return RedirectToAction("Login", "Auth");
+            if (model.Grade < 9 || model.Grade > 12)
+            {
+                ModelState.AddModelError(nameof(model.Grade), "Sınıf seviyesi 9, 10, 11 veya 12 olmalıdır.");
+            }
+
+            if (!Regex.IsMatch(model.Branch ?? "", "^[A-F]$"))
+            {
+                ModelState.AddModelError(nameof(model.Branch), "Şube A, B, C, D, E veya F olmalıdır.");
+            }
+
+            if (model.Capacity <= 0)
+            {
+                ModelState.AddModelError(nameof(model.Capacity), "Kapasite 1 veya daha büyük olmalıdır.");
+            }
+
+            if (await ClassExists(model.Name))
+            {
+                ModelState.AddModelError(nameof(model.Name), "Bu sınıf zaten kayıtlı.");
+            }
+
+            if (!ModelState.IsValid)
+            {
+                model.Teachers = await GetTeachers();
+                return View(model);
+            }
+
+            var teacherName = await GetTeacherName(model.TeacherId);
+            var now = Timestamp.GetCurrentTimestamp();
+
+            await _firestore.Collection("classes").AddAsync(new Dictionary<string, object>
+            {
+                { "name", model.Name },
+                { "className", model.Name },
+                { "grade", model.Grade },
+                { "branch", model.Branch },
+                { "teacherId", model.TeacherId ?? "" },
+                { "teacherName", teacherName },
+                { "capacity", model.Capacity },
+                { "studentCount", await CountStudentsByClass(model.Name) },
+                { "createdAt", now },
+                { "updatedAt", now }
+            });
+
+            TempData["Success"] = "Sınıf oluşturuldu.";
+            return RedirectToAction(nameof(Index));
         }
 
-        if (string.IsNullOrWhiteSpace(id))
+        [HttpGet]
+        public async Task<IActionResult> Edit(string id)
         {
-            return RedirectToAction("Index");
-        }
+            if (string.IsNullOrWhiteSpace(id))
+            {
+                TempData["Error"] = "Sınıf bulunamadı.";
+                return RedirectToAction(nameof(Index));
+            }
 
-        var doc = await _firestore.Classes.Document(id).GetSnapshotAsync();
+            var doc = await _firestore.Collection("classes").Document(id).GetSnapshotAsync();
 
-        if (!doc.Exists)
-        {
-            TempData["Error"] = "Sınıf bulunamadı.";
-            return RedirectToAction("Index");
-        }
+            if (!doc.Exists)
+            {
+                TempData["Error"] = "Sınıf bulunamadı.";
+                return RedirectToAction(nameof(Index));
+            }
 
-        var data = doc.ToDictionary();
+            var data = doc.ToDictionary();
 
-        var model = new ClassViewModel
-        {
-            Id = doc.Id,
-            Name = GetValue(data, "name"),
-            Grade = GetValue(data, "grade", "9"),
-            Branch = GetValue(data, "branch", "A"),
-            TeacherId = GetValue(data, "teacherId"),
-            Teacher = GetValue(data, "teacher"),
-            TeacherBranch = GetValue(data, "teacherBranch"),
-            Capacity = GetInt(data, "capacity", 30),
-            StudentCount = GetInt(data, "studentCount", 0)
-        };
+            var name = NormalizeClassName(
+                GetString(data, "name", "Name", "className", "ClassName")
+            );
 
-        ViewData["Title"] = "Sınıf Düzenle";
-        ViewData["PageTitle"] = "Sınıf Düzenle";
-        ViewData["PageSubtitle"] = $"{model.Name} sınıfını güncelleyin.";
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                name = NormalizeClassName(
+                    $"{GetString(data, "grade", "Grade")}-{GetString(data, "branch", "Branch")}"
+                );
+            }
 
-        await LoadTeacherOptions();
+            var parsed = ParseClassName(name);
 
-        return View(model);
-    }
+            var model = new ClassViewModel
+            {
+                Id = doc.Id,
+                Name = name,
+                Grade = parsed.grade,
+                Branch = parsed.branch,
+                TeacherId = GetString(data, "teacherId", "TeacherId"),
+                TeacherName = GetString(data, "teacherName", "TeacherName"),
+                Capacity = GetInt(data, 30, "capacity", "Capacity"),
+                StudentCount = await CountStudentsByClass(name),
+                Teachers = await GetTeachers()
+            };
 
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Edit(ClassViewModel model)
-    {
-        if (!_session.IsAdmin(HttpContext))
-        {
-            return RedirectToAction("Login", "Auth");
-        }
-
-        await LoadTeacherOptions();
-
-        await FillTeacherInfo(model);
-        ValidateClass(model);
-
-        if (!ModelState.IsValid)
-        {
-            ViewData["Title"] = "Sınıf Düzenle";
-            ViewData["PageTitle"] = "Sınıf Düzenle";
-            ViewData["PageSubtitle"] = "Sınıf bilgilerini güncelleyin.";
             return View(model);
         }
 
-        var classRef = _firestore.Classes.Document(model.Id);
-        var classDoc = await classRef.GetSnapshotAsync();
-
-        if (!classDoc.Exists)
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Edit(ClassViewModel model)
         {
-            TempData["Error"] = "Sınıf bulunamadı.";
-            return RedirectToAction("Index");
+            ModelState.Clear();
+
+            if (string.IsNullOrWhiteSpace(model.Id))
+            {
+                TempData["Error"] = "Sınıf bulunamadı.";
+                return RedirectToAction(nameof(Index));
+            }
+
+            model.Branch = CleanText(model.Branch).ToUpperInvariant();
+            model.Name = NormalizeClassName($"{model.Grade}-{model.Branch}");
+
+            if (model.Grade < 9 || model.Grade > 12)
+            {
+                ModelState.AddModelError(nameof(model.Grade), "Sınıf seviyesi 9, 10, 11 veya 12 olmalıdır.");
+            }
+
+            if (!Regex.IsMatch(model.Branch ?? "", "^[A-F]$"))
+            {
+                ModelState.AddModelError(nameof(model.Branch), "Şube A, B, C, D, E veya F olmalıdır.");
+            }
+
+            if (model.Capacity <= 0)
+            {
+                ModelState.AddModelError(nameof(model.Capacity), "Kapasite 1 veya daha büyük olmalıdır.");
+            }
+
+            if (await ClassExists(model.Name, model.Id))
+            {
+                ModelState.AddModelError(nameof(model.Name), "Bu sınıf başka bir kayıtta zaten var.");
+            }
+
+            if (!ModelState.IsValid)
+            {
+                model.Teachers = await GetTeachers();
+                model.StudentCount = await CountStudentsByClass(model.Name);
+                return View(model);
+            }
+
+            var teacherName = await GetTeacherName(model.TeacherId);
+            var studentCount = await CountStudentsByClass(model.Name);
+
+            await _firestore.Collection("classes").Document(model.Id).UpdateAsync(new Dictionary<string, object>
+            {
+                { "name", model.Name },
+                { "className", model.Name },
+                { "grade", model.Grade },
+                { "branch", model.Branch },
+                { "teacherId", model.TeacherId ?? "" },
+                { "teacherName", teacherName },
+                { "capacity", model.Capacity },
+                { "studentCount", studentCount },
+                { "updatedAt", Timestamp.GetCurrentTimestamp() }
+            });
+
+            TempData["Success"] = "Sınıf güncellendi.";
+            return RedirectToAction(nameof(Index));
         }
 
-        var className = $"{model.Grade}-{model.Branch}";
-
-        await classRef.UpdateAsync(new Dictionary<string, object?>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Delete(string id)
         {
-            { "name", className },
-            { "grade", model.Grade.Trim() },
-            { "branch", model.Branch.Trim() },
-            { "teacherId", model.TeacherId.Trim() },
-            { "teacher", model.Teacher.Trim() },
-            { "teacherBranch", string.IsNullOrWhiteSpace(model.TeacherBranch) ? "Branş yok" : model.TeacherBranch.Trim() },
-            { "capacity", model.Capacity },
-            { "studentCount", model.StudentCount },
-            { "updatedAt", Timestamp.GetCurrentTimestamp() }
-        });
+            if (string.IsNullOrWhiteSpace(id))
+            {
+                TempData["Error"] = "Sınıf bulunamadı.";
+                return RedirectToAction(nameof(Index));
+            }
 
-        TempData["Success"] = "Sınıf güncellendi.";
-        return RedirectToAction("Index");
-    }
+            await _firestore.Collection("classes").Document(id).DeleteAsync();
 
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Delete(string id)
-    {
-        if (!_session.IsAdmin(HttpContext))
-        {
-            return RedirectToAction("Login", "Auth");
+            TempData["Success"] = "Sınıf silindi.";
+            return RedirectToAction(nameof(Index));
         }
 
-        if (string.IsNullOrWhiteSpace(id))
+        private async Task<List<SelectListItem>> GetTeachers()
         {
-            return RedirectToAction("Index");
+            var result = new List<SelectListItem>
+            {
+                new SelectListItem
+                {
+                    Value = "",
+                    Text = "Öğretmen seç"
+                }
+            };
+
+            var snapshot = await _firestore
+                .Collection("users")
+                .WhereEqualTo("role", "Öğretmen")
+                .GetSnapshotAsync();
+
+            foreach (var doc in snapshot.Documents)
+            {
+                var data = doc.ToDictionary();
+
+                var name = GetString(data, "name", "Name");
+                var branch = GetString(data, "branch", "Branch");
+
+                result.Add(new SelectListItem
+                {
+                    Value = doc.Id,
+                    Text = string.IsNullOrWhiteSpace(branch)
+                        ? name
+                        : $"{name} • {branch}"
+                });
+            }
+
+            return result;
         }
 
-        await _firestore.Classes.Document(id).DeleteAsync();
-
-        TempData["Success"] = "Sınıf silindi.";
-        return RedirectToAction("Index");
-    }
-
-    private void ValidateClass(ClassViewModel model)
-    {
-        if (model.StudentCount > model.Capacity)
+        private async Task<string> GetTeacherName(string? teacherId)
         {
-            ModelState.AddModelError(
-                nameof(model.StudentCount),
-                "Öğrenci sayısı kapasiteden büyük olamaz."
-            );
-        }
+            if (string.IsNullOrWhiteSpace(teacherId))
+            {
+                return "";
+            }
 
-        if (string.IsNullOrWhiteSpace(model.TeacherId))
-        {
-            ModelState.AddModelError(
-                nameof(model.TeacherId),
-                "Sınıf öğretmeni seçilmelidir."
-            );
-        }
+            var doc = await _firestore.Collection("users").Document(teacherId).GetSnapshotAsync();
 
-        if (string.IsNullOrWhiteSpace(model.Teacher))
-        {
-            ModelState.AddModelError(
-                nameof(model.TeacherId),
-                "Seçilen öğretmen bulunamadı."
-            );
-        }
-    }
+            if (!doc.Exists)
+            {
+                return "";
+            }
 
-    private async Task LoadTeacherOptions()
-    {
-        var snapshot = await _firestore.Users
-            .WhereEqualTo("role", "Öğretmen")
-            .GetSnapshotAsync();
-
-        var teachers = new List<TeacherOptionViewModel>();
-
-        foreach (var doc in snapshot.Documents)
-        {
             var data = doc.ToDictionary();
 
-            teachers.Add(new TeacherOptionViewModel
+            return GetString(data, "name", "Name");
+        }
+
+        private async Task<int> CountStudentsByClass(string className)
+        {
+            var target = NormalizeClassName(className);
+
+            if (string.IsNullOrWhiteSpace(target))
             {
-                Id = doc.Id,
-                Name = GetValue(data, "name", "İsimsiz"),
-                Branch = GetValue(data, "branch", "Branş yok")
-            });
+                return 0;
+            }
+
+            var snapshot = await _firestore
+                .Collection("users")
+                .WhereEqualTo("role", "Öğrenci")
+                .GetSnapshotAsync();
+
+            int count = 0;
+
+            foreach (var doc in snapshot.Documents)
+            {
+                var data = doc.ToDictionary();
+
+                var userClass = NormalizeClassName(
+                    GetString(data, "className", "ClassName", "class", "Class")
+                );
+
+                if (userClass == target)
+                {
+                    count++;
+                }
+            }
+
+            return count;
         }
 
-        ViewBag.Teachers = teachers
-            .OrderBy(x => x.Name)
-            .ToList();
-    }
-
-    private async Task FillTeacherInfo(ClassViewModel model)
-    {
-        if (string.IsNullOrWhiteSpace(model.TeacherId))
+        private async Task<bool> ClassExists(string className, string? excludedId = null)
         {
-            model.Teacher = "";
-            model.TeacherBranch = "";
-            return;
+            var target = NormalizeClassName(className);
+
+            var snapshot = await _firestore.Collection("classes").GetSnapshotAsync();
+
+            foreach (var doc in snapshot.Documents)
+            {
+                if (!string.IsNullOrWhiteSpace(excludedId) && doc.Id == excludedId)
+                {
+                    continue;
+                }
+
+                var data = doc.ToDictionary();
+
+                var name = NormalizeClassName(
+                    GetString(data, "name", "Name", "className", "ClassName")
+                );
+
+                if (name == target)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
-        var teacherDoc = await _firestore.Users
-            .Document(model.TeacherId)
-            .GetSnapshotAsync();
-
-        if (!teacherDoc.Exists)
+        private static (int grade, string branch) ParseClassName(string value)
         {
-            model.Teacher = "";
-            model.TeacherBranch = "";
-            return;
+            var normalized = NormalizeClassName(value);
+            var match = Regex.Match(normalized, @"^(9|10|11|12)-([A-F])$");
+
+            if (match.Success)
+            {
+                return (int.Parse(match.Groups[1].Value), match.Groups[2].Value);
+            }
+
+            return (9, "A");
         }
 
-        var data = teacherDoc.ToDictionary();
-
-        model.Teacher = GetValue(data, "name", "İsimsiz");
-        model.TeacherBranch = GetValue(data, "branch", "Branş yok");
-    }
-
-    private static string GetValue(
-        Dictionary<string, object> data,
-        string key,
-        string defaultValue = ""
-    )
-    {
-        if (!data.ContainsKey(key) || data[key] == null)
+        private static string NormalizeClassName(string value)
         {
+            var text = (value ?? "")
+                .Trim()
+                .ToUpperInvariant()
+                .Replace("SINIF", "")
+                .Replace("ŞUBE", "")
+                .Replace("SUBE", "")
+                .Replace("_", "-")
+                .Replace("/", "-")
+                .Replace("\\", "-")
+                .Replace(".", "-");
+
+            text = Regex.Replace(text, @"\s+", "");
+
+            var match = Regex.Match(text, @"(9|10|11|12)[^\dA-F]*([A-F])");
+
+            if (match.Success)
+            {
+                return $"{match.Groups[1].Value}-{match.Groups[2].Value}";
+            }
+
+            match = Regex.Match(text, @"([A-F])[^\dA-F]*(9|10|11|12)");
+
+            if (match.Success)
+            {
+                return $"{match.Groups[2].Value}-{match.Groups[1].Value}";
+            }
+
+            return "";
+        }
+
+        private static string GetString(Dictionary<string, object> data, params string[] keys)
+        {
+            foreach (var key in keys)
+            {
+                if (data.TryGetValue(key, out var value) && value != null)
+                {
+                    return value.ToString() ?? "";
+                }
+            }
+
+            return "";
+        }
+
+        private static int GetInt(Dictionary<string, object> data, int defaultValue, params string[] keys)
+        {
+            foreach (var key in keys)
+            {
+                if (!data.TryGetValue(key, out var value) || value == null)
+                {
+                    continue;
+                }
+
+                if (value is int intValue)
+                {
+                    return intValue;
+                }
+
+                if (int.TryParse(value.ToString(), out var parsed))
+                {
+                    return parsed;
+                }
+            }
+
             return defaultValue;
         }
 
-        return data[key]?.ToString() ?? defaultValue;
-    }
-
-    private static int GetInt(
-        Dictionary<string, object> data,
-        string key,
-        int defaultValue = 0
-    )
-    {
-        if (!data.ContainsKey(key) || data[key] == null)
+        private static string CleanText(string value)
         {
-            return defaultValue;
+            return (value ?? "")
+                .Replace("\u00A0", " ")
+                .Replace("\r", " ")
+                .Replace("\n", " ")
+                .Trim();
         }
-
-        return int.TryParse(data[key].ToString(), out var value)
-            ? value
-            : defaultValue;
     }
 }

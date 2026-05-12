@@ -1,109 +1,811 @@
-@model List<UserViewModel>
+@model List<mvc_web.Models.UserViewModel>
 
 @{
     Layout = "_AdminLayout";
     ViewData["Title"] = "Kullanıcılar";
+
+    var users = Model ?? new List<mvc_web.Models.UserViewModel>();
 }
 
-@if (TempData["Success"] != null)
-{
-    <div class="alert alert-success">@TempData["Success"]</div>
-}
+<div class="users-page">
+    <div class="users-toolbar">
+        <div>
+            <h2>Kullanıcılar</h2>
+            <p>Öğrenci, öğretmen ve veli hesaplarını yönetin.</p>
+        </div>
 
-@if (TempData["Error"] != null)
-{
-    <div class="alert alert-danger">@TempData["Error"]</div>
-}
+        <div class="toolbar-actions">
+            <a asp-controller="Users" asp-action="Create" class="btn-primary">
+                👥 Yeni Kullanıcı
+            </a>
 
-<div class="page-actions">
-    <a class="btn btn-primary" asp-controller="Users" asp-action="Create">
-        👤 Yeni Kullanıcı
-    </a>
+            <form asp-controller="Users"
+                  asp-action="ImportStudentsExcel"
+                  method="post"
+                  enctype="multipart/form-data"
+                  class="excel-form">
+
+                @Html.AntiForgeryToken()
+
+                <label class="excel-btn">
+                    🎒 Öğrenci Excel
+                    <input type="file"
+                           name="excelFile"
+                           accept=".xlsx"
+                           onchange="this.form.submit()"
+                           hidden />
+                </label>
+            </form>
+
+            <form asp-controller="Users"
+                  asp-action="ImportTeachersExcel"
+                  method="post"
+                  enctype="multipart/form-data"
+                  class="excel-form">
+
+                @Html.AntiForgeryToken()
+
+                <label class="excel-btn teacher">
+                    👨‍🏫 Öğretmen Excel
+                    <input type="file"
+                           name="excelFile"
+                           accept=".xlsx"
+                           onchange="this.form.submit()"
+                           hidden />
+                </label>
+            </form>
+        </div>
+    </div>
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success">
+            @TempData["Success"]
+        </div>
+    }
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger">
+            @TempData["Error"]
+        </div>
+    }
+
+    <div class="search-panel">
+        <div class="search-box">
+            <span>🔍</span>
+
+            <input id="userSearchInput"
+                   type="search"
+                   placeholder="Ad soyad veya numara yazın... Örn: Oğuzhan, 145"
+                   autocomplete="off" />
+        </div>
+
+        <div class="search-info">
+            <strong id="visibleCount">@users.Count</strong>
+            <span>kullanıcı gösteriliyor</span>
+        </div>
+    </div>
+
+    <div class="role-filter">
+        <button type="button" class="role-filter-btn active" data-role="all">
+            Tümü
+        </button>
+
+        <button type="button" class="role-filter-btn" data-role="Öğrenci">
+            Öğrenci
+        </button>
+
+        <button type="button" class="role-filter-btn" data-role="Öğretmen">
+            Öğretmen
+        </button>
+
+        <button type="button" class="role-filter-btn" data-role="Veli">
+            Veli
+        </button>
+    </div>
+
+    @if (!users.Any())
+    {
+        <div class="empty-box">
+            Henüz kullanıcı eklenmedi.
+        </div>
+    }
+    else
+    {
+        <div id="usersGrid" class="users-grid">
+            @foreach (var user in users)
+            {
+                var roleIcon = user.Role == "Öğretmen" ? "👨‍🏫" : user.Role == "Veli" ? "👪" : "🎒";
+                var roleClass = user.Role == "Öğretmen" ? "teacher" : user.Role == "Veli" ? "parent" : "student";
+
+                <div class="user-card"
+                     data-role="@user.Role"
+                     data-name="@user.Name"
+                     data-number="@user.SchoolNo">
+
+                    <div class="user-top">
+                        <div class="user-icon @roleClass">
+                            @roleIcon
+                        </div>
+
+                        <div class="user-main">
+                            <h3>@user.Name</h3>
+                            <p>@user.SchoolNo</p>
+                        </div>
+                    </div>
+
+                    <div class="user-tags">
+                        <span class="tag @roleClass">
+                            @user.Role
+                        </span>
+
+                        @if (user.MustChangePassword)
+                        {
+                            <span class="tag waiting">
+                                Aktivasyon Bekliyor
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="tag active">
+                                Aktif
+                            </span>
+                        }
+                    </div>
+
+                    <div class="user-details">
+                        @if (user.Role == "Öğrenci")
+                        {
+                            <div>
+                                <span>ℹ️</span>
+                                <strong>Sınıf:</strong>
+                                <b>@(string.IsNullOrWhiteSpace(user.ClassName) ? "-" : user.ClassName)</b>
+                            </div>
+                        }
+
+                        @if (user.Role == "Öğretmen")
+                        {
+                            <div>
+                                <span>📚</span>
+                                <strong>Branş:</strong>
+                                <b>@(string.IsNullOrWhiteSpace(user.Branch) ? "-" : user.Branch)</b>
+                            </div>
+                        }
+
+                        @if (user.Role == "Veli")
+                        {
+                            <div>
+                                <span>👪</span>
+                                <strong>Bağlı Öğrenci:</strong>
+                                <b>@(string.IsNullOrWhiteSpace(user.LinkedStudentNo) ? "-" : user.LinkedStudentNo)</b>
+                            </div>
+                        }
+
+                        <div>
+                            <span>📞</span>
+                            <strong>Telefon:</strong>
+                            <b>@(string.IsNullOrWhiteSpace(user.Phone) ? "-" : user.Phone)</b>
+                        </div>
+
+                        <div>
+                            <span>🔑</span>
+                            <strong>Aktivasyon:</strong>
+                            <b>@(string.IsNullOrWhiteSpace(user.ActivationCode) ? "-" : user.ActivationCode)</b>
+                        </div>
+                    </div>
+
+                    <div class="card-actions">
+                        <a asp-controller="Users"
+                           asp-action="Edit"
+                           asp-route-id="@user.Id"
+                           class="edit-btn">
+                            ✏️ Düzenle
+                        </a>
+
+                        <form asp-controller="Users"
+                              asp-action="Delete"
+                              method="post"
+                              class="delete-user-form"
+                              data-user-name="@user.Name">
+
+                            @Html.AntiForgeryToken()
+
+                            <input type="hidden" name="id" value="@user.Id" />
+
+                            <button type="submit" class="delete-btn">
+                                🗑️ Sil
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <div id="noSearchResult" class="empty-box" style="display:none;">
+            Aradığınız kritere uygun kullanıcı bulunamadı.
+        </div>
+    }
 </div>
 
-@if (Model.Count == 0)
-{
-    <div class="empty-state">
-        <div class="empty-icon">👥</div>
-        <div class="empty-title">Henüz kullanıcı yok</div>
-        <div class="empty-text">Yeni kullanıcı ekleyerek başlayabilirsiniz.</div>
+<div id="deleteModal" class="delete-modal-backdrop">
+    <div class="delete-modal-card">
+        <div class="delete-modal-icon">
+            🗑️
+        </div>
+
+        <h3>Kullanıcı silinsin mi?</h3>
+
+        <p>
+            <strong id="deleteUserName">Bu kullanıcı</strong> kalıcı olarak silinecek.
+        </p>
+
+        <div class="delete-modal-actions">
+            <button type="button" id="cancelDeleteBtn" class="cancel-modal-btn">
+                Vazgeç
+            </button>
+
+            <button type="button" id="confirmDeleteBtn" class="confirm-modal-btn">
+                Sil
+            </button>
+        </div>
     </div>
-}
-else
-{
-    <div class="card-grid">
-        @foreach (var user in Model)
-        {
-            var roleBadge = user.Role == "Öğretmen"
-                ? "badge-cyan"
-                : user.Role == "Veli"
-                    ? "badge-orange"
-                    : "badge-purple";
+</div>
 
-            <div class="data-card">
-                <div class="data-card-header">
-                    <div class="data-card-icon">
-                        @(user.Role == "Öğretmen" ? "👨‍🏫" : user.Role == "Veli" ? "👪" : "🎒")
-                    </div>
-                    <div>
-                        <div class="data-card-title">@user.Name</div>
-                        <div class="data-card-subtitle">@user.SchoolNo</div>
-                    </div>
-                </div>
+<style>
+    .users-page {
+        display: grid;
+        gap: 18px;
+    }
 
-                <div class="badge-row">
-                    <span class="badge @roleBadge">@user.Role</span>
+    .users-toolbar {
+        background: #fff;
+        border-radius: 30px;
+        padding: 24px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 18px;
+        box-shadow: 0 18px 42px rgba(15, 23, 42, .07);
+    }
 
-                    @if (user.MustChangePassword)
-                    {
-                        <span class="badge badge-orange">Aktivasyon Bekliyor</span>
-                    }
-                    else
-                    {
-                        <span class="badge badge-green">Aktif</span>
-                    }
-                </div>
+    .users-toolbar h2 {
+        margin: 0;
+        color: #0f172a;
+        font-size: 30px;
+        font-weight: 950;
+    }
 
-                <div class="info-line">
-                    <span>ℹ️</span>
-                    <span>@user.Detail</span>
-                </div>
+    .users-toolbar p {
+        margin: 6px 0 0;
+        color: #64748b;
+        font-weight: 800;
+    }
 
-                <div class="info-line">
-                    <span>📞</span>
-                    <span>@(string.IsNullOrWhiteSpace(user.Phone) ? "-" : user.Phone)</span>
-                </div>
+    .toolbar-actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
 
-                <div class="info-line">
-                    <span>🔑</span>
-                    <span>
-                        Aktivasyon:
-                        <strong>@(string.IsNullOrWhiteSpace(user.ActivationCode) ? "Yok" : user.ActivationCode)</strong>
-                    </span>
-                </div>
+    .btn-primary,
+    .excel-btn {
+        min-height: 48px;
+        border-radius: 16px;
+        padding: 0 16px;
+        border: 0;
+        background: #4f46e5;
+        color: #fff;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 950;
+        cursor: pointer;
+        white-space: nowrap;
+    }
 
-                <div class="card-actions">
-                    <a class="btn btn-light" asp-controller="Users" asp-action="Edit" asp-route-id="@user.Id">
-                        ✏️ Düzenle
-                    </a>
+    .excel-btn {
+        background: #06b6d4;
+    }
 
-                    <form asp-controller="Users" asp-action="RenewCode" method="post">
-                        @Html.AntiForgeryToken()
-                        <input type="hidden" name="id" value="@user.Id" />
-                        <button class="btn btn-success" type="submit">
-                            🔁 Kod Yenile
-                        </button>
-                    </form>
+    .excel-btn.teacher {
+        background: #10b981;
+    }
 
-                    <form asp-controller="Users" asp-action="Delete" method="post" onsubmit="return confirmDelete('Kullanıcı silinsin mi?');">
-                        @Html.AntiForgeryToken()
-                        <input type="hidden" name="id" value="@user.Id" />
-                        <button class="btn btn-danger" type="submit">
-                            🗑️ Sil
-                        </button>
-                    </form>
-                </div>
-            </div>
+    .alert {
+        padding: 14px 18px;
+        border-radius: 18px;
+        font-weight: 900;
+    }
+
+    .alert-success {
+        background: #dcfce7;
+        color: #166534;
+    }
+
+    .alert-danger {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+
+    .search-panel {
+        background: #fff;
+        border-radius: 26px;
+        padding: 16px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        box-shadow: 0 18px 42px rgba(15, 23, 42, .07);
+    }
+
+    .search-box {
+        flex: 1;
+        min-height: 58px;
+        border-radius: 20px;
+        border: 1px solid #e5e7eb;
+        background: #f8fafc;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 0 16px;
+    }
+
+    .search-box:focus-within {
+        background: #fff;
+        border-color: #4f46e5;
+        box-shadow: 0 0 0 5px rgba(79, 70, 229, .11);
+    }
+
+    .search-box span {
+        font-size: 20px;
+    }
+
+    .search-box input {
+        flex: 1;
+        border: 0;
+        outline: 0;
+        background: transparent;
+        color: #0f172a;
+        font-weight: 900;
+        font-size: 15px;
+    }
+
+    .search-info {
+        min-width: 150px;
+        background: #eef2ff;
+        color: #3730a3;
+        border-radius: 18px;
+        padding: 12px 14px;
+        display: grid;
+        gap: 2px;
+    }
+
+    .search-info strong {
+        font-size: 24px;
+        font-weight: 950;
+        line-height: 1;
+    }
+
+    .search-info span {
+        font-size: 12px;
+        font-weight: 900;
+    }
+
+    .role-filter {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .role-filter-btn {
+        border: 0;
+        background: #fff;
+        color: #334155;
+        border-radius: 999px;
+        padding: 12px 18px;
+        font-weight: 950;
+        cursor: pointer;
+        box-shadow: 0 12px 26px rgba(15, 23, 42, .06);
+    }
+
+    .role-filter-btn.active {
+        background: #4f46e5;
+        color: #fff;
+    }
+
+    .users-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+        gap: 18px;
+    }
+
+    .user-card {
+        background: #fff;
+        border-radius: 28px;
+        padding: 20px;
+        box-shadow: 0 18px 42px rgba(15, 23, 42, .07);
+        display: grid;
+        gap: 16px;
+    }
+
+    .user-top {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+    }
+
+    .user-icon {
+        width: 58px;
+        height: 58px;
+        border-radius: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 28px;
+        flex: 0 0 auto;
+    }
+
+    .user-icon.student {
+        background: #eef2ff;
+    }
+
+    .user-icon.teacher {
+        background: #cffafe;
+    }
+
+    .user-icon.parent {
+        background: #ffedd5;
+    }
+
+    .user-main h3 {
+        margin: 0;
+        color: #0f172a;
+        font-size: 21px;
+        font-weight: 950;
+    }
+
+    .user-main p {
+        margin: 4px 0 0;
+        color: #64748b;
+        font-weight: 900;
+    }
+
+    .user-tags {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .tag {
+        border-radius: 999px;
+        padding: 8px 12px;
+        font-size: 12px;
+        font-weight: 950;
+    }
+
+    .tag.student {
+        background: #eef2ff;
+        color: #3730a3;
+    }
+
+    .tag.teacher {
+        background: #cffafe;
+        color: #155e75;
+    }
+
+    .tag.parent {
+        background: #ffedd5;
+        color: #9a3412;
+    }
+
+    .tag.waiting {
+        background: #fef3c7;
+        color: #92400e;
+    }
+
+    .tag.active {
+        background: #dcfce7;
+        color: #166534;
+    }
+
+    .user-details {
+        display: grid;
+        gap: 10px;
+    }
+
+    .user-details div {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: #334155;
+        font-weight: 850;
+    }
+
+    .user-details strong {
+        color: #475569;
+    }
+
+    .user-details b {
+        margin-left: auto;
+        color: #0f172a;
+        font-weight: 950;
+    }
+
+    .card-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+    }
+
+    .edit-btn,
+    .delete-btn {
+        min-height: 48px;
+        border-radius: 16px;
+        border: 0;
+        text-decoration: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 950;
+        cursor: pointer;
+    }
+
+    .edit-btn {
+        background: #eef2ff;
+        color: #4338ca;
+    }
+
+    .delete-btn {
+        width: 100%;
+        background: #fee2e2;
+        color: #991b1b;
+    }
+
+    .empty-box {
+        background: #fff;
+        border-radius: 26px;
+        padding: 28px;
+        text-align: center;
+        color: #64748b;
+        font-weight: 900;
+        box-shadow: 0 18px 42px rgba(15, 23, 42, .07);
+    }
+
+    .delete-modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, .62);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 99999;
+        padding: 18px;
+    }
+
+    .delete-modal-backdrop.show {
+        display: flex;
+    }
+
+    .delete-modal-card {
+        width: 100%;
+        max-width: 430px;
+        background: #fff;
+        border-radius: 30px;
+        padding: 28px;
+        text-align: center;
+        box-shadow: 0 30px 90px rgba(0,0,0,.35);
+    }
+
+    .delete-modal-icon {
+        width: 74px;
+        height: 74px;
+        border-radius: 24px;
+        background: #fee2e2;
+        color: #991b1b;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 34px;
+        margin: 0 auto 16px;
+    }
+
+    .delete-modal-card h3 {
+        margin: 0;
+        color: #0f172a;
+        font-size: 25px;
+        font-weight: 950;
+    }
+
+    .delete-modal-card p {
+        color: #64748b;
+        font-weight: 850;
+    }
+
+    .delete-modal-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-top: 18px;
+    }
+
+    .cancel-modal-btn,
+    .confirm-modal-btn {
+        min-height: 52px;
+        border: 0;
+        border-radius: 16px;
+        font-weight: 950;
+        cursor: pointer;
+    }
+
+    .cancel-modal-btn {
+        background: #eef2ff;
+        color: #4338ca;
+    }
+
+    .confirm-modal-btn {
+        background: #ef4444;
+        color: #fff;
+    }
+
+    @@media (max-width: 760px) {
+        .users-toolbar,
+        .search-panel {
+            flex-direction: column;
+            align-items: stretch;
         }
-    </div>
+
+        .toolbar-actions {
+            justify-content: stretch;
+        }
+
+        .btn-primary,
+        .excel-btn {
+            width: 100%;
+        }
+
+        .card-actions {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+@section Scripts {
+    <script>
+        let activeRole = "all";
+
+        const searchInput = document.getElementById("userSearchInput");
+        const cards = Array.from(document.querySelectorAll(".user-card"));
+        const visibleCount = document.getElementById("visibleCount");
+        const noSearchResult = document.getElementById("noSearchResult");
+        const roleButtons = document.querySelectorAll(".role-filter-btn");
+
+        function normalizeText(value) {
+            return (value || "")
+                .toString()
+                .toLocaleLowerCase("tr-TR")
+                .replaceAll("ı", "i")
+                .replaceAll("ğ", "g")
+                .replaceAll("ü", "u")
+                .replaceAll("ş", "s")
+                .replaceAll("ö", "o")
+                .replaceAll("ç", "c")
+                .replaceAll("İ", "i")
+                .trim();
+        }
+
+        function nameMatches(name, query) {
+            if (query === "") {
+                return true;
+            }
+
+            const normalizedName = normalizeText(name);
+            const parts = normalizedName.split(" ").filter(x => x.trim() !== "");
+
+            if (normalizedName.startsWith(query)) {
+                return true;
+            }
+
+            return parts.some(part => part.startsWith(query));
+        }
+
+        function numberMatches(number, query) {
+            if (query === "") {
+                return true;
+            }
+
+            return normalizeText(number).startsWith(query);
+        }
+
+        function filterUsers() {
+            const query = normalizeText(searchInput.value || "");
+
+            let count = 0;
+
+            cards.forEach(card => {
+                const role = card.dataset.role || "";
+                const roleMatches = activeRole === "all" || role === activeRole;
+
+                const name = card.dataset.name || "";
+                const number = card.dataset.number || "";
+
+                const searchMatches =
+                    query === "" ||
+                    nameMatches(name, query) ||
+                    numberMatches(number, query);
+
+                const show = roleMatches && searchMatches;
+
+                card.style.display = show ? "" : "none";
+
+                if (show) {
+                    count++;
+                }
+            });
+
+            visibleCount.textContent = count;
+
+            if (noSearchResult) {
+                noSearchResult.style.display = count === 0 ? "block" : "none";
+            }
+        }
+
+        searchInput.addEventListener("input", function (event) {
+            event.preventDefault();
+            filterUsers();
+        });
+
+        searchInput.addEventListener("keydown", function (event) {
+            if (event.key === "Enter") {
+                event.preventDefault();
+            }
+        });
+
+        roleButtons.forEach(btn => {
+            btn.addEventListener("click", function () {
+                roleButtons.forEach(x => x.classList.remove("active"));
+                this.classList.add("active");
+                activeRole = this.dataset.role || "all";
+                filterUsers();
+            });
+        });
+
+        filterUsers();
+
+        let pendingDeleteForm = null;
+
+        const deleteModal = document.getElementById("deleteModal");
+        const deleteUserName = document.getElementById("deleteUserName");
+        const cancelDeleteBtn = document.getElementById("cancelDeleteBtn");
+        const confirmDeleteBtn = document.getElementById("confirmDeleteBtn");
+
+        document.querySelectorAll(".delete-user-form").forEach(form => {
+            form.addEventListener("submit", function (event) {
+                event.preventDefault();
+
+                pendingDeleteForm = this;
+                deleteUserName.textContent = this.dataset.userName || "Bu kullanıcı";
+                deleteModal.classList.add("show");
+            });
+        });
+
+        cancelDeleteBtn.addEventListener("click", function () {
+            pendingDeleteForm = null;
+            deleteModal.classList.remove("show");
+        });
+
+        confirmDeleteBtn.addEventListener("click", function () {
+            if (pendingDeleteForm) {
+                pendingDeleteForm.submit();
+            }
+        });
+
+        deleteModal.addEventListener("click", function (event) {
+            if (event.target === deleteModal) {
+                pendingDeleteForm = null;
+                deleteModal.classList.remove("show");
+            }
+        });
+    </script>
 }

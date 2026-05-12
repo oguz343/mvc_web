@@ -1,6 +1,36 @@
+@using Microsoft.AspNetCore.Http
+
 @{
     var currentController = ViewContext.RouteData.Values["controller"]?.ToString() ?? "";
-    var name = Context.Session.GetString("Name") ?? "Admin";
+    var currentAction = ViewContext.RouteData.Values["action"]?.ToString() ?? "";
+
+    var adminName =
+        Context.Session.GetString("UserName") ??
+        Context.Session.GetString("Name") ??
+        "Admin";
+
+    var adminNumber =
+        Context.Session.GetString("UserNumber") ??
+        Context.Session.GetString("Number") ??
+        "0000";
+
+    var pageTitle = ViewData["PageTitle"]?.ToString();
+    var pageSubtitle = ViewData["PageSubtitle"]?.ToString();
+
+    if (string.IsNullOrWhiteSpace(pageTitle))
+    {
+        pageTitle = ViewData["Title"]?.ToString() ?? "Admin Paneli";
+    }
+
+    if (string.IsNullOrWhiteSpace(pageSubtitle))
+    {
+        pageSubtitle = "Yönetim işlemlerinizi buradan kontrol edin.";
+    }
+
+    string Active(string controller)
+    {
+        return currentController == controller ? "active" : "";
+    }
 }
 
 <!DOCTYPE html>
@@ -8,77 +38,130 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
     <title>@ViewData["Title"] - Admin Paneli</title>
 
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/dashboard.css" asp-append-version="true" />
 </head>
+
 <body>
     <div class="app-shell">
-        <aside class="sidebar">
+        <aside class="sidebar admin-sidebar">
             <div class="brand">
-                <div class="brand-icon">🎓</div>
+                <div class="brand-icon admin">
+                    🎓
+                </div>
+
                 <div>
-                    <div class="brand-title">Ödev Sistemi</div>
-                    <div class="brand-subtitle">Admin Panel</div>
+                    <div class="brand-title">
+                        Ödev Sistemi
+                    </div>
+
+                    <div class="brand-subtitle">
+                        Admin Panel
+                    </div>
                 </div>
             </div>
 
             <nav class="nav-menu">
-                <a class="nav-link @(currentController == "Dashboard" ? "active" : "")" asp-controller="Dashboard" asp-action="Index">
+                <a class="nav-link @Active("Dashboard")"
+                   asp-controller="Dashboard"
+                   asp-action="Index">
                     <span>📊</span>
-                    Dashboard
+                    <strong>Dashboard</strong>
                 </a>
 
-                <a class="nav-link @(currentController == "Users" ? "active" : "")" asp-controller="Users" asp-action="Index">
+                <a class="nav-link @Active("Users")"
+                   asp-controller="Users"
+                   asp-action="Index">
                     <span>👥</span>
-                    Kullanıcılar
+                    <strong>Kullanıcılar</strong>
                 </a>
 
-                <a class="nav-link @(currentController == "Classes" ? "active" : "")" asp-controller="Classes" asp-action="Index">
+                <a class="nav-link @Active("Classes")"
+                   asp-controller="Classes"
+                   asp-action="Index">
                     <span>🏫</span>
-                    Sınıflar
+                    <strong>Sınıflar</strong>
                 </a>
 
-                <a class="nav-link @(currentController == "Lessons" ? "active" : "")" asp-controller="Lessons" asp-action="Index">
+                <a class="nav-link @Active("Lessons")"
+                   asp-controller="Lessons"
+                   asp-action="Index">
                     <span>📚</span>
-                    Dersler
+                    <strong>Dersler</strong>
                 </a>
 
-                <a class="nav-link @(currentController == "Submissions" ? "active" : "")" asp-controller="Submissions" asp-action="Index">
-                    <span>📤</span>
-                    Teslimler
+                <a class="nav-link @Active("Submissions")"
+                   asp-controller="Submissions"
+                   asp-action="Index">
+                    <span>📥</span>
+                    <strong>Teslimler</strong>
                 </a>
 
-                <a class="nav-link @(currentController == "Announcements" ? "active" : "")" asp-controller="Announcements" asp-action="Index">
-                    <span>📢</span>
-                    Duyurular
+                <a class="nav-link @Active("Announcements")"
+                   asp-controller="Announcements"
+                   asp-action="Index">
+                    <span>📣</span>
+                    <strong>Duyurular</strong>
                 </a>
 
-                <a class="nav-link @(currentController == "PasswordRequests" ? "active" : "")" asp-controller="PasswordRequests" asp-action="Index">
-                    <span>🔐</span>
-                    Şifre Talepleri
+                <a class="nav-link @Active("PasswordRequests")"
+                   asp-controller="PasswordRequests"
+                   asp-action="Index">
+                    <span>🔑</span>
+                    <strong>Şifre Talepleri</strong>
+                </a>
+
+                <a class="nav-link @Active("AdminAccount")"
+                   asp-controller="AdminAccount"
+                   asp-action="ChangePassword">
+                    <span>🛡️</span>
+                    <strong>Admin Şifresi</strong>
                 </a>
             </nav>
 
-            <a class="logout-link" asp-controller="Auth" asp-action="Logout">
+            <a class="logout-link"
+               asp-controller="Auth"
+               asp-action="Logout">
                 <span>🚪</span>
-                Çıkış Yap
+                <strong>Çıkış Yap</strong>
             </a>
         </aside>
 
         <main class="main-content">
             <header class="topbar">
                 <div>
-                    <div class="topbar-title">@ViewData["PageTitle"]</div>
-                    <div class="topbar-subtitle">@ViewData["PageSubtitle"]</div>
+                    <div class="topbar-subtitle">
+                        Yönetim Paneli
+                    </div>
+
+                    <div class="topbar-title">
+                        @pageTitle
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(pageSubtitle))
+                    {
+                        <div class="topbar-description">
+                            @pageSubtitle
+                        </div>
+                    }
                 </div>
 
                 <div class="user-chip">
-                    <div class="user-avatar">A</div>
+                    <div class="user-avatar admin">
+                        A
+                    </div>
+
                     <div>
-                        <div class="user-name">@name</div>
-                        <div class="user-role">Admin</div>
+                        <div class="user-name">
+                            @adminName
+                        </div>
+
+                        <div class="user-role">
+                            No: @adminNumber
+                        </div>
                     </div>
                 </div>
             </header>
@@ -90,6 +173,9 @@
     </div>
 
     <script src="~/js/site.js" asp-append-version="true"></script>
+
     @await RenderSectionAsync("Scripts", required: false)
+
+    @await Html.PartialAsync("_DeleteConfirmModal")
 </body>
 </html>

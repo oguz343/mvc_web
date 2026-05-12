@@ -1,83 +1,188 @@
-@model List<AnnouncementViewModel>
+@using System.Reflection
+@model List<mvc_web.Models.AnnouncementViewModel>
 
 @{
     Layout = "_AdminLayout";
     ViewData["Title"] = "Duyurular";
+
+    var announcements = Model ?? new List<mvc_web.Models.AnnouncementViewModel>();
 }
 
-@if (TempData["Success"] != null)
-{
-    <div class="alert alert-success">@TempData["Success"]</div>
-}
-
-@if (TempData["Error"] != null)
-{
-    <div class="alert alert-danger">@TempData["Error"]</div>
-}
-
-<div class="page-actions">
-    <a class="btn btn-primary" asp-controller="Announcements" asp-action="Create">
-        📢 Yeni Duyuru
-    </a>
-</div>
-
-@if (Model.Count == 0)
-{
-    <div class="empty-state">
-        <div class="empty-icon">📢</div>
-        <div class="empty-title">Henüz duyuru yok</div>
-        <div class="empty-text">Yeni duyuru yayınlayarak başlayabilirsiniz.</div>
-    </div>
-}
-else
-{
-    <div class="card-grid">
-        @foreach (var item in Model)
+@functions {
+    private string GetText(object? item, params string[] keys)
+    {
+        if (item == null)
         {
-            var badgeClass = item.Target == "Veliler"
-                ? "badge-orange"
-                : item.Target == "Öğretmenler"
-                    ? "badge-cyan"
-                    : item.Target == "Öğrenciler"
-                        ? "badge-purple"
-                        : "badge-green";
-
-            <div class="data-card">
-                <div class="data-card-header">
-                    <div class="data-card-icon">📢</div>
-                    <div>
-                        <div class="data-card-title">@item.Title</div>
-                        <div class="data-card-subtitle">@item.Author tarafından yayınlandı</div>
-                    </div>
-                </div>
-
-                <div class="badge-row">
-                    <span class="badge @badgeClass">@item.Target</span>
-                </div>
-
-                <div class="info-line">
-                    <span>👤</span>
-                    <span>Yayınlayan: <strong>@item.Author</strong></span>
-                </div>
-
-                <div class="announcement-preview">
-                    @item.Content
-                </div>
-
-                <div class="card-actions">
-                    <a class="btn btn-light" asp-controller="Announcements" asp-action="Edit" asp-route-id="@item.Id">
-                        ✏️ Düzenle
-                    </a>
-
-                    <form asp-controller="Announcements" asp-action="Delete" method="post" onsubmit="return confirmDelete('Duyuru silinsin mi?');">
-                        @Html.AntiForgeryToken()
-                        <input type="hidden" name="id" value="@item.Id" />
-                        <button class="btn btn-danger" type="submit">
-                            🗑️ Sil
-                        </button>
-                    </form>
-                </div>
-            </div>
+            return "";
         }
-    </div>
+
+        var type = item.GetType();
+
+        foreach (var key in keys)
+        {
+            var prop = type.GetProperty(
+                key,
+                BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase
+            );
+
+            if (prop != null)
+            {
+                var value = prop.GetValue(item);
+
+                if (value != null)
+                {
+                    return value.ToString() ?? "";
+                }
+            }
+        }
+
+        return "";
+    }
+
+    private string GetDateText(object? item, params string[] keys)
+    {
+        if (item == null)
+        {
+            return "-";
+        }
+
+        var type = item.GetType();
+
+        foreach (var key in keys)
+        {
+            var prop = type.GetProperty(
+                key,
+                BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase
+            );
+
+            if (prop == null)
+            {
+                continue;
+            }
+
+            var value = prop.GetValue(item);
+
+            if (value == null)
+            {
+                continue;
+            }
+
+            if (value is DateTime date)
+            {
+                return date.ToString("dd.MM.yyyy HH:mm");
+            }
+
+            if (DateTime.TryParse(value.ToString(), out var parsed))
+            {
+                return parsed.ToString("dd.MM.yyyy HH:mm");
+            }
+        }
+
+        return "-";
+    }
+
+    private string FirstNonEmpty(params string[] values)
+    {
+        foreach (var value in values)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return value;
+            }
+        }
+
+        return "";
+    }
 }
+
+<div class="page-shell">
+    <section class="page-header-card">
+        <div>
+            <div class="eyebrow">Yönetim Paneli</div>
+            <h1>Duyurular</h1>
+            <p>Öğrenci, öğretmen ve velilere gönderilecek duyuruları buradan yönetin.</p>
+        </div>
+
+        <div class="page-actions">
+            <a asp-controller="Announcements" asp-action="Create" class="btn-primary">
+                📣 Yeni Duyuru
+            </a>
+        </div>
+    </section>
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success">@TempData["Success"]</div>
+    }
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger">@TempData["Error"]</div>
+    }
+
+    @if (!announcements.Any())
+    {
+        <div class="empty-state">
+            Henüz duyuru eklenmedi.
+        </div>
+    }
+    else
+    {
+        <section class="entity-grid">
+            @foreach (var item in announcements)
+            {
+                var id = GetText(item, "Id");
+                var title = FirstNonEmpty(GetText(item, "Title"), "Duyuru");
+                var content = FirstNonEmpty(GetText(item, "Content"), GetText(item, "Message"), "-");
+                var target = FirstNonEmpty(
+                    GetText(item, "Target"),
+                    GetText(item, "TargetRole"),
+                    GetText(item, "Audience"),
+                    GetText(item, "Role"),
+                    "Tüm Okul"
+                );
+                var author = FirstNonEmpty(GetText(item, "Author"), GetText(item, "CreatedBy"), "Admin");
+                var createdText = GetDateText(item, "CreatedAt", "CreatedDate", "Date", "PublishedAt");
+
+                <article class="entity-card">
+                    <div class="entity-head">
+                        <div class="entity-icon warning">📢</div>
+
+                        <div class="entity-title">
+                            <h3>@title</h3>
+                            <p>@createdText tarihinde yayınlandı</p>
+                        </div>
+                    </div>
+
+                    <div class="badge-row">
+                        <span class="badge-pill badge-warning">@target</span>
+                        <span class="badge-pill badge-primary">Yayınlayan: @author</span>
+                    </div>
+
+                    <div class="meta-list">
+                        <div class="meta-item">
+                            <span>📝</span>
+                            <span>@content</span>
+                        </div>
+                    </div>
+
+                    <div class="card-actions">
+                        <a asp-controller="Announcements" asp-action="Edit" asp-route-id="@id" class="btn-secondary">
+                            ✏️ Düzenle
+                        </a>
+
+                        <form asp-controller="Announcements"
+                              asp-action="Delete"
+                              method="post"
+                              class="inline-form js-delete-form"
+                              data-delete-name="@title">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="id" value="@id" />
+                            <button type="submit" class="btn-danger">🗑️ Sil</button>
+                        </form>
+                    </div>
+                </article>
+            }
+        </section>
+    }
+</div>

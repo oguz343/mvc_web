@@ -1,212 +1,612 @@
-@model DashboardViewModel
+@using System.Collections
+@using System.Reflection
 
 @{
     Layout = "_AdminLayout";
     ViewData["Title"] = "Dashboard";
+
+    int GetInt(params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            if (ViewData.ContainsKey(key) && ViewData[key] != null)
+            {
+                if (int.TryParse(ViewData[key]?.ToString(), out var value))
+                {
+                    return value;
+                }
+            }
+        }
+
+        return 0;
+    }
+
+    string GetText(object? item, params string[] keys)
+    {
+        if (item == null)
+        {
+            return "";
+        }
+
+        if (item is IDictionary<string, object> dict)
+        {
+            foreach (var key in keys)
+            {
+                if (dict.TryGetValue(key, out var value) && value != null)
+                {
+                    return value.ToString() ?? "";
+                }
+            }
+        }
+
+        var type = item.GetType();
+
+        foreach (var key in keys)
+        {
+            var prop = type.GetProperty(key, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+
+            if (prop != null)
+            {
+                var value = prop.GetValue(item);
+
+                if (value != null)
+                {
+                    return value.ToString() ?? "";
+                }
+            }
+        }
+
+        return "";
+    }
+
+    List<object> GetRecentUsers()
+    {
+        object? raw =
+            ViewData["RecentUsers"] ??
+            ViewData["LastUsers"] ??
+            ViewData["Users"] ??
+            ViewData["recentUsers"] ??
+            null;
+
+        if (raw == null && Model != null)
+        {
+            raw = Model;
+        }
+
+        if (raw is IEnumerable enumerable && raw is not string)
+        {
+            return enumerable.Cast<object>().Take(6).ToList();
+        }
+
+        return new List<object>();
+    }
+
+    var studentCount = GetInt("StudentCount", "StudentsCount", "OgrenciCount", "OgrenciSayisi");
+    var teacherCount = GetInt("TeacherCount", "TeachersCount", "OgretmenCount", "OgretmenSayisi");
+    var parentCount = GetInt("ParentCount", "ParentsCount", "VeliCount", "VeliSayisi");
+    var submissionCount = GetInt("SubmissionCount", "SubmissionsCount", "TeslimCount", "TeslimSayisi");
+    var classCount = GetInt("ClassCount", "ClassesCount", "SinifCount", "SinifSayisi");
+    var lessonCount = GetInt("LessonCount", "LessonsCount", "DersCount", "DersSayisi");
+    var announcementCount = GetInt("AnnouncementCount", "AnnouncementsCount", "DuyuruCount", "DuyuruSayisi");
+    var passwordRequestCount = GetInt("PasswordRequestCount", "PasswordRequestsCount", "SifreTalebiCount", "SifreTalepSayisi");
+
+    var recentUsers = GetRecentUsers();
 }
 
-<div class="stats-grid">
-    <div class="stat-card">
-        <div class="stat-icon purple">🎒</div>
+<div class="dash-page">
+    <section class="dash-hero">
         <div>
-            <div class="stat-value">@Model.StudentCount</div>
-            <div class="stat-label">Öğrenci</div>
+            <div class="dash-kicker">Genel Bakış</div>
+            <h2>Okul yönetim paneli</h2>
+            <p>Kullanıcıları, sınıfları, ödevleri, teslimleri ve şifre taleplerini tek yerden takip edin.</p>
         </div>
-    </div>
 
-    <div class="stat-card">
-        <div class="stat-icon cyan">👨‍🏫</div>
-        <div>
-            <div class="stat-value">@Model.TeacherCount</div>
-            <div class="stat-label">Öğretmen</div>
-        </div>
-    </div>
-
-    <div class="stat-card">
-        <div class="stat-icon orange">👪</div>
-        <div>
-            <div class="stat-value">@Model.ParentCount</div>
-            <div class="stat-label">Veli</div>
-        </div>
-    </div>
-
-    <div class="stat-card">
-        <div class="stat-icon green">📤</div>
-        <div>
-            <div class="stat-value">@Model.SubmissionCount</div>
-            <div class="stat-label">Teslim</div>
-        </div>
-    </div>
-</div>
-
-<div class="stats-grid">
-    <div class="stat-card">
-        <div class="stat-icon purple">🏫</div>
-        <div>
-            <div class="stat-value">@Model.ClassCount</div>
-            <div class="stat-label">Sınıf</div>
-        </div>
-    </div>
-
-    <div class="stat-card">
-        <div class="stat-icon cyan">📚</div>
-        <div>
-            <div class="stat-value">@Model.LessonCount</div>
-            <div class="stat-label">Ders</div>
-        </div>
-    </div>
-
-    <div class="stat-card">
-        <div class="stat-icon orange">📢</div>
-        <div>
-            <div class="stat-value">@Model.AnnouncementCount</div>
-            <div class="stat-label">Duyuru</div>
-        </div>
-    </div>
-
-    <div class="stat-card">
-        <div class="stat-icon green">🔐</div>
-        <div>
-            <div class="stat-value">@Model.PasswordRequestCount</div>
-            <div class="stat-label">Şifre Talebi</div>
-        </div>
-    </div>
-</div>
-
-<div class="dashboard-panels">
-    <div class="table-card">
-        <div class="section-header">
+        <div class="dash-hero-card">
+            <div class="dash-hero-icon">📊</div>
             <div>
-                <div class="section-title">Son Eklenen Kullanıcılar</div>
-                <div class="section-subtitle">Firestore users koleksiyonundan son kayıtlar</div>
+                <strong>@(studentCount + teacherCount + parentCount)</strong>
+                <span>Toplam Kullanıcı</span>
             </div>
-
-            <a class="btn btn-light" asp-controller="Users" asp-action="Index">
-                Tümünü Gör
-            </a>
         </div>
+    </section>
 
-        @if (Model.LatestUsers.Count == 0)
-        {
-            <div class="empty-mini">
-                Henüz kullanıcı yok.
-            </div>
-        }
-        else
-        {
-            <table class="table">
-                <thead>
-                    <tr>
-                        <th>Ad Soyad</th>
-                        <th>Rol</th>
-                        <th>Numara</th>
-                        <th>Detay</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var user in Model.LatestUsers)
-                    {
-                        <tr>
-                            <td>
-                                <strong>@user.Name</strong>
-                            </td>
-                            <td>
-                                <span class="badge @(user.Role == "Öğretmen" ? "badge-cyan" : user.Role == "Veli" ? "badge-orange" : "badge-purple")">
-                                    @user.Role
-                                </span>
-                            </td>
-                            <td>@user.Number</td>
-                            <td>@user.Detail</td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        }
-    </div>
-
-    <div class="table-card">
-        <div class="section-header">
+    <section class="dash-stats-grid">
+        <a asp-controller="Users" asp-action="Index" class="dash-stat-card purple">
+            <div class="dash-stat-icon">🎒</div>
             <div>
-                <div class="section-title">Son Teslimler</div>
-                <div class="section-subtitle">Öğrencilerden gelen son ödev teslimleri</div>
+                <strong>@studentCount</strong>
+                <span>Öğrenci</span>
+            </div>
+        </a>
+
+        <a asp-controller="Users" asp-action="Index" class="dash-stat-card cyan">
+            <div class="dash-stat-icon">👨‍🏫</div>
+            <div>
+                <strong>@teacherCount</strong>
+                <span>Öğretmen</span>
+            </div>
+        </a>
+
+        <a asp-controller="Users" asp-action="Index" class="dash-stat-card orange">
+            <div class="dash-stat-icon">👪</div>
+            <div>
+                <strong>@parentCount</strong>
+                <span>Veli</span>
+            </div>
+        </a>
+
+        <a asp-controller="Submissions" asp-action="Index" class="dash-stat-card green">
+            <div class="dash-stat-icon">📥</div>
+            <div>
+                <strong>@submissionCount</strong>
+                <span>Teslim</span>
+            </div>
+        </a>
+
+        <a asp-controller="Classes" asp-action="Index" class="dash-stat-card blue">
+            <div class="dash-stat-icon">🏫</div>
+            <div>
+                <strong>@classCount</strong>
+                <span>Sınıf</span>
+            </div>
+        </a>
+
+        <a asp-controller="Lessons" asp-action="Index" class="dash-stat-card indigo">
+            <div class="dash-stat-icon">📚</div>
+            <div>
+                <strong>@lessonCount</strong>
+                <span>Ders</span>
+            </div>
+        </a>
+
+        <a asp-controller="Announcements" asp-action="Index" class="dash-stat-card pink">
+            <div class="dash-stat-icon">📣</div>
+            <div>
+                <strong>@announcementCount</strong>
+                <span>Duyuru</span>
+            </div>
+        </a>
+
+        <a asp-controller="PasswordRequests" asp-action="Index" class="dash-stat-card red">
+            <div class="dash-stat-icon">🔐</div>
+            <div>
+                <strong>@passwordRequestCount</strong>
+                <span>Şifre Talebi</span>
+            </div>
+        </a>
+    </section>
+
+    <section class="dash-bottom-grid">
+        <div class="dash-panel">
+            <div class="dash-panel-head">
+                <div>
+                    <h3>Son Eklenen Kullanıcılar</h3>
+                    <p>Firestore users koleksiyonundan son kayıtlar</p>
+                </div>
+
+                <a asp-controller="Users" asp-action="Index">
+                    Tümünü Gör
+                </a>
             </div>
 
-            <a class="btn btn-light" asp-controller="Submissions" asp-action="Index">
-                Tümünü Gör
-            </a>
+            @if (!recentUsers.Any())
+            {
+                <div class="dash-empty">
+                    Henüz kullanıcı kaydı görünmüyor.
+                </div>
+            }
+            else
+            {
+                <div class="dash-table-wrap">
+                    <table class="dash-table">
+                        <thead>
+                            <tr>
+                                <th>Ad Soyad</th>
+                                <th>Rol</th>
+                                <th>Numara</th>
+                                <th>Detay</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            @foreach (var user in recentUsers)
+                            {
+                                var name = GetText(user, "Name", "name");
+                                var role = GetText(user, "Role", "role");
+                                var number = GetText(user, "SchoolNo", "schoolNo", "Number", "number");
+                                var className = GetText(user, "ClassName", "className");
+                                var branch = GetText(user, "Branch", "branch");
+                                var linkedStudent = GetText(user, "LinkedStudentNo", "linkedStudentNo");
+
+                                var detail = role == "Öğrenci"
+                                    ? $"Sınıf: {(string.IsNullOrWhiteSpace(className) ? "-" : className)}"
+                                    : role == "Öğretmen"
+                                        ? $"Branş: {(string.IsNullOrWhiteSpace(branch) ? "-" : branch)}"
+                                        : role == "Veli"
+                                            ? $"Bağlı öğrenci: {(string.IsNullOrWhiteSpace(linkedStudent) ? "-" : linkedStudent)}"
+                                            : "-";
+
+                                <tr>
+                                    <td>
+                                        <strong>@(string.IsNullOrWhiteSpace(name) ? "-" : name)</strong>
+                                    </td>
+
+                                    <td>
+                                        <span class="role-pill">@role</span>
+                                    </td>
+
+                                    <td>@(string.IsNullOrWhiteSpace(number) ? "-" : number)</td>
+
+                                    <td>@detail</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
         </div>
 
-        @if (Model.LatestSubmissions.Count == 0)
-        {
-            <div class="empty-mini">
-                Henüz teslim yok.
+        <div class="dash-panel quick-panel">
+            <div class="dash-panel-head">
+                <div>
+                    <h3>Hızlı İşlemler</h3>
+                    <p>Sık kullanılan yönetim araçları</p>
+                </div>
             </div>
-        }
-        else
-        {
-            <table class="table">
-                <thead>
-                    <tr>
-                        <th>Ödev</th>
-                        <th>Ders</th>
-                        <th>Öğrenci No</th>
-                        <th>Durum</th>
-                        <th>Not</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var submission in Model.LatestSubmissions)
-                    {
-                        <tr>
-                            <td>
-                                <strong>@submission.AssignmentTitle</strong>
-                            </td>
-                            <td>@submission.Lesson</td>
-                            <td>@submission.StudentNo</td>
-                            <td>
-                                <span class="badge @(submission.Status == "Değerlendirildi" ? "badge-green" : "badge-orange")">
-                                    @submission.Status
-                                </span>
-                            </td>
-                            <td>@submission.Grade</td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        }
-    </div>
+
+            <div class="quick-actions">
+                <a asp-controller="Users" asp-action="Create">
+                    <span>👥</span>
+                    Yeni Kullanıcı
+                </a>
+
+                <a asp-controller="Classes" asp-action="Create">
+                    <span>🏫</span>
+                    Yeni Sınıf
+                </a>
+
+                <a asp-controller="Announcements" asp-action="Create">
+                    <span>📣</span>
+                    Duyuru Yayınla
+                </a>
+
+                <a asp-controller="AdminAccount" asp-action="ChangePassword">
+                    <span>🛡️</span>
+                    Admin Şifresi
+                </a>
+            </div>
+        </div>
+    </section>
 </div>
 
-<div class="quick-actions">
-    <a class="quick-action-card" asp-controller="Users" asp-action="Create">
-        <div class="quick-icon">👤</div>
-        <div>
-            <div class="quick-title">Yeni Kullanıcı</div>
-            <div class="quick-text">Öğrenci, öğretmen veya veli ekle</div>
-        </div>
-    </a>
+<style>
+    .dash-page {
+        display: grid;
+        gap: 22px;
+    }
 
-    <a class="quick-action-card" asp-controller="Classes" asp-action="Create">
-        <div class="quick-icon">🏫</div>
-        <div>
-            <div class="quick-title">Yeni Sınıf</div>
-            <div class="quick-text">Sınıf ve şube oluştur</div>
-        </div>
-    </a>
+    .dash-hero {
+        background:
+            radial-gradient(circle at top left, rgba(79, 70, 229, .14), transparent 34%),
+            linear-gradient(135deg, #ffffff, #f8fafc);
+        border: 1px solid rgba(255,255,255,.9);
+        border-radius: 32px;
+        padding: 28px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 22px;
+        box-shadow: 0 22px 55px rgba(15, 23, 42, .08);
+    }
 
-    <a class="quick-action-card" asp-controller="Lessons" asp-action="Create">
-        <div class="quick-icon">📚</div>
-        <div>
-            <div class="quick-title">Yeni Ders</div>
-            <div class="quick-text">Dersi öğretmenle eşleştir</div>
-        </div>
-    </a>
+    .dash-kicker {
+        color: #4f46e5;
+        font-weight: 950;
+        font-size: 13px;
+        margin-bottom: 6px;
+    }
 
-    <a class="quick-action-card" asp-controller="Announcements" asp-action="Create">
-        <div class="quick-icon">📢</div>
-        <div>
-            <div class="quick-title">Yeni Duyuru</div>
-            <div class="quick-text">Okul geneline duyuru yayınla</div>
-        </div>
-    </a>
-</div>
+    .dash-hero h2 {
+        margin: 0;
+        color: #0f172a;
+        font-size: 34px;
+        font-weight: 950;
+        letter-spacing: -.7px;
+    }
+
+    .dash-hero p {
+        margin: 8px 0 0;
+        color: #64748b;
+        font-weight: 800;
+        line-height: 1.5;
+        max-width: 640px;
+    }
+
+    .dash-hero-card {
+        min-width: 210px;
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 26px;
+        padding: 18px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        box-shadow: 0 16px 34px rgba(15, 23, 42, .07);
+    }
+
+    .dash-hero-icon {
+        width: 58px;
+        height: 58px;
+        border-radius: 20px;
+        background: linear-gradient(135deg, #4f46e5, #06b6d4);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        font-size: 28px;
+    }
+
+    .dash-hero-card strong {
+        display: block;
+        color: #0f172a;
+        font-size: 30px;
+        font-weight: 950;
+    }
+
+    .dash-hero-card span {
+        color: #64748b;
+        font-weight: 850;
+    }
+
+    .dash-stats-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 16px;
+    }
+
+    .dash-stat-card {
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 28px;
+        padding: 20px;
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        text-decoration: none;
+        box-shadow: 0 18px 42px rgba(15, 23, 42, .07);
+        transition: .18s ease;
+        min-height: 118px;
+    }
+
+    .dash-stat-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 24px 52px rgba(15, 23, 42, .10);
+    }
+
+    .dash-stat-icon {
+        width: 58px;
+        height: 58px;
+        border-radius: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 27px;
+        flex: 0 0 auto;
+    }
+
+    .dash-stat-card strong {
+        display: block;
+        color: #0f172a;
+        font-size: 32px;
+        line-height: 1;
+        font-weight: 950;
+    }
+
+    .dash-stat-card span {
+        display: block;
+        color: #64748b;
+        font-weight: 900;
+        margin-top: 6px;
+    }
+
+    .dash-stat-card.purple .dash-stat-icon {
+        background: #eef2ff;
+    }
+
+    .dash-stat-card.cyan .dash-stat-icon {
+        background: #cffafe;
+    }
+
+    .dash-stat-card.orange .dash-stat-icon {
+        background: #ffedd5;
+    }
+
+    .dash-stat-card.green .dash-stat-icon {
+        background: #dcfce7;
+    }
+
+    .dash-stat-card.blue .dash-stat-icon {
+        background: #dbeafe;
+    }
+
+    .dash-stat-card.indigo .dash-stat-icon {
+        background: #e0e7ff;
+    }
+
+    .dash-stat-card.pink .dash-stat-icon {
+        background: #fce7f3;
+    }
+
+    .dash-stat-card.red .dash-stat-icon {
+        background: #fee2e2;
+    }
+
+    .dash-bottom-grid {
+        display: grid;
+        grid-template-columns: 1.45fr .85fr;
+        gap: 18px;
+    }
+
+    .dash-panel {
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 30px;
+        padding: 22px;
+        box-shadow: 0 18px 42px rgba(15, 23, 42, .07);
+    }
+
+    .dash-panel-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        margin-bottom: 16px;
+    }
+
+    .dash-panel-head h3 {
+        margin: 0;
+        color: #0f172a;
+        font-size: 22px;
+        font-weight: 950;
+    }
+
+    .dash-panel-head p {
+        margin: 5px 0 0;
+        color: #64748b;
+        font-weight: 800;
+    }
+
+    .dash-panel-head a {
+        background: #eef2ff;
+        color: #4338ca;
+        text-decoration: none;
+        border-radius: 16px;
+        padding: 12px 16px;
+        font-weight: 950;
+        white-space: nowrap;
+    }
+
+    .dash-empty {
+        background: #f8fafc;
+        border-radius: 20px;
+        padding: 22px;
+        color: #64748b;
+        font-weight: 900;
+        text-align: center;
+    }
+
+    .dash-table-wrap {
+        overflow-x: auto;
+    }
+
+    .dash-table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 620px;
+    }
+
+    .dash-table th {
+        text-align: left;
+        padding: 14px 12px;
+        color: #64748b;
+        font-weight: 950;
+        border-bottom: 1px solid #e5e7eb;
+        white-space: nowrap;
+    }
+
+    .dash-table td {
+        padding: 15px 12px;
+        border-bottom: 1px solid #f1f5f9;
+        color: #334155;
+        font-weight: 800;
+    }
+
+    .dash-table td strong {
+        color: #0f172a;
+        font-weight: 950;
+    }
+
+    .role-pill {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        background: #f1f5f9;
+        color: #334155;
+        padding: 7px 11px;
+        font-size: 12px;
+        font-weight: 950;
+    }
+
+    .quick-actions {
+        display: grid;
+        gap: 12px;
+    }
+
+    .quick-actions a {
+        min-height: 58px;
+        background: #f8fafc;
+        border: 1px solid #e5e7eb;
+        border-radius: 20px;
+        color: #0f172a;
+        text-decoration: none;
+        font-weight: 950;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 0 16px;
+        transition: .18s ease;
+    }
+
+    .quick-actions a:hover {
+        background: #eef2ff;
+        border-color: #c7d2fe;
+        color: #3730a3;
+        transform: translateX(3px);
+    }
+
+    .quick-actions span {
+        width: 40px;
+        height: 40px;
+        border-radius: 14px;
+        background: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+    }
+
+    @@media (max-width: 1180px) {
+        .dash-stats-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .dash-bottom-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @@media (max-width: 720px) {
+        .dash-hero {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .dash-hero-card {
+            width: 100%;
+        }
+
+        .dash-stats-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .dash-panel-head {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .dash-panel-head a {
+            width: 100%;
+            text-align: center;
+        }
+    }
+</style>
