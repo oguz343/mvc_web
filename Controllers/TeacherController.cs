@@ -1,1406 +1,1478 @@
 using Google.Cloud.Firestore;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using mvc_web.Services;
+using System.Text.RegularExpressions;
 
-namespace mvc_web.Controllers
+namespace mvc_web.Controllers;
+
+public class TeacherController : Controller
 {
-    public class TeacherController : Controller
+    private readonly FirestoreDb _firestore;
+    private readonly DataIntegrityService _integrity;
+
+    public TeacherController(FirestoreDb firestore)
     {
-        private readonly FirestoreDb _firestore;
+        _firestore = firestore;
+        _integrity = new DataIntegrityService(firestore);
+    }
 
-        public TeacherController(FirestoreDb firestore)
+    [HttpGet]
+    public async Task<IActionResult> Index()
+    {
+        await _integrity.CleanupOrphanActiveLinksAsync();
+
+        var teacherNumber = GetSessionValue(
+            "UserNumber",
+            "Number",
+            "SchoolNo",
+            "TeacherNo",
+            "LoginNumber",
+            "CurrentUserNumber"
+        );
+
+        var teacherName = GetSessionValue(
+            "UserName",
+            "Name",
+            "TeacherName",
+            "CurrentUserName"
+        );
+
+        var teacherProfile = await LoadTeacherProfile(teacherNumber, teacherName);
+
+        if (teacherProfile.Count == 0)
         {
-            _firestore = firestore;
+            return RedirectToAction("Login", "Auth");
         }
 
-        public async Task<IActionResult> Index()
+        var teacherNo = OnlyDigits(GetText(teacherProfile, "Number", "number", "TeacherNo", "teacherNo"));
+        var realTeacherName = GetText(teacherProfile, "Name", "name", "TeacherName", "teacherName");
+        var teacherBranch = GetText(teacherProfile, "Branch", "branch", "TeacherBranch", "teacherBranch");
+        var teacherId = GetText(teacherProfile, "Id", "id", "TeacherId", "teacherId");
+
+        var lessons = await LoadTeacherLessons(teacherNo, realTeacherName, teacherBranch, teacherId);
+        var assignments = await LoadTeacherAssignments(teacherNo, realTeacherName, teacherBranch, teacherId, lessons);
+        var submissions = await LoadTeacherSubmissions(teacherNo, realTeacherName, teacherBranch, teacherId, lessons, assignments);
+        var announcements = await LoadTeacherAnnouncements();
+
+        ViewBag.TeacherName = realTeacherName;
+        ViewBag.TeacherNo = teacherNo;
+        ViewBag.TeacherBranch = teacherBranch;
+        ViewBag.Teacher = teacherProfile;
+
+        ViewBag.Lessons = lessons;
+        ViewBag.Assignments = assignments;
+        ViewBag.Submissions = submissions;
+        ViewBag.Announcements = announcements;
+
+        ViewBag.LessonCount = lessons.Count;
+        ViewBag.AssignmentCount = assignments.Count;
+        ViewBag.SubmissionCount = submissions.Count;
+        ViewBag.EvaluatedCount = submissions.Count(x => IsEvaluatedStatus(GetText(x, "Status", "status")));
+
+        return View();
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> Assignments()
+    {
+        await _integrity.CleanupOrphanActiveLinksAsync();
+
+        var teacherNumber = GetSessionValue(
+            "UserNumber",
+            "Number",
+            "SchoolNo",
+            "TeacherNo",
+            "LoginNumber",
+            "CurrentUserNumber"
+        );
+
+        var teacherName = GetSessionValue(
+            "UserName",
+            "Name",
+            "TeacherName",
+            "CurrentUserName"
+        );
+
+        var teacherProfile = await LoadTeacherProfile(teacherNumber, teacherName);
+
+        if (teacherProfile.Count == 0)
         {
-            if (!IsTeacherLoggedIn())
-            {
-                return RedirectToAction("Login", "Auth");
-            }
-
-            var teacherNumber =
-                HttpContext.Session.GetString("Number") ??
-                HttpContext.Session.GetString("UserNumber") ??
-                "";
-
-            var teacherName =
-                HttpContext.Session.GetString("Name") ??
-                HttpContext.Session.GetString("UserName") ??
-                "";
-
-            var teacherBranch =
-                HttpContext.Session.GetString("Branch") ??
-                HttpContext.Session.GetString("TeacherBranch") ??
-                "";
-
-            var teacherProfile = await LoadTeacherProfile(teacherNumber, teacherName);
-
-            if (string.IsNullOrWhiteSpace(teacherName))
-            {
-                teacherName = GetString(teacherProfile, "name", "Name", "userName", "UserName");
-            }
-
-            if (string.IsNullOrWhiteSpace(teacherNumber))
-            {
-                teacherNumber = OnlyDigits(FirstNonEmpty(
-                    GetString(teacherProfile, "schoolNo", "SchoolNo"),
-                    GetString(teacherProfile, "number", "Number")
-                ));
-            }
-
-            if (string.IsNullOrWhiteSpace(teacherBranch))
-            {
-                teacherBranch = GetString(teacherProfile, "branch", "Branch", "teacherBranch", "TeacherBranch");
-            }
-
-            var lessons = await LoadTeacherLessons(teacherNumber, teacherName, teacherBranch);
-            var assignments = await LoadTeacherAssignments(teacherNumber, teacherName, teacherBranch, lessons);
-            var submissions = await LoadTeacherSubmissions(teacherNumber, teacherName, teacherBranch, assignments, lessons);
-
-            ViewData["TeacherName"] = teacherName;
-            ViewData["TeacherNo"] = teacherNumber;
-            ViewData["TeacherBranch"] = teacherBranch;
-
-            ViewData["Lessons"] = lessons;
-            ViewData["TeacherLessons"] = lessons;
-            ViewData["MyLessons"] = lessons;
-
-            ViewData["Assignments"] = assignments;
-            ViewData["Homeworks"] = assignments;
-            ViewData["TeacherAssignments"] = assignments;
-            ViewData["MyAssignments"] = assignments;
-
-            ViewData["Submissions"] = submissions.Take(5).ToList();
-            ViewData["RecentSubmissions"] = submissions.Take(5).ToList();
-            ViewData["LastSubmissions"] = submissions.Take(5).ToList();
-
-            ViewData["LessonCount"] = lessons.Count;
-            ViewData["AssignmentCount"] = assignments.Count;
-            ViewData["SubmissionCount"] = submissions.Count;
-            ViewData["EvaluatedCount"] = submissions.Count(x => IsEvaluated(x));
-
-            return View();
+            return RedirectToAction("Login", "Auth");
         }
 
-        public async Task<IActionResult> Assignments()
+        var teacherNo = OnlyDigits(GetText(teacherProfile, "Number", "number", "TeacherNo", "teacherNo"));
+        var realTeacherName = GetText(teacherProfile, "Name", "name", "TeacherName", "teacherName");
+        var teacherBranch = GetText(teacherProfile, "Branch", "branch", "TeacherBranch", "teacherBranch");
+        var teacherId = GetText(teacherProfile, "Id", "id", "TeacherId", "teacherId");
+
+        var lessons = await LoadTeacherLessons(teacherNo, realTeacherName, teacherBranch, teacherId);
+        var assignments = await LoadTeacherAssignments(teacherNo, realTeacherName, teacherBranch, teacherId, lessons);
+
+        ViewBag.TeacherName = realTeacherName;
+        ViewBag.TeacherNo = teacherNo;
+        ViewBag.TeacherBranch = teacherBranch;
+        ViewBag.Teacher = teacherProfile;
+
+        ViewBag.Lessons = lessons;
+        ViewBag.Assignments = assignments;
+
+        return View();
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> CreateAssignment()
+    {
+        await _integrity.CleanupOrphanActiveLinksAsync();
+
+        var teacherNumber = GetSessionValue(
+            "UserNumber",
+            "Number",
+            "SchoolNo",
+            "TeacherNo",
+            "LoginNumber",
+            "CurrentUserNumber"
+        );
+
+        var teacherName = GetSessionValue(
+            "UserName",
+            "Name",
+            "TeacherName",
+            "CurrentUserName"
+        );
+
+        var teacherProfile = await LoadTeacherProfile(teacherNumber, teacherName);
+
+        if (teacherProfile.Count == 0)
         {
-            if (!IsTeacherLoggedIn())
-            {
-                return RedirectToAction("Login", "Auth");
-            }
-
-            var teacherNumber =
-                HttpContext.Session.GetString("Number") ??
-                HttpContext.Session.GetString("UserNumber") ??
-                "";
-
-            var teacherName =
-                HttpContext.Session.GetString("Name") ??
-                HttpContext.Session.GetString("UserName") ??
-                "";
-
-            var teacherBranch =
-                HttpContext.Session.GetString("Branch") ??
-                HttpContext.Session.GetString("TeacherBranch") ??
-                "";
-
-            var teacherProfile = await LoadTeacherProfile(teacherNumber, teacherName);
-
-            if (string.IsNullOrWhiteSpace(teacherName))
-            {
-                teacherName = GetString(teacherProfile, "name", "Name", "userName", "UserName");
-            }
-
-            if (string.IsNullOrWhiteSpace(teacherNumber))
-            {
-                teacherNumber = OnlyDigits(FirstNonEmpty(
-                    GetString(teacherProfile, "schoolNo", "SchoolNo"),
-                    GetString(teacherProfile, "number", "Number")
-                ));
-            }
-
-            if (string.IsNullOrWhiteSpace(teacherBranch))
-            {
-                teacherBranch = GetString(teacherProfile, "branch", "Branch", "teacherBranch", "TeacherBranch");
-            }
-
-            var lessons = await LoadTeacherLessons(teacherNumber, teacherName, teacherBranch);
-            var assignments = await LoadTeacherAssignments(teacherNumber, teacherName, teacherBranch, lessons);
-
-            ViewData["TeacherName"] = teacherName;
-            ViewData["TeacherNo"] = teacherNumber;
-            ViewData["TeacherBranch"] = teacherBranch;
-
-            ViewData["Lessons"] = lessons;
-            ViewData["Assignments"] = assignments;
-            ViewData["Homeworks"] = assignments;
-            ViewData["TeacherAssignments"] = assignments;
-            ViewData["MyAssignments"] = assignments;
-
-            return View(assignments);
+            return RedirectToAction("Login", "Auth");
         }
 
-        [HttpGet]
-        public async Task<IActionResult> CreateAssignment()
+        var teacherNo = OnlyDigits(GetText(teacherProfile, "Number", "number", "TeacherNo", "teacherNo"));
+        var realTeacherName = GetText(teacherProfile, "Name", "name", "TeacherName", "teacherName");
+        var teacherBranch = GetText(teacherProfile, "Branch", "branch", "TeacherBranch", "teacherBranch");
+        var teacherId = GetText(teacherProfile, "Id", "id", "TeacherId", "teacherId");
+
+        var lessons = await LoadTeacherLessons(teacherNo, realTeacherName, teacherBranch, teacherId);
+
+        ViewBag.TeacherName = realTeacherName;
+        ViewBag.TeacherNo = teacherNo;
+        ViewBag.TeacherBranch = teacherBranch;
+        ViewBag.Teacher = teacherProfile;
+        ViewBag.Lessons = lessons;
+        ViewBag.TeacherLessons = lessons;
+        ViewBag.MyLessons = lessons;
+
+        return View();
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CreateAssignment(IFormCollection form)
+    {
+        await _integrity.CleanupOrphanActiveLinksAsync();
+
+        var teacherNumber = GetSessionValue(
+            "UserNumber",
+            "Number",
+            "SchoolNo",
+            "TeacherNo",
+            "LoginNumber",
+            "CurrentUserNumber"
+        );
+
+        var teacherName = GetSessionValue(
+            "UserName",
+            "Name",
+            "TeacherName",
+            "CurrentUserName"
+        );
+
+        var teacherProfile = await LoadTeacherProfile(teacherNumber, teacherName);
+
+        if (teacherProfile.Count == 0)
         {
-            if (!IsTeacherLoggedIn())
-            {
-                return RedirectToAction("Login", "Auth");
-            }
-
-            var teacherNumber =
-                HttpContext.Session.GetString("Number") ??
-                HttpContext.Session.GetString("UserNumber") ??
-                "";
-
-            var teacherName =
-                HttpContext.Session.GetString("Name") ??
-                HttpContext.Session.GetString("UserName") ??
-                "";
-
-            var teacherBranch =
-                HttpContext.Session.GetString("Branch") ??
-                HttpContext.Session.GetString("TeacherBranch") ??
-                "";
-
-            var teacherProfile = await LoadTeacherProfile(teacherNumber, teacherName);
-
-            if (string.IsNullOrWhiteSpace(teacherName))
-            {
-                teacherName = GetString(teacherProfile, "name", "Name", "userName", "UserName");
-            }
-
-            if (string.IsNullOrWhiteSpace(teacherNumber))
-            {
-                teacherNumber = OnlyDigits(FirstNonEmpty(
-                    GetString(teacherProfile, "schoolNo", "SchoolNo"),
-                    GetString(teacherProfile, "number", "Number")
-                ));
-            }
-
-            if (string.IsNullOrWhiteSpace(teacherBranch))
-            {
-                teacherBranch = GetString(teacherProfile, "branch", "Branch", "teacherBranch", "TeacherBranch");
-            }
-
-            var lessons = await LoadTeacherLessons(teacherNumber, teacherName, teacherBranch);
-
-            ViewData["Lessons"] = lessons;
-            ViewData["TeacherLessons"] = lessons;
-            ViewData["TeacherName"] = teacherName;
-            ViewData["TeacherNo"] = teacherNumber;
-            ViewData["TeacherBranch"] = teacherBranch;
-
-            return View();
+            return RedirectToAction("Login", "Auth");
         }
 
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> CreateAssignment(IFormCollection form)
+        var teacherNo = OnlyDigits(GetText(teacherProfile, "Number", "number", "TeacherNo", "teacherNo"));
+        var realTeacherName = GetText(teacherProfile, "Name", "name", "TeacherName", "teacherName");
+        var teacherBranch = GetText(teacherProfile, "Branch", "branch", "TeacherBranch", "teacherBranch");
+        var teacherId = GetText(teacherProfile, "Id", "id", "TeacherId", "teacherId");
+
+        var lessons = await LoadTeacherLessons(teacherNo, realTeacherName, teacherBranch, teacherId);
+
+        var selectedLessonIds = form["lessonIds"]
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x?.Trim() ?? "")
+            .Distinct()
+            .ToList();
+
+        var legacyLessonId = (form["lessonId"].ToString() ?? "").Trim();
+
+        if (!string.IsNullOrWhiteSpace(legacyLessonId) &&
+            !selectedLessonIds.Contains(legacyLessonId))
         {
-            if (!IsTeacherLoggedIn())
-            {
-                return RedirectToAction("Login", "Auth");
-            }
+            selectedLessonIds.Add(legacyLessonId);
+        }
+        var title = (form["title"].ToString() ?? "").Trim();
+        var description = (form["description"].ToString() ?? "").Trim();
+        var fileType = (form["fileType"].ToString() ?? "").Trim();
+        var dueDateRaw = (form["dueDate"].ToString() ?? "").Trim();
 
-            var teacherNumber =
-                HttpContext.Session.GetString("Number") ??
-                HttpContext.Session.GetString("UserNumber") ??
-                "";
+        if (!selectedLessonIds.Any())
+        {
+            TempData["Error"] = "Ders seçmelisiniz.";
+            return RedirectToAction(nameof(CreateAssignment));
+        }
 
-            var teacherName =
-                HttpContext.Session.GetString("Name") ??
-                HttpContext.Session.GetString("UserName") ??
-                "";
+        if (string.IsNullOrWhiteSpace(title))
+        {
+            TempData["Error"] = "Ödev başlığı boş bırakılamaz.";
+            return RedirectToAction(nameof(CreateAssignment));
+        }
 
-            var teacherBranch =
-                HttpContext.Session.GetString("Branch") ??
-                HttpContext.Session.GetString("TeacherBranch") ??
-                "";
+        var selectedLessons = lessons
+            .Where(x => selectedLessonIds.Contains(GetText(x, "Id", "id")))
+            .ToList();
 
-            var teacherProfile = await LoadTeacherProfile(teacherNumber, teacherName);
+        if (selectedLessons.Count != selectedLessonIds.Count)
+        {
+            TempData["Error"] = "Seçilen ders aktif değil, silinmiş veya size atanmamış.";
+            return RedirectToAction(nameof(CreateAssignment));
+        }
 
-            if (string.IsNullOrWhiteSpace(teacherName))
-            {
-                teacherName = GetString(teacherProfile, "name", "Name", "userName", "UserName");
-            }
+        if (string.IsNullOrWhiteSpace(fileType))
+        {
+            fileType = "Metin / Link";
+        }
 
-            if (string.IsNullOrWhiteSpace(teacherNumber))
-            {
-                teacherNumber = OnlyDigits(FirstNonEmpty(
-                    GetString(teacherProfile, "schoolNo", "SchoolNo"),
-                    GetString(teacherProfile, "number", "Number")
-                ));
-            }
+        DateTime? dueDate = null;
 
-            if (string.IsNullOrWhiteSpace(teacherBranch))
-            {
-                teacherBranch = GetString(teacherProfile, "branch", "Branch", "teacherBranch", "TeacherBranch");
-            }
+        if (!string.IsNullOrWhiteSpace(dueDateRaw) && DateTime.TryParse(dueDateRaw, out var parsedDueDate))
+        {
+            dueDate = parsedDueDate;
+        }
 
-            var lessonId = FormValue(form, "lessonId", "LessonId", "lesson", "Lesson");
-            var selectedLesson = await FindLessonById(lessonId);
+        var now = Timestamp.FromDateTime(DateTime.UtcNow);
+        var createdCount = 0;
 
-            var title = FirstNonEmpty(
-                FormValue(form, "title", "Title"),
-                FormValue(form, "name", "Name"),
-                FormValue(form, "assignmentTitle", "AssignmentTitle"),
-                FormValue(form, "homeworkTitle", "HomeworkTitle")
-            );
+        foreach (var selectedLesson in selectedLessons)
+        {
+            var lessonId = GetText(selectedLesson, "Id", "id");
+            var lessonName = GetText(selectedLesson, "Name", "name", "LessonName", "lessonName");
+            var className = NormalizeClassName(GetText(selectedLesson, "ClassName", "className", "Class", "class"));
+            var branch = GetText(selectedLesson, "Branch", "branch", "TeacherBranch", "teacherBranch");
 
-            var description = FirstNonEmpty(
-                FormValue(form, "description", "Description"),
-                FormValue(form, "content", "Content"),
-                FormValue(form, "text", "Text")
-            );
+        var data = new Dictionary<string, object?>
+        {
+            ["title"] = title,
+            ["Title"] = title,
+            ["name"] = title,
+            ["Name"] = title,
+            ["homeworkTitle"] = title,
+            ["assignmentTitle"] = title,
 
-            var lessonName = FirstNonEmpty(
-                GetString(selectedLesson, "name", "Name", "lessonName", "LessonName", "title", "Title"),
-                FormValue(form, "lessonName", "LessonName"),
-                FormValue(form, "courseName", "CourseName"),
-                FormValue(form, "course", "Course")
-            );
+            ["description"] = description,
+            ["Description"] = description,
+            ["content"] = description,
+            ["Content"] = description,
 
-            var className = NormalizeClassName(FirstNonEmpty(
-                GetString(selectedLesson, "className", "ClassName", "class", "Class", "targetClass", "TargetClass"),
-                FormValue(form, "className", "ClassName"),
-                FormValue(form, "class", "Class"),
-                FormValue(form, "targetClass", "TargetClass")
-            ));
+            ["lessonId"] = lessonId,
+            ["LessonId"] = lessonId,
+            ["courseId"] = lessonId,
+            ["CourseId"] = lessonId,
 
-            var dueDateText = FirstNonEmpty(
-                FormValue(form, "dueDate", "DueDate"),
-                FormValue(form, "deadline", "Deadline"),
-                FormValue(form, "endDate", "EndDate")
-            );
+            ["lessonName"] = lessonName,
+            ["LessonName"] = lessonName,
+            ["lesson"] = lessonName,
+            ["Lesson"] = lessonName,
+            ["courseName"] = lessonName,
+            ["CourseName"] = lessonName,
 
-            var fileType = FirstNonEmpty(
-                FormValue(form, "fileType", "FileType"),
-                FormValue(form, "type", "Type"),
-                FormValue(form, "submissionType", "SubmissionType"),
-                "Dosya"
-            );
+            ["className"] = className,
+            ["ClassName"] = className,
+            ["class"] = className,
+            ["Class"] = className,
+            ["targetClass"] = className,
+            ["TargetClass"] = className,
 
-            if (string.IsNullOrWhiteSpace(title))
-            {
-                TempData["Error"] = "Ödev başlığı boş bırakılamaz.";
-                return RedirectToAction(nameof(CreateAssignment));
-            }
+            ["teacherId"] = teacherId,
+            ["TeacherId"] = teacherId,
+            ["teacherName"] = realTeacherName,
+            ["TeacherName"] = realTeacherName,
+            ["teacher"] = realTeacherName,
+            ["Teacher"] = realTeacherName,
+            ["teacherNo"] = teacherNo,
+            ["TeacherNo"] = teacherNo,
+            ["teacherNumber"] = teacherNo,
+            ["TeacherNumber"] = teacherNo,
 
-            if (string.IsNullOrWhiteSpace(lessonName))
-            {
-                lessonName = "Ders";
-            }
+            ["branch"] = string.IsNullOrWhiteSpace(branch) ? teacherBranch : branch,
+            ["Branch"] = string.IsNullOrWhiteSpace(branch) ? teacherBranch : branch,
+            ["teacherBranch"] = string.IsNullOrWhiteSpace(branch) ? teacherBranch : branch,
+            ["TeacherBranch"] = string.IsNullOrWhiteSpace(branch) ? teacherBranch : branch,
 
-            if (string.IsNullOrWhiteSpace(className))
-            {
-                className = "-";
-            }
+            ["fileType"] = fileType,
+            ["FileType"] = fileType,
+            ["type"] = fileType,
+            ["Type"] = fileType,
 
-            var now = Timestamp.GetCurrentTimestamp();
+            ["status"] = "Aktif",
+            ["Status"] = "Aktif",
+            ["isDeleted"] = false,
+            ["IsDeleted"] = false,
+            ["isActive"] = true,
+            ["IsActive"] = true,
 
-            var data = new Dictionary<string, object>
-            {
-                { "title", title },
-                { "name", title },
-                { "homeworkTitle", title },
-                { "assignmentTitle", title },
+            ["createdAt"] = now,
+            ["CreatedAt"] = now,
+            ["updatedAt"] = now,
+            ["UpdatedAt"] = now,
+        };
 
-                { "description", description },
-                { "content", description },
-                { "text", description },
+        if (dueDate.HasValue)
+        {
+            var dueTimestamp = Timestamp.FromDateTime(DateTime.SpecifyKind(dueDate.Value, DateTimeKind.Utc));
 
-                { "lessonId", lessonId },
-                { "lessonName", lessonName },
-                { "lesson", lessonName },
-                { "courseName", lessonName },
-                { "course", lessonName },
+            data["dueDate"] = dueTimestamp;
+            data["DueDate"] = dueTimestamp;
+            data["deadline"] = dueTimestamp;
+            data["Deadline"] = dueTimestamp;
+            data["endDate"] = dueTimestamp;
+            data["EndDate"] = dueTimestamp;
+        }
 
-                { "className", className },
-                { "class", className },
-                { "targetClass", className },
+        var homeworkRef = await _firestore.Collection("homeworks").AddAsync(data);
 
-                { "teacherName", teacherName },
-                { "teacher", teacherName },
-                { "teacherNo", teacherNumber },
-                { "teacherNumber", teacherNumber },
-                { "branch", teacherBranch },
-                { "teacherBranch", teacherBranch },
+        data["id"] = homeworkRef.Id;
+        data["Id"] = homeworkRef.Id;
 
-                { "fileType", fileType },
-                { "type", fileType },
-                { "submissionType", fileType },
+        await _firestore.Collection("assignments").Document(homeworkRef.Id).SetAsync(data, SetOptions.MergeAll);
+            createdCount++;
+        }
 
-                { "status", "Aktif" },
-                { "createdAt", now },
-                { "updatedAt", now },
-                { "isDeleted", false },
-                { "isActive", true }
-            };
+        TempData["Success"] = "Ödev başarıyla oluşturuldu.";
+        if (createdCount > 1)
+        {
+            TempData["Success"] = $"{createdCount} sınıf/ders ataması için ödev başarıyla oluşturuldu.";
+        }
 
-            if (DateTime.TryParse(dueDateText, out DateTime dueDate))
-            {
-                data["dueDate"] = Timestamp.FromDateTime(DateTime.SpecifyKind(dueDate, DateTimeKind.Utc));
-                data["deadline"] = Timestamp.FromDateTime(DateTime.SpecifyKind(dueDate, DateTimeKind.Utc));
-                data["endDate"] = Timestamp.FromDateTime(DateTime.SpecifyKind(dueDate, DateTimeKind.Utc));
-            }
-            else
-            {
-                data["dueDateText"] = dueDateText;
-            }
+        return RedirectToAction(nameof(Assignments));
+    }
 
-            var docRef = await _firestore.Collection("homeworks").AddAsync(data);
+    [HttpGet]
+    public async Task<IActionResult> EditAssignment(string id)
+    {
+        await _integrity.CleanupOrphanActiveLinksAsync();
 
-            data["id"] = docRef.Id;
-            data["Id"] = docRef.Id;
+        id = (id ?? "").Trim();
 
-            await _firestore.Collection("assignments").Document(docRef.Id).SetAsync(data, SetOptions.MergeAll);
-
-            TempData["Success"] = "Ödev oluşturuldu.";
+        if (string.IsNullOrWhiteSpace(id))
+        {
+            TempData["Error"] = "Ödev bulunamadı.";
             return RedirectToAction(nameof(Assignments));
         }
 
-        [HttpGet]
-        public async Task<IActionResult> EditAssignment(string id)
+        var teacherNumber = GetSessionValue(
+            "UserNumber",
+            "Number",
+            "SchoolNo",
+            "TeacherNo",
+            "LoginNumber",
+            "CurrentUserNumber"
+        );
+
+        var teacherName = GetSessionValue(
+            "UserName",
+            "Name",
+            "TeacherName",
+            "CurrentUserName"
+        );
+
+        var teacherProfile = await LoadTeacherProfile(teacherNumber, teacherName);
+
+        if (teacherProfile.Count == 0)
         {
-            if (!IsTeacherLoggedIn())
-            {
-                return RedirectToAction("Login", "Auth");
-            }
-
-            if (string.IsNullOrWhiteSpace(id))
-            {
-                TempData["Error"] = "Ödev bulunamadı.";
-                return RedirectToAction(nameof(Assignments));
-            }
-
-            var found = await FindDocumentInCollections(id, "homeworks", "assignments");
-
-            if (found.Doc == null || !found.Doc.Exists)
-            {
-                TempData["Error"] = "Ödev bulunamadı.";
-                return RedirectToAction(nameof(Assignments));
-            }
-
-            var data = found.Doc.ToDictionary();
-            data["Id"] = found.Doc.Id;
-
-            return View(data);
+            return RedirectToAction("Login", "Auth");
         }
 
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> EditAssignment(string id, IFormCollection form)
+        var teacherNo = OnlyDigits(GetText(teacherProfile, "Number", "number", "TeacherNo", "teacherNo"));
+        var realTeacherName = GetText(teacherProfile, "Name", "name", "TeacherName", "teacherName");
+        var teacherBranch = GetText(teacherProfile, "Branch", "branch", "TeacherBranch", "teacherBranch");
+        var teacherId = GetText(teacherProfile, "Id", "id", "TeacherId", "teacherId");
+
+        var lessons = await LoadTeacherLessons(teacherNo, realTeacherName, teacherBranch, teacherId);
+        var assignments = await LoadTeacherAssignments(teacherNo, realTeacherName, teacherBranch, teacherId, lessons);
+
+        var assignment = assignments.FirstOrDefault(x =>
+            GetText(x, "Id", "id") == id
+        );
+
+        if (assignment == null)
         {
-            if (!IsTeacherLoggedIn())
-            {
-                return RedirectToAction("Login", "Auth");
-            }
-
-            if (string.IsNullOrWhiteSpace(id))
-            {
-                TempData["Error"] = "Ödev bulunamadı.";
-                return RedirectToAction(nameof(Assignments));
-            }
-
-            var title = FirstNonEmpty(
-                FormValue(form, "title", "Title"),
-                FormValue(form, "name", "Name"),
-                FormValue(form, "assignmentTitle", "AssignmentTitle"),
-                FormValue(form, "homeworkTitle", "HomeworkTitle")
-            );
-
-            var description = FirstNonEmpty(
-                FormValue(form, "description", "Description"),
-                FormValue(form, "content", "Content"),
-                FormValue(form, "text", "Text")
-            );
-
-            var lessonName = FirstNonEmpty(
-                FormValue(form, "lessonName", "LessonName"),
-                FormValue(form, "lesson", "Lesson"),
-                FormValue(form, "courseName", "CourseName"),
-                FormValue(form, "course", "Course")
-            );
-
-            var className = NormalizeClassName(FirstNonEmpty(
-                FormValue(form, "className", "ClassName"),
-                FormValue(form, "class", "Class"),
-                FormValue(form, "targetClass", "TargetClass")
-            ));
-
-            var dueDateText = FirstNonEmpty(
-                FormValue(form, "dueDate", "DueDate"),
-                FormValue(form, "deadline", "Deadline"),
-                FormValue(form, "endDate", "EndDate")
-            );
-
-            var fileType = FirstNonEmpty(
-                FormValue(form, "fileType", "FileType"),
-                FormValue(form, "type", "Type"),
-                FormValue(form, "submissionType", "SubmissionType")
-            );
-
-            var update = new Dictionary<string, object>
-            {
-                { "updatedAt", Timestamp.GetCurrentTimestamp() }
-            };
-
-            if (!string.IsNullOrWhiteSpace(title))
-            {
-                update["title"] = title;
-                update["name"] = title;
-                update["homeworkTitle"] = title;
-                update["assignmentTitle"] = title;
-            }
-
-            update["description"] = description;
-            update["content"] = description;
-            update["text"] = description;
-
-            if (!string.IsNullOrWhiteSpace(lessonName))
-            {
-                update["lessonName"] = lessonName;
-                update["lesson"] = lessonName;
-                update["courseName"] = lessonName;
-                update["course"] = lessonName;
-            }
-
-            if (!string.IsNullOrWhiteSpace(className))
-            {
-                update["className"] = className;
-                update["class"] = className;
-                update["targetClass"] = className;
-            }
-
-            if (!string.IsNullOrWhiteSpace(fileType))
-            {
-                update["fileType"] = fileType;
-                update["type"] = fileType;
-                update["submissionType"] = fileType;
-            }
-
-            if (DateTime.TryParse(dueDateText, out DateTime dueDate))
-            {
-                update["dueDate"] = Timestamp.FromDateTime(DateTime.SpecifyKind(dueDate, DateTimeKind.Utc));
-                update["deadline"] = Timestamp.FromDateTime(DateTime.SpecifyKind(dueDate, DateTimeKind.Utc));
-                update["endDate"] = Timestamp.FromDateTime(DateTime.SpecifyKind(dueDate, DateTimeKind.Utc));
-            }
-
-            await UpdateDocumentInCollections(id, update, "homeworks", "assignments");
-
-            TempData["Success"] = "Ödev güncellendi.";
+            TempData["Error"] = "Bu ödev aktif değil, silinmiş veya size ait değil.";
             return RedirectToAction(nameof(Assignments));
         }
 
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> DeleteAssignment(string id)
+        ViewBag.TeacherName = realTeacherName;
+        ViewBag.TeacherNo = teacherNo;
+        ViewBag.TeacherBranch = teacherBranch;
+        ViewBag.Teacher = teacherProfile;
+        ViewBag.Lessons = lessons;
+        ViewBag.Assignment = assignment;
+
+        return View();
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> EditAssignment(IFormCollection form)
+    {
+        await _integrity.CleanupOrphanActiveLinksAsync();
+
+        var id = (form["id"].ToString() ?? "").Trim();
+        var title = (form["title"].ToString() ?? "").Trim();
+        var description = (form["description"].ToString() ?? "").Trim();
+        var fileType = (form["fileType"].ToString() ?? "").Trim();
+        var dueDateRaw = (form["dueDate"].ToString() ?? "").Trim();
+
+        if (string.IsNullOrWhiteSpace(id))
         {
-            if (!IsTeacherLoggedIn())
-            {
-                return RedirectToAction("Login", "Auth");
-            }
-
-            if (string.IsNullOrWhiteSpace(id))
-            {
-                TempData["Error"] = "Ödev bulunamadı.";
-                return RedirectToAction(nameof(Assignments));
-            }
-
-            var update = new Dictionary<string, object>
-            {
-                { "isDeleted", true },
-                { "deleted", true },
-                { "status", "Silindi" },
-                { "deletedAt", Timestamp.GetCurrentTimestamp() },
-                { "updatedAt", Timestamp.GetCurrentTimestamp() }
-            };
-
-            await UpdateDocumentInCollections(id, update, "homeworks", "assignments");
-
-            TempData["Success"] = "Ödev silindi.";
+            TempData["Error"] = "Ödev bulunamadı.";
             return RedirectToAction(nameof(Assignments));
         }
 
-        [HttpGet]
-        public async Task<IActionResult> Submissions(string assignmentId = "")
+        if (string.IsNullOrWhiteSpace(title))
         {
-            if (!IsTeacherLoggedIn())
-            {
-                return RedirectToAction("Login", "Auth");
-            }
-
-            var teacherNumber =
-                HttpContext.Session.GetString("Number") ??
-                HttpContext.Session.GetString("UserNumber") ??
-                "";
-
-            var teacherName =
-                HttpContext.Session.GetString("Name") ??
-                HttpContext.Session.GetString("UserName") ??
-                "";
-
-            var teacherBranch =
-                HttpContext.Session.GetString("Branch") ??
-                HttpContext.Session.GetString("TeacherBranch") ??
-                "";
-
-            var teacherProfile = await LoadTeacherProfile(teacherNumber, teacherName);
-
-            if (string.IsNullOrWhiteSpace(teacherName))
-            {
-                teacherName = GetString(teacherProfile, "name", "Name", "userName", "UserName");
-            }
-
-            if (string.IsNullOrWhiteSpace(teacherNumber))
-            {
-                teacherNumber = OnlyDigits(FirstNonEmpty(
-                    GetString(teacherProfile, "schoolNo", "SchoolNo"),
-                    GetString(teacherProfile, "number", "Number")
-                ));
-            }
-
-            if (string.IsNullOrWhiteSpace(teacherBranch))
-            {
-                teacherBranch = GetString(teacherProfile, "branch", "Branch", "teacherBranch", "TeacherBranch");
-            }
-
-            var lessons = await LoadTeacherLessons(teacherNumber, teacherName, teacherBranch);
-            var assignments = await LoadTeacherAssignments(teacherNumber, teacherName, teacherBranch, lessons);
-            var submissions = await LoadTeacherSubmissions(teacherNumber, teacherName, teacherBranch, assignments, lessons);
-
-            if (!string.IsNullOrWhiteSpace(assignmentId))
-            {
-                submissions = submissions
-                    .Where(x =>
-                        GetText(x, "HomeworkId") == assignmentId ||
-                        GetText(x, "AssignmentId") == assignmentId ||
-                        GetText(x, "homeworkId") == assignmentId ||
-                        GetText(x, "assignmentId") == assignmentId)
-                    .ToList();
-            }
-
-            ViewData["Submissions"] = submissions;
-            ViewData["RecentSubmissions"] = submissions;
-            ViewData["TotalSubmissionCount"] = submissions.Count;
-            ViewData["EvaluatedCount"] = submissions.Count(x => IsEvaluated(x));
-            ViewData["PendingCount"] = submissions.Count(x => !IsEvaluated(x));
-
-            return View(submissions);
+            TempData["Error"] = "Ödev başlığı boş bırakılamaz.";
+            return RedirectToAction(nameof(EditAssignment), new { id });
         }
 
-        [HttpGet]
-        public async Task<IActionResult> EvaluateSubmission(string id)
+        var update = new Dictionary<string, object?>
         {
-            if (!IsTeacherLoggedIn())
-            {
-                return RedirectToAction("Login", "Auth");
-            }
+            ["title"] = title,
+            ["Title"] = title,
+            ["name"] = title,
+            ["Name"] = title,
+            ["homeworkTitle"] = title,
+            ["assignmentTitle"] = title,
 
-            if (string.IsNullOrWhiteSpace(id))
-            {
-                TempData["Error"] = "Teslim bulunamadı.";
-                return RedirectToAction(nameof(Submissions));
-            }
+            ["description"] = description,
+            ["Description"] = description,
+            ["content"] = description,
+            ["Content"] = description,
 
-            var found = await FindDocumentInCollections(id, "homework_submissions", "submissions");
+            ["fileType"] = string.IsNullOrWhiteSpace(fileType) ? "Metin / Link" : fileType,
+            ["FileType"] = string.IsNullOrWhiteSpace(fileType) ? "Metin / Link" : fileType,
+            ["type"] = string.IsNullOrWhiteSpace(fileType) ? "Metin / Link" : fileType,
+            ["Type"] = string.IsNullOrWhiteSpace(fileType) ? "Metin / Link" : fileType,
 
-            if (found.Doc == null || !found.Doc.Exists)
-            {
-                TempData["Error"] = "Teslim bulunamadı.";
-                return RedirectToAction(nameof(Submissions));
-            }
+            ["updatedAt"] = Timestamp.FromDateTime(DateTime.UtcNow),
+            ["UpdatedAt"] = Timestamp.FromDateTime(DateTime.UtcNow),
+        };
 
-            var data = found.Doc.ToDictionary();
-            data["Id"] = found.Doc.Id;
+        if (!string.IsNullOrWhiteSpace(dueDateRaw) && DateTime.TryParse(dueDateRaw, out var parsedDueDate))
+        {
+            var dueTimestamp = Timestamp.FromDateTime(DateTime.SpecifyKind(parsedDueDate, DateTimeKind.Utc));
 
-            return View(data);
+            update["dueDate"] = dueTimestamp;
+            update["DueDate"] = dueTimestamp;
+            update["deadline"] = dueTimestamp;
+            update["Deadline"] = dueTimestamp;
+            update["endDate"] = dueTimestamp;
+            update["EndDate"] = dueTimestamp;
         }
 
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> EvaluateSubmission(string id, IFormCollection form)
+        await UpdateAssignmentEverywhere(id, update);
+
+        TempData["Success"] = "Ödev güncellendi.";
+        return RedirectToAction(nameof(Assignments));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteAssignment(string id)
+    {
+        await _integrity.CleanupOrphanActiveLinksAsync();
+
+        id = (id ?? "").Trim();
+
+        if (string.IsNullOrWhiteSpace(id))
         {
-            if (!IsTeacherLoggedIn())
-            {
-                return RedirectToAction("Login", "Auth");
-            }
+            TempData["Error"] = "Ödev bulunamadı.";
+            return RedirectToAction(nameof(Assignments));
+        }
 
-            if (string.IsNullOrWhiteSpace(id))
-            {
-                TempData["Error"] = "Teslim bulunamadı.";
-                return RedirectToAction(nameof(Submissions));
-            }
+        var update = new Dictionary<string, object?>
+        {
+            ["isDeleted"] = true,
+            ["IsDeleted"] = true,
+            ["isActive"] = false,
+            ["IsActive"] = false,
+            ["status"] = "Silindi",
+            ["Status"] = "Silindi",
+            ["deletedAt"] = Timestamp.FromDateTime(DateTime.UtcNow),
+            ["DeletedAt"] = Timestamp.FromDateTime(DateTime.UtcNow),
+            ["updatedAt"] = Timestamp.FromDateTime(DateTime.UtcNow),
+            ["UpdatedAt"] = Timestamp.FromDateTime(DateTime.UtcNow),
+        };
 
-            var score = FirstNonEmpty(
-                FormValue(form, "score", "Score"),
-                FormValue(form, "grade", "Grade"),
-                FormValue(form, "point", "Point"),
-                FormValue(form, "not", "Not")
-            );
+        await UpdateAssignmentEverywhere(id, update);
 
-            var feedback = FirstNonEmpty(
-                FormValue(form, "feedback", "Feedback"),
-                FormValue(form, "comment", "Comment"),
-                FormValue(form, "geriDonus", "GeriDonus")
-            );
+        TempData["Success"] = "Ödev silindi.";
+        return RedirectToAction(nameof(Assignments));
+    }
 
-            var update = new Dictionary<string, object>
-            {
-                { "score", score },
-                { "grade", score },
-                { "point", score },
-                { "not", score },
-                { "feedback", feedback },
-                { "comment", feedback },
-                { "geriDonus", feedback },
-                { "status", "Değerlendirildi" },
-                { "evaluatedAt", Timestamp.GetCurrentTimestamp() },
-                { "updatedAt", Timestamp.GetCurrentTimestamp() }
-            };
+    [HttpGet]
+    public async Task<IActionResult> Submissions()
+    {
+        await _integrity.CleanupOrphanActiveLinksAsync();
 
-            await UpdateDocumentInCollections(id, update, "homework_submissions", "submissions");
+        var teacherNumber = GetSessionValue(
+            "UserNumber",
+            "Number",
+            "SchoolNo",
+            "TeacherNo",
+            "LoginNumber",
+            "CurrentUserNumber"
+        );
 
-            TempData["Success"] = "Teslim değerlendirildi.";
+        var teacherName = GetSessionValue(
+            "UserName",
+            "Name",
+            "TeacherName",
+            "CurrentUserName"
+        );
+
+        var teacherProfile = await LoadTeacherProfile(teacherNumber, teacherName);
+
+        if (teacherProfile.Count == 0)
+        {
+            return RedirectToAction("Login", "Auth");
+        }
+
+        var teacherNo = OnlyDigits(GetText(teacherProfile, "Number", "number", "TeacherNo", "teacherNo"));
+        var realTeacherName = GetText(teacherProfile, "Name", "name", "TeacherName", "teacherName");
+        var teacherBranch = GetText(teacherProfile, "Branch", "branch", "TeacherBranch", "teacherBranch");
+        var teacherId = GetText(teacherProfile, "Id", "id", "TeacherId", "teacherId");
+
+        var lessons = await LoadTeacherLessons(teacherNo, realTeacherName, teacherBranch, teacherId);
+        var assignments = await LoadTeacherAssignments(teacherNo, realTeacherName, teacherBranch, teacherId, lessons);
+        var submissions = await LoadTeacherSubmissions(teacherNo, realTeacherName, teacherBranch, teacherId, lessons, assignments);
+
+        ViewBag.TeacherName = realTeacherName;
+        ViewBag.TeacherNo = teacherNo;
+        ViewBag.TeacherBranch = teacherBranch;
+        ViewBag.Teacher = teacherProfile;
+
+        ViewBag.Lessons = lessons;
+        ViewBag.Assignments = assignments;
+        ViewBag.Submissions = submissions;
+
+        return View();
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> EvaluateSubmission(string submissionId, string score, string feedback)
+    {
+        await _integrity.CleanupOrphanActiveLinksAsync();
+
+        submissionId = (submissionId ?? "").Trim();
+        score = (score ?? "").Trim();
+        feedback = (feedback ?? "").Trim();
+
+        if (string.IsNullOrWhiteSpace(submissionId))
+        {
+            TempData["Error"] = "Teslim bulunamadı.";
             return RedirectToAction(nameof(Submissions));
         }
 
-        private bool IsTeacherLoggedIn()
+        if (string.IsNullOrWhiteSpace(score) && string.IsNullOrWhiteSpace(feedback))
         {
-            var role =
-                HttpContext.Session.GetString("Role") ??
-                HttpContext.Session.GetString("UserRole") ??
-                "";
-
-            var roleKey = NormalizeKey(role);
-
-            return roleKey == "ogretmen" || roleKey == "teacher";
+            TempData["Error"] = "Not veya geri dönüş alanlarından en az biri doldurulmalı.";
+            return RedirectToAction(nameof(Submissions));
         }
 
-        private async Task<Dictionary<string, object>> LoadTeacherProfile(string teacherNumber, string teacherName)
+        var update = new Dictionary<string, object?>
         {
-            try
-            {
-                var snapshot = await _firestore.Collection("users").GetSnapshotAsync();
+            ["score"] = score,
+            ["Score"] = score,
+            ["grade"] = score,
+            ["Grade"] = score,
+            ["point"] = score,
+            ["Point"] = score,
+            ["not"] = score,
+            ["Not"] = score,
 
-                var numberKey = OnlyDigits(teacherNumber);
-                var nameKey = NormalizeKey(teacherName);
+            ["feedback"] = feedback,
+            ["Feedback"] = feedback,
+            ["comment"] = feedback,
+            ["Comment"] = feedback,
+            ["geriDonus"] = feedback,
+            ["GeriDonus"] = feedback,
 
-                foreach (var doc in snapshot.Documents)
-                {
-                    var data = doc.ToDictionary();
+            ["status"] = "Değerlendirildi",
+            ["Status"] = "Değerlendirildi",
 
-                    if (IsDeleted(data))
-                    {
-                        continue;
-                    }
+            ["evaluatedAt"] = Timestamp.FromDateTime(DateTime.UtcNow),
+            ["EvaluatedAt"] = Timestamp.FromDateTime(DateTime.UtcNow),
+            ["updatedAt"] = Timestamp.FromDateTime(DateTime.UtcNow),
+            ["UpdatedAt"] = Timestamp.FromDateTime(DateTime.UtcNow),
+        };
 
-                    var role = NormalizeKey(GetString(data, "role", "Role"));
+        await UpdateSubmissionEverywhere(submissionId, update);
 
-                    if (role != "ogretmen" && role != "teacher")
-                    {
-                        continue;
-                    }
+        TempData["Success"] = "Teslim değerlendirildi.";
+        return RedirectToAction(nameof(Submissions));
+    }
 
-                    var docNumber = OnlyDigits(FirstNonEmpty(
-                        GetString(data, "schoolNo", "SchoolNo"),
-                        GetString(data, "number", "Number")
-                    ));
+    [HttpGet]
+    public async Task<IActionResult> Announcements()
+    {
+        await _integrity.CleanupOrphanActiveLinksAsync();
 
-                    var docName = NormalizeKey(GetString(data, "name", "Name"));
+        var teacherNumber = GetSessionValue(
+            "UserNumber",
+            "Number",
+            "SchoolNo",
+            "TeacherNo",
+            "LoginNumber",
+            "CurrentUserNumber"
+        );
 
-                    if ((!string.IsNullOrWhiteSpace(numberKey) && docNumber == numberKey) ||
-                        (!string.IsNullOrWhiteSpace(nameKey) && docName == nameKey))
-                    {
-                        data["Id"] = doc.Id;
-                        return data;
-                    }
-                }
-            }
-            catch
-            {
-            }
+        var teacherName = GetSessionValue(
+            "UserName",
+            "Name",
+            "TeacherName",
+            "CurrentUserName"
+        );
 
-            return new Dictionary<string, object>();
+        var teacherProfile = await LoadTeacherProfile(teacherNumber, teacherName);
+
+        if (teacherProfile.Count == 0)
+        {
+            return RedirectToAction("Login", "Auth");
         }
 
-        private async Task<List<Dictionary<string, object>>> LoadTeacherLessons(
-            string teacherNumber,
-            string teacherName,
-            string teacherBranch
-        )
+        var teacherNo = OnlyDigits(GetText(teacherProfile, "Number", "number", "TeacherNo", "teacherNo"));
+        var realTeacherName = GetText(teacherProfile, "Name", "name", "TeacherName", "teacherName");
+        var teacherBranch = GetText(teacherProfile, "Branch", "branch", "TeacherBranch");
+
+        var announcements = await LoadTeacherAnnouncements();
+
+        ViewBag.TeacherName = realTeacherName;
+        ViewBag.TeacherNo = teacherNo;
+        ViewBag.TeacherBranch = teacherBranch;
+        ViewBag.Teacher = teacherProfile;
+        ViewBag.Announcements = announcements;
+
+        return View();
+    }
+
+    private async Task<Dictionary<string, object>> LoadTeacherProfile(string teacherNumber, string teacherName)
+    {
+        var result = new Dictionary<string, object>();
+
+        var numberKey = OnlyDigits(teacherNumber);
+        var nameKey = NormalizeKey(teacherName);
+
+        var snapshot = await _firestore.Collection("users").GetSnapshotAsync();
+
+        foreach (var doc in snapshot.Documents)
         {
-            var result = new List<Dictionary<string, object>>();
+            var data = doc.ToDictionary();
 
-            try
+            if (IsDeleted(data))
             {
-                var snapshot = await _firestore.Collection("lessons").GetSnapshotAsync();
-
-                foreach (var doc in snapshot.Documents)
-                {
-                    var data = doc.ToDictionary();
-
-                    if (IsDeleted(data))
-                    {
-                        continue;
-                    }
-
-                    var docTeacherNo = OnlyDigits(FirstNonEmpty(
-                        GetString(data, "teacherNo", "TeacherNo"),
-                        GetString(data, "teacherNumber", "TeacherNumber"),
-                        GetString(data, "number", "Number")
-                    ));
-
-                    var docTeacherName = NormalizeKey(FirstNonEmpty(
-                        GetString(data, "teacherName", "TeacherName"),
-                        GetString(data, "teacher", "Teacher")
-                    ));
-
-                    var docBranch = NormalizeKey(FirstNonEmpty(
-                        GetString(data, "branch", "Branch"),
-                        GetString(data, "teacherBranch", "TeacherBranch")
-                    ));
-
-                    var sameTeacher =
-                        (!string.IsNullOrWhiteSpace(teacherNumber) && docTeacherNo == OnlyDigits(teacherNumber)) ||
-                        (!string.IsNullOrWhiteSpace(teacherName) && docTeacherName == NormalizeKey(teacherName)) ||
-                        (!string.IsNullOrWhiteSpace(teacherBranch) && docBranch == NormalizeKey(teacherBranch));
-
-                    if (!sameTeacher)
-                    {
-                        continue;
-                    }
-
-                    var lessonName = FirstNonEmpty(
-                        GetString(data, "name", "Name"),
-                        GetString(data, "lessonName", "LessonName"),
-                        GetString(data, "title", "Title"),
-                        "Ders"
-                    );
-
-                    var className = NormalizeClassName(FirstNonEmpty(
-                        GetString(data, "className", "ClassName"),
-                        GetString(data, "class", "Class"),
-                        GetString(data, "targetClass", "TargetClass")
-                    ));
-
-                    data["Id"] = doc.Id;
-                    data["Name"] = lessonName;
-                    data["LessonName"] = lessonName;
-                    data["Title"] = lessonName;
-                    data["ClassName"] = string.IsNullOrWhiteSpace(className) ? "-" : className;
-                    data["Branch"] = FirstNonEmpty(
-                        GetString(data, "branch", "Branch"),
-                        GetString(data, "teacherBranch", "TeacherBranch"),
-                        teacherBranch
-                    );
-
-                    result.Add(data);
-                }
-            }
-            catch
-            {
+                continue;
             }
 
-            return result
-                .GroupBy(x => NormalizeKey($"{GetText(x, "Name")}_{GetText(x, "ClassName")}"))
-                .Select(x => x.First())
-                .ToList();
-        }
+            var role = NormalizeKey(GetText(data, "role", "Role", "userRole", "UserRole"));
 
-        private async Task<List<Dictionary<string, object>>> LoadTeacherAssignments(
-            string teacherNumber,
-            string teacherName,
-            string teacherBranch,
-            List<Dictionary<string, object>> teacherLessons
-        )
-        {
-            var result = new List<Dictionary<string, object>>();
-
-            var lessonKeys = teacherLessons
-                .Select(x => NormalizeKey($"{GetText(x, "Name")}_{GetText(x, "ClassName")}"))
-                .Where(x => !string.IsNullOrWhiteSpace(x))
-                .ToHashSet();
-
-            var collections = new[] { "homeworks", "assignments" };
-
-            foreach (var collection in collections)
+            if (role != "ogretmen")
             {
-                try
-                {
-                    var snapshot = await _firestore.Collection(collection).GetSnapshotAsync();
-
-                    foreach (var doc in snapshot.Documents)
-                    {
-                        var data = doc.ToDictionary();
-
-                        if (IsDeleted(data))
-                        {
-                            continue;
-                        }
-
-                        var docTeacherNo = OnlyDigits(FirstNonEmpty(
-                            GetString(data, "teacherNo", "TeacherNo"),
-                            GetString(data, "teacherNumber", "TeacherNumber"),
-                            GetString(data, "number", "Number")
-                        ));
-
-                        var docTeacherName = NormalizeKey(FirstNonEmpty(
-                            GetString(data, "teacherName", "TeacherName"),
-                            GetString(data, "teacher", "Teacher")
-                        ));
-
-                        var docBranch = NormalizeKey(FirstNonEmpty(
-                            GetString(data, "branch", "Branch"),
-                            GetString(data, "teacherBranch", "TeacherBranch")
-                        ));
-
-                        var lessonName = FirstNonEmpty(
-                            GetString(data, "lessonName", "LessonName"),
-                            GetString(data, "lesson", "Lesson"),
-                            GetString(data, "courseName", "CourseName"),
-                            GetString(data, "course", "Course")
-                        );
-
-                        var className = NormalizeClassName(FirstNonEmpty(
-                            GetString(data, "className", "ClassName"),
-                            GetString(data, "class", "Class"),
-                            GetString(data, "targetClass", "TargetClass")
-                        ));
-
-                        var lessonKey = NormalizeKey($"{lessonName}_{className}");
-
-                        var sameTeacher =
-                            (!string.IsNullOrWhiteSpace(teacherNumber) && docTeacherNo == OnlyDigits(teacherNumber)) ||
-                            (!string.IsNullOrWhiteSpace(teacherName) && docTeacherName == NormalizeKey(teacherName)) ||
-                            (!string.IsNullOrWhiteSpace(teacherBranch) && docBranch == NormalizeKey(teacherBranch)) ||
-                            lessonKeys.Contains(lessonKey);
-
-                        if (!sameTeacher)
-                        {
-                            continue;
-                        }
-
-                        var title = FirstNonEmpty(
-                            GetString(data, "title", "Title"),
-                            GetString(data, "name", "Name"),
-                            GetString(data, "homeworkTitle", "HomeworkTitle"),
-                            GetString(data, "assignmentTitle", "AssignmentTitle"),
-                            "Ödev"
-                        );
-
-                        data["Id"] = doc.Id;
-                        data["Title"] = title;
-                        data["Name"] = title;
-                        data["HomeworkTitle"] = title;
-                        data["AssignmentTitle"] = title;
-                        data["LessonName"] = string.IsNullOrWhiteSpace(lessonName) ? "-" : lessonName;
-                        data["ClassName"] = string.IsNullOrWhiteSpace(className) ? "-" : className;
-
-                        result.Add(data);
-                    }
-                }
-                catch
-                {
-                }
+                continue;
             }
 
-            return result
-                .GroupBy(x => NormalizeKey($"{GetText(x, "Title")}_{GetText(x, "LessonName")}_{GetText(x, "ClassName")}"))
-                .Select(x => x.First())
-                .ToList();
-        }
+            var currentNumber = OnlyDigits(FirstNonEmpty(
+                GetText(data, "number", "Number"),
+                GetText(data, "schoolNo", "SchoolNo"),
+                GetText(data, "teacherNo", "TeacherNo"),
+                GetText(data, "teacherNumber", "TeacherNumber")
+            ));
 
-        private async Task<List<Dictionary<string, object>>> LoadTeacherSubmissions(
-            string teacherNumber,
-            string teacherName,
-            string teacherBranch,
-            List<Dictionary<string, object>> assignments,
-            List<Dictionary<string, object>> lessons
-        )
-        {
-            var result = new List<Dictionary<string, object>>();
-
-            var assignmentIds = assignments
-                .Select(x => GetText(x, "Id"))
-                .Where(x => !string.IsNullOrWhiteSpace(x))
-                .ToHashSet();
-
-            var assignmentKeys = assignments
-                .Select(x => NormalizeKey($"{GetText(x, "Title")}_{GetText(x, "LessonName")}_{GetText(x, "ClassName")}"))
-                .Where(x => !string.IsNullOrWhiteSpace(x))
-                .ToHashSet();
-
-            var lessonKeys = lessons
-                .Select(x => NormalizeKey($"{GetText(x, "Name")}_{GetText(x, "ClassName")}"))
-                .Where(x => !string.IsNullOrWhiteSpace(x))
-                .ToHashSet();
-
-            var collections = new[] { "homework_submissions", "submissions" };
-
-            foreach (var collection in collections)
-            {
-                try
-                {
-                    var snapshot = await _firestore.Collection(collection).GetSnapshotAsync();
-
-                    foreach (var doc in snapshot.Documents)
-                    {
-                        var data = doc.ToDictionary();
-
-                        if (IsDeleted(data))
-                        {
-                            continue;
-                        }
-
-                        var homeworkId = FirstNonEmpty(
-                            GetString(data, "homeworkId", "HomeworkId"),
-                            GetString(data, "assignmentId", "AssignmentId")
-                        );
-
-                        var title = FirstNonEmpty(
-                            GetString(data, "assignmentTitle", "AssignmentTitle"),
-                            GetString(data, "homeworkTitle", "HomeworkTitle"),
-                            GetString(data, "title", "Title"),
-                            GetString(data, "name", "Name"),
-                            "Ödev"
-                        );
-
-                        var lessonName = FirstNonEmpty(
-                            GetString(data, "lessonName", "LessonName"),
-                            GetString(data, "lesson", "Lesson"),
-                            GetString(data, "courseName", "CourseName"),
-                            GetString(data, "course", "Course")
-                        );
-
-                        var className = NormalizeClassName(FirstNonEmpty(
-                            GetString(data, "className", "ClassName"),
-                            GetString(data, "class", "Class"),
-                            GetString(data, "targetClass", "TargetClass")
-                        ));
-
-                        var docTeacherNo = OnlyDigits(FirstNonEmpty(
-                            GetString(data, "teacherNo", "TeacherNo"),
-                            GetString(data, "teacherNumber", "TeacherNumber"),
-                            GetString(data, "number", "Number")
-                        ));
-
-                        var docTeacherName = NormalizeKey(FirstNonEmpty(
-                            GetString(data, "teacherName", "TeacherName"),
-                            GetString(data, "teacher", "Teacher")
-                        ));
-
-                        var docBranch = NormalizeKey(FirstNonEmpty(
-                            GetString(data, "branch", "Branch"),
-                            GetString(data, "teacherBranch", "TeacherBranch")
-                        ));
-
-                        var assignmentKey = NormalizeKey($"{title}_{lessonName}_{className}");
-                        var lessonKey = NormalizeKey($"{lessonName}_{className}");
-
-                        var sameTeacher =
-                            (!string.IsNullOrWhiteSpace(homeworkId) && assignmentIds.Contains(homeworkId)) ||
-                            assignmentKeys.Contains(assignmentKey) ||
-                            lessonKeys.Contains(lessonKey) ||
-                            (!string.IsNullOrWhiteSpace(teacherNumber) && docTeacherNo == OnlyDigits(teacherNumber)) ||
-                            (!string.IsNullOrWhiteSpace(teacherName) && docTeacherName == NormalizeKey(teacherName)) ||
-                            (!string.IsNullOrWhiteSpace(teacherBranch) && docBranch == NormalizeKey(teacherBranch));
-
-                        if (!sameTeacher)
-                        {
-                            continue;
-                        }
-
-                        var studentNo = OnlyDigits(FirstNonEmpty(
-                            GetString(data, "studentNo", "StudentNo"),
-                            GetString(data, "studentNumber", "StudentNumber"),
-                            GetString(data, "schoolNo", "SchoolNo"),
-                            GetString(data, "number", "Number")
-                        ));
-
-                        var answer = FirstNonEmpty(
-                            GetString(data, "answerText", "AnswerText"),
-                            GetString(data, "answer", "Answer"),
-                            GetString(data, "content", "Content"),
-                            GetString(data, "text", "Text"),
-                            "-"
-                        );
-
-                        var link = FirstNonEmpty(
-                            GetString(data, "answerLink", "AnswerLink"),
-                            GetString(data, "fileUrl", "FileUrl"),
-                            GetString(data, "submissionFileUrl", "SubmissionFileUrl"),
-                            GetString(data, "link", "Link"),
-                            GetString(data, "url", "Url")
-                        );
-
-                        var score = FirstNonEmpty(
-                            GetString(data, "score", "Score"),
-                            GetString(data, "grade", "Grade"),
-                            GetString(data, "point", "Point"),
-                            GetString(data, "not", "Not")
-                        );
-
-                        var feedback = FirstNonEmpty(
-                            GetString(data, "feedback", "Feedback"),
-                            GetString(data, "comment", "Comment"),
-                            GetString(data, "geriDonus", "GeriDonus")
-                        );
-
-                        var status = FirstNonEmpty(
-                            GetString(data, "status", "Status"),
-                            !string.IsNullOrWhiteSpace(score) || !string.IsNullOrWhiteSpace(feedback)
-                                ? "Değerlendirildi"
-                                : "Bekliyor"
-                        );
-
-                        data["Id"] = doc.Id;
-                        data["HomeworkId"] = homeworkId;
-                        data["AssignmentId"] = homeworkId;
-                        data["Title"] = title;
-                        data["AssignmentTitle"] = title;
-                        data["HomeworkTitle"] = title;
-                        data["LessonName"] = string.IsNullOrWhiteSpace(lessonName) ? "-" : lessonName;
-                        data["ClassName"] = string.IsNullOrWhiteSpace(className) ? "-" : className;
-                        data["StudentNo"] = studentNo;
-                        data["StudentNumber"] = studentNo;
-                        data["SchoolNo"] = studentNo;
-                        data["Answer"] = answer;
-                        data["AnswerText"] = answer;
-                        data["AnswerLink"] = link;
-                        data["FileUrl"] = link;
-                        data["Score"] = score;
-                        data["Grade"] = score;
-                        data["Feedback"] = feedback;
-                        data["Status"] = status;
-
-                        result.Add(data);
-                    }
-                }
-                catch
-                {
-                }
-            }
-
-            return result
-                .GroupBy(x => NormalizeKey($"{GetText(x, "HomeworkId")}_{GetText(x, "StudentNo")}_{GetText(x, "Title")}"))
-                .Select(x => x.First())
-                .OrderByDescending(x => GetDate(x, "createdAt", "CreatedAt", "submittedAt", "SubmittedAt") ?? DateTime.MinValue)
-                .ToList();
-        }
-
-        private async Task<Dictionary<string, object>> FindLessonById(string lessonId)
-        {
-            if (string.IsNullOrWhiteSpace(lessonId))
-            {
-                return new Dictionary<string, object>();
-            }
-
-            try
-            {
-                var doc = await _firestore.Collection("lessons").Document(lessonId).GetSnapshotAsync();
-
-                if (doc.Exists)
-                {
-                    var data = doc.ToDictionary();
-                    data["Id"] = doc.Id;
-                    return data;
-                }
-            }
-            catch
-            {
-            }
-
-            return new Dictionary<string, object>();
-        }
-
-        private async Task<(DocumentSnapshot? Doc, string CollectionName)> FindDocumentInCollections(string id, params string[] collections)
-        {
-            foreach (var collection in collections)
-            {
-                try
-                {
-                    var doc = await _firestore.Collection(collection).Document(id).GetSnapshotAsync();
-
-                    if (doc.Exists)
-                    {
-                        return (doc, collection);
-                    }
-                }
-                catch
-                {
-                }
-            }
-
-            return (null, "");
-        }
-
-        private async Task UpdateDocumentInCollections(string id, Dictionary<string, object> update, params string[] collections)
-        {
-            foreach (var collection in collections)
-            {
-                try
-                {
-                    var docRef = _firestore.Collection(collection).Document(id);
-                    var doc = await docRef.GetSnapshotAsync();
-
-                    if (doc.Exists)
-                    {
-                        await docRef.SetAsync(update, SetOptions.MergeAll);
-                    }
-                }
-                catch
-                {
-                }
-            }
-        }
-
-        private static bool IsDeleted(Dictionary<string, object> data)
-        {
-            if (data == null || data.Count == 0)
-            {
-                return true;
-            }
-
-            if (GetBool(data, "isDeleted", "IsDeleted", "deleted", "Deleted"))
-            {
-                return true;
-            }
-
-            if (GetBool(data, "isArchived", "IsArchived", "archived", "Archived"))
-            {
-                return true;
-            }
-
-            if (GetBool(data, "isHidden", "IsHidden", "hidden", "Hidden"))
-            {
-                return true;
-            }
-
-            if (GetBool(data, "isRemoved", "IsRemoved", "removed", "Removed"))
-            {
-                return true;
-            }
-
-            if (HasAnyValue(data, "deletedAt", "DeletedAt", "removedAt", "RemovedAt", "archivedAt", "ArchivedAt"))
-            {
-                return true;
-            }
-
-            var status = NormalizeKey(GetString(data, "status", "Status"));
-
-            if (status == "silindi" ||
-                status == "deleted" ||
-                status == "arsivlendi" ||
-                status == "archived" ||
-                status == "pasif" ||
-                status == "inactive" ||
-                status == "iptal" ||
-                status == "cancelled" ||
-                status == "canceled")
-            {
-                return true;
-            }
-
-            return false;
-        }
-
-        private static bool IsEvaluated(Dictionary<string, object> data)
-        {
-            var status = NormalizeKey(GetString(data, "status", "Status"));
-            var score = FirstNonEmpty(
-                GetString(data, "score", "Score"),
-                GetString(data, "grade", "Grade"),
-                GetString(data, "point", "Point"),
-                GetString(data, "not", "Not")
+            var currentName = FirstNonEmpty(
+                GetText(data, "name", "Name"),
+                GetText(data, "fullName", "FullName"),
+                GetText(data, "userName", "UserName"),
+                GetText(data, "teacherName", "TeacherName"),
+                "Öğretmen"
             );
 
-            var feedback = FirstNonEmpty(
-                GetString(data, "feedback", "Feedback"),
-                GetString(data, "comment", "Comment"),
-                GetString(data, "geriDonus", "GeriDonus")
+            var currentNameKey = NormalizeKey(currentName);
+
+            var matchedByNumber =
+                !string.IsNullOrWhiteSpace(numberKey) &&
+                currentNumber == numberKey;
+
+            var matchedByName =
+                !string.IsNullOrWhiteSpace(nameKey) &&
+                currentNameKey == nameKey;
+
+            if (!matchedByNumber && !matchedByName)
+            {
+                continue;
+            }
+
+            data["Id"] = doc.Id;
+            data["id"] = doc.Id;
+            data["Name"] = currentName;
+            data["name"] = currentName;
+            data["TeacherName"] = currentName;
+            data["teacherName"] = currentName;
+            data["Number"] = currentNumber;
+            data["number"] = currentNumber;
+            data["TeacherNo"] = currentNumber;
+            data["teacherNo"] = currentNumber;
+            data["Branch"] = FirstNonEmpty(GetText(data, "branch", "Branch"), GetText(data, "teacherBranch", "TeacherBranch"));
+            data["branch"] = data["Branch"];
+
+            result = data;
+            break;
+        }
+
+        return result;
+    }
+
+    private async Task<List<Dictionary<string, object>>> LoadTeacherLessons(
+        string teacherNumber,
+        string teacherName,
+        string teacherBranch,
+        string teacherId = ""
+    )
+    {
+        await _integrity.CleanupOrphanActiveLinksAsync();
+
+        var result = new List<Dictionary<string, object>>();
+        var seen = new HashSet<string>();
+
+        var activeTeachers = await _integrity.LoadActiveTeachersAsync();
+        var activeClasses = await _integrity.LoadActiveClassesAsync();
+
+        var activeTeacherIds = activeTeachers
+            .Select(x => DataIntegrityService.NormalizeKey(x.Id))
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .ToHashSet();
+
+        var activeTeacherNos = activeTeachers
+            .Select(x => DataIntegrityService.OnlyDigits(x.Number))
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .ToHashSet();
+
+        var activeTeacherNames = activeTeachers
+            .Select(x => DataIntegrityService.NormalizeKey(x.Name))
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .ToHashSet();
+
+        var activeClassNames = activeClasses
+            .Select(x => DataIntegrityService.NormalizeClassName(x.Name))
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .ToHashSet();
+
+        var teacherNumberKey = OnlyDigits(teacherNumber);
+        var teacherNameKey = NormalizeKey(teacherName);
+        var teacherBranchKey = NormalizeKey(teacherBranch);
+        var teacherIdKey = NormalizeKey(teacherId);
+
+        var snapshot = await _firestore.Collection("lessons").GetSnapshotAsync();
+
+        foreach (var doc in snapshot.Documents)
+        {
+            var data = doc.ToDictionary();
+
+            if (IsDeleted(data))
+            {
+                continue;
+            }
+
+            var lessonName = FirstNonEmpty(
+                GetText(data, "name", "Name"),
+                GetText(data, "lessonName", "LessonName"),
+                GetText(data, "title", "Title"),
+                GetText(data, "courseName", "CourseName"),
+                GetText(data, "lesson", "Lesson"),
+                "Ders"
             );
 
-            return status.Contains("deger") ||
-                   status.Contains("evaluated") ||
-                   !string.IsNullOrWhiteSpace(score) ||
-                   !string.IsNullOrWhiteSpace(feedback);
-        }
+            var className = NormalizeClassName(FirstNonEmpty(
+                GetText(data, "className", "ClassName"),
+                GetText(data, "class", "Class"),
+                GetText(data, "targetClass", "TargetClass"),
+                GetText(data, "schoolClass", "SchoolClass")
+            ));
 
-        private static bool HasAnyValue(Dictionary<string, object> data, params string[] keys)
-        {
-            foreach (var key in keys)
+            var docTeacherId = NormalizeKey(FirstNonEmpty(
+                GetText(data, "teacherId", "TeacherId"),
+                GetText(data, "teacherUid", "TeacherUid"),
+                GetText(data, "userId", "UserId"),
+                GetText(data, "teacherDocId", "TeacherDocId")
+            ));
+
+            var docTeacherNo = OnlyDigits(FirstNonEmpty(
+                GetText(data, "teacherNo", "TeacherNo"),
+                GetText(data, "teacherNumber", "TeacherNumber"),
+                GetText(data, "teacherSchoolNo", "TeacherSchoolNo"),
+                GetText(data, "number", "Number"),
+                GetText(data, "schoolNo", "SchoolNo")
+            ));
+
+            var docTeacherNameRaw = FirstNonEmpty(
+                GetText(data, "teacherName", "TeacherName"),
+                GetText(data, "teacherFullName", "TeacherFullName"),
+                GetText(data, "teacher", "Teacher")
+            );
+
+            var docTeacherName = NormalizeKey(docTeacherNameRaw);
+
+            var docBranchRaw = FirstNonEmpty(
+                GetText(data, "branch", "Branch"),
+                GetText(data, "teacherBranch", "TeacherBranch"),
+                GetText(data, "lessonBranch", "LessonBranch"),
+                GetText(data, "subject", "Subject")
+            );
+
+            var docBranch = NormalizeKey(docBranchRaw);
+
+            var lessonTeacherStillActive =
+                (!string.IsNullOrWhiteSpace(docTeacherId) && activeTeacherIds.Contains(docTeacherId)) ||
+                (!string.IsNullOrWhiteSpace(docTeacherNo) && activeTeacherNos.Contains(docTeacherNo)) ||
+                (!string.IsNullOrWhiteSpace(docTeacherName) && activeTeacherNames.Contains(docTeacherName));
+
+            var lessonClassStillActive =
+                !string.IsNullOrWhiteSpace(className) &&
+                activeClassNames.Contains(className);
+
+            if (!lessonTeacherStillActive || !lessonClassStillActive)
             {
-                if (data.TryGetValue(key, out var value) && value != null)
-                {
-                    if (!string.IsNullOrWhiteSpace(value.ToString()))
-                    {
-                        return true;
-                    }
-                }
+                continue;
             }
 
-            return false;
-        }
+            var hasTeacherIdentity =
+                !string.IsNullOrWhiteSpace(docTeacherId) ||
+                !string.IsNullOrWhiteSpace(docTeacherNo) ||
+                !string.IsNullOrWhiteSpace(docTeacherName);
 
-        private static string FormValue(IFormCollection form, params string[] keys)
-        {
-            foreach (var key in keys)
+            var sameTeacher =
+                (!string.IsNullOrWhiteSpace(teacherIdKey) && docTeacherId == teacherIdKey) ||
+                (!string.IsNullOrWhiteSpace(teacherNumberKey) && docTeacherNo == teacherNumberKey) ||
+                (!string.IsNullOrWhiteSpace(teacherNameKey) && docTeacherName == teacherNameKey) ||
+                (!hasTeacherIdentity && !string.IsNullOrWhiteSpace(teacherBranchKey) && docBranch == teacherBranchKey);
+
+            if (!sameTeacher)
             {
-                if (form.ContainsKey(key))
-                {
-                    var value = form[key].ToString();
-
-                    if (!string.IsNullOrWhiteSpace(value))
-                    {
-                        return value;
-                    }
-                }
+                continue;
             }
 
-            return "";
-        }
+            var key = NormalizeKey($"{lessonName}_{className}_{docTeacherNo}_{docTeacherNameRaw}");
 
-        private static string GetText(Dictionary<string, object> data, params string[] keys)
-        {
-            return GetString(data, keys);
-        }
-
-        private static string GetString(Dictionary<string, object> data, params string[] keys)
-        {
-            foreach (var key in keys)
+            if (seen.Contains(key))
             {
-                if (data.TryGetValue(key, out var value) && value != null)
-                {
-                    return value.ToString() ?? "";
-                }
+                continue;
             }
 
-            return "";
+            seen.Add(key);
+
+            data["Id"] = doc.Id;
+            data["id"] = doc.Id;
+            data["Name"] = lessonName;
+            data["name"] = lessonName;
+            data["LessonName"] = lessonName;
+            data["lessonName"] = lessonName;
+            data["ClassName"] = className;
+            data["className"] = className;
+            data["Class"] = className;
+            data["class"] = className;
+            data["TeacherId"] = docTeacherId;
+            data["teacherId"] = docTeacherId;
+            data["TeacherName"] = string.IsNullOrWhiteSpace(docTeacherNameRaw) ? teacherName : docTeacherNameRaw;
+            data["teacherName"] = data["TeacherName"];
+            data["TeacherNo"] = string.IsNullOrWhiteSpace(docTeacherNo) ? teacherNumberKey : docTeacherNo;
+            data["teacherNo"] = data["TeacherNo"];
+            data["TeacherNumber"] = data["TeacherNo"];
+            data["teacherNumber"] = data["TeacherNo"];
+            data["Branch"] = string.IsNullOrWhiteSpace(docBranchRaw) ? teacherBranch : docBranchRaw;
+            data["branch"] = data["Branch"];
+            data["TeacherBranch"] = data["Branch"];
+            data["teacherBranch"] = data["Branch"];
+
+            result.Add(data);
         }
 
-        private static bool GetBool(Dictionary<string, object> data, params string[] keys)
+        return result
+            .OrderBy(x => GetText(x, "ClassName", "className"))
+            .ThenBy(x => GetText(x, "Name", "name"))
+            .ToList();
+    }
+
+    private async Task<List<Dictionary<string, object>>> LoadTeacherAssignments(
+        string teacherNumber,
+        string teacherName,
+        string teacherBranch,
+        string teacherId,
+        List<Dictionary<string, object>> lessons
+    )
+    {
+        await _integrity.CleanupOrphanActiveLinksAsync();
+
+        var result = new List<Dictionary<string, object>>();
+        var seen = new HashSet<string>();
+
+        var lessonIds = lessons
+            .Select(x => GetText(x, "Id", "id"))
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .ToHashSet();
+
+        var lessonKeys = lessons
+            .Select(x => NormalizeKey($"{GetText(x, "Name", "name", "LessonName", "lessonName")}_{NormalizeClassName(GetText(x, "ClassName", "className", "Class", "class"))}"))
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .ToHashSet();
+
+        var teacherNumberKey = OnlyDigits(teacherNumber);
+        var teacherNameKey = NormalizeKey(teacherName);
+        var teacherIdKey = NormalizeKey(teacherId);
+
+        var collections = new[] { "homeworks", "assignments" };
+
+        foreach (var collection in collections)
         {
-            foreach (var key in keys)
+            var snapshot = await _firestore.Collection(collection).GetSnapshotAsync();
+
+            foreach (var doc in snapshot.Documents)
             {
-                if (data.TryGetValue(key, out var value) && value != null)
-                {
-                    if (value is bool boolValue)
-                    {
-                        return boolValue;
-                    }
+                var data = doc.ToDictionary();
 
-                    if (bool.TryParse(value.ToString(), out bool parsed))
-                    {
-                        return parsed;
-                    }
-
-                    if (int.TryParse(value.ToString(), out int intValue))
-                    {
-                        return intValue == 1;
-                    }
-                }
-            }
-
-            return false;
-        }
-
-        private static DateTime? GetDate(Dictionary<string, object> data, params string[] keys)
-        {
-            foreach (var key in keys)
-            {
-                if (!data.TryGetValue(key, out var value) || value == null)
+                if (IsDeleted(data))
                 {
                     continue;
                 }
 
-                if (value is Timestamp timestamp)
+                var lessonId = FirstNonEmpty(
+                    GetText(data, "lessonId", "LessonId"),
+                    GetText(data, "courseId", "CourseId")
+                );
+
+                var title = FirstNonEmpty(
+                    GetText(data, "title", "Title"),
+                    GetText(data, "name", "Name"),
+                    GetText(data, "homeworkTitle"),
+                    GetText(data, "assignmentTitle"),
+                    "Ödev"
+                );
+
+                var lessonName = FirstNonEmpty(
+                    GetText(data, "lessonName", "LessonName"),
+                    GetText(data, "lesson", "Lesson"),
+                    GetText(data, "courseName", "CourseName")
+                );
+
+                var className = NormalizeClassName(FirstNonEmpty(
+                    GetText(data, "className", "ClassName"),
+                    GetText(data, "class", "Class"),
+                    GetText(data, "targetClass", "TargetClass")
+                ));
+
+                var docTeacherId = NormalizeKey(FirstNonEmpty(
+                    GetText(data, "teacherId", "TeacherId"),
+                    GetText(data, "teacherUid", "TeacherUid"),
+                    GetText(data, "userId", "UserId")
+                ));
+
+                var docTeacherNo = OnlyDigits(FirstNonEmpty(
+                    GetText(data, "teacherNo", "TeacherNo"),
+                    GetText(data, "teacherNumber", "TeacherNumber"),
+                    GetText(data, "number", "Number")
+                ));
+
+                var docTeacherName = NormalizeKey(FirstNonEmpty(
+                    GetText(data, "teacherName", "TeacherName"),
+                    GetText(data, "teacher", "Teacher")
+                ));
+
+                var assignmentLessonKey = NormalizeKey($"{lessonName}_{className}");
+
+                var sameLesson =
+                    (!string.IsNullOrWhiteSpace(lessonId) && lessonIds.Contains(lessonId)) ||
+                    lessonKeys.Contains(assignmentLessonKey);
+
+                var sameTeacher =
+                    (!string.IsNullOrWhiteSpace(teacherIdKey) && docTeacherId == teacherIdKey) ||
+                    (!string.IsNullOrWhiteSpace(teacherNumberKey) && docTeacherNo == teacherNumberKey) ||
+                    (!string.IsNullOrWhiteSpace(teacherNameKey) && docTeacherName == teacherNameKey);
+
+                if (!sameLesson && !sameTeacher)
                 {
-                    return timestamp.ToDateTime();
+                    continue;
                 }
 
-                if (DateTime.TryParse(value.ToString(), out DateTime date))
+                if (!lessonKeys.Contains(assignmentLessonKey) && !lessonIds.Contains(lessonId))
                 {
-                    return date;
+                    continue;
                 }
+
+                var key = NormalizeKey($"{title}_{lessonName}_{className}_{doc.Id}");
+
+                if (seen.Contains(key))
+                {
+                    continue;
+                }
+
+                seen.Add(key);
+
+                data["Id"] = doc.Id;
+                data["id"] = doc.Id;
+                data["Title"] = title;
+                data["title"] = title;
+                data["Name"] = title;
+                data["name"] = title;
+                data["Description"] = FirstNonEmpty(GetText(data, "description", "Description"), GetText(data, "content", "Content"));
+                data["description"] = data["Description"];
+                data["LessonId"] = lessonId;
+                data["lessonId"] = lessonId;
+                data["LessonName"] = lessonName;
+                data["lessonName"] = lessonName;
+                data["ClassName"] = className;
+                data["className"] = className;
+                data["TeacherName"] = teacherName;
+                data["teacherName"] = teacherName;
+                data["TeacherNo"] = teacherNumber;
+                data["teacherNo"] = teacherNumber;
+                data["Branch"] = teacherBranch;
+                data["branch"] = teacherBranch;
+                data["FileType"] = FirstNonEmpty(GetText(data, "fileType", "FileType"), GetText(data, "type", "Type"), "Metin / Link");
+                data["fileType"] = data["FileType"];
+
+                result.Add(data);
             }
-
-            return null;
         }
 
-        private static string FirstNonEmpty(params string[] values)
+        return result
+            .OrderByDescending(x => GetDate(x, "createdAt", "CreatedAt") ?? DateTime.MinValue)
+            .ToList();
+    }
+
+    private async Task<List<Dictionary<string, object>>> LoadTeacherSubmissions(
+        string teacherNumber,
+        string teacherName,
+        string teacherBranch,
+        string teacherId,
+        List<Dictionary<string, object>> lessons,
+        List<Dictionary<string, object>> assignments
+    )
+    {
+        await _integrity.CleanupOrphanActiveLinksAsync();
+
+        var result = new List<Dictionary<string, object>>();
+        var seen = new HashSet<string>();
+
+        var lessonKeys = lessons
+            .Select(x => NormalizeKey($"{GetText(x, "Name", "name", "LessonName", "lessonName")}_{NormalizeClassName(GetText(x, "ClassName", "className", "Class", "class"))}"))
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .ToHashSet();
+
+        var assignmentIds = assignments
+            .Select(x => GetText(x, "Id", "id"))
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .ToHashSet();
+
+        var assignmentKeys = assignments
+            .Select(x => NormalizeKey($"{GetText(x, "Title", "title", "Name", "name")}_{GetText(x, "LessonName", "lessonName")}_{NormalizeClassName(GetText(x, "ClassName", "className"))}"))
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .ToHashSet();
+
+        var collections = new[] { "homework_submissions", "submissions" };
+
+        foreach (var collection in collections)
         {
-            foreach (var value in values)
+            var snapshot = await _firestore.Collection(collection).GetSnapshotAsync();
+
+            foreach (var doc in snapshot.Documents)
             {
-                if (!string.IsNullOrWhiteSpace(value))
+                var data = doc.ToDictionary();
+
+                if (IsDeleted(data))
                 {
-                    return value;
+                    continue;
                 }
+
+                var assignmentId = FirstNonEmpty(
+                    GetText(data, "assignmentId", "AssignmentId"),
+                    GetText(data, "homeworkId", "HomeworkId")
+                );
+
+                var title = FirstNonEmpty(
+                    GetText(data, "title", "Title"),
+                    GetText(data, "assignmentTitle"),
+                    GetText(data, "homeworkTitle"),
+                    "Ödev"
+                );
+
+                var lessonName = FirstNonEmpty(
+                    GetText(data, "lessonName", "LessonName"),
+                    GetText(data, "lesson", "Lesson"),
+                    GetText(data, "courseName", "CourseName")
+                );
+
+                var className = NormalizeClassName(FirstNonEmpty(
+                    GetText(data, "className", "ClassName"),
+                    GetText(data, "class", "Class"),
+                    GetText(data, "targetClass", "TargetClass")
+                ));
+
+                var studentNo = OnlyDigits(FirstNonEmpty(
+                    GetText(data, "studentNo", "StudentNo"),
+                    GetText(data, "studentNumber", "StudentNumber"),
+                    GetText(data, "number", "Number")
+                ));
+
+                var submissionLessonKey = NormalizeKey($"{lessonName}_{className}");
+                var submissionAssignmentKey = NormalizeKey($"{title}_{lessonName}_{className}");
+
+                var sameAssignment =
+                    (!string.IsNullOrWhiteSpace(assignmentId) && assignmentIds.Contains(assignmentId)) ||
+                    assignmentKeys.Contains(submissionAssignmentKey);
+
+                var sameLesson = lessonKeys.Contains(submissionLessonKey);
+
+                if (!sameAssignment && !sameLesson)
+                {
+                    continue;
+                }
+
+                var key = NormalizeKey($"{assignmentId}_{studentNo}_{title}_{lessonName}_{className}");
+
+                var item = new Dictionary<string, object>(data)
+                {
+                    ["Id"] = doc.Id,
+                    ["id"] = doc.Id,
+                    ["AssignmentId"] = assignmentId,
+                    ["assignmentId"] = assignmentId,
+                    ["Title"] = title,
+                    ["title"] = title,
+                    ["LessonName"] = lessonName,
+                    ["lessonName"] = lessonName,
+                    ["ClassName"] = className,
+                    ["className"] = className,
+                    ["StudentName"] = FirstNonEmpty(GetText(data, "studentName", "StudentName"), GetText(data, "name", "Name"), "-"),
+                    ["studentName"] = FirstNonEmpty(GetText(data, "studentName", "StudentName"), GetText(data, "name", "Name"), "-"),
+                    ["StudentNo"] = studentNo,
+                    ["studentNo"] = studentNo,
+                    ["Answer"] = FirstNonEmpty(GetText(data, "answer", "Answer"), GetText(data, "content", "Content"), GetText(data, "text", "Text"), "-"),
+                    ["answer"] = FirstNonEmpty(GetText(data, "answer", "Answer"), GetText(data, "content", "Content"), GetText(data, "text", "Text"), "-"),
+                    ["Link"] = FirstNonEmpty(GetText(data, "link", "Link"), GetText(data, "fileUrl", "FileUrl"), GetText(data, "url", "Url")),
+                    ["link"] = FirstNonEmpty(GetText(data, "link", "Link"), GetText(data, "fileUrl", "FileUrl"), GetText(data, "url", "Url")),
+                    ["Score"] = FirstNonEmpty(GetText(data, "score", "Score"), GetText(data, "grade", "Grade"), GetText(data, "point", "Point"), GetText(data, "not", "Not")),
+                    ["score"] = FirstNonEmpty(GetText(data, "score", "Score"), GetText(data, "grade", "Grade"), GetText(data, "point", "Point"), GetText(data, "not", "Not")),
+                    ["Feedback"] = FirstNonEmpty(GetText(data, "feedback", "Feedback"), GetText(data, "comment", "Comment"), GetText(data, "geriDonus", "GeriDonus")),
+                    ["feedback"] = FirstNonEmpty(GetText(data, "feedback", "Feedback"), GetText(data, "comment", "Comment"), GetText(data, "geriDonus", "GeriDonus")),
+                    ["Status"] = FirstNonEmpty(GetText(data, "status", "Status"), "Bekliyor"),
+                    ["status"] = FirstNonEmpty(GetText(data, "status", "Status"), "Bekliyor"),
+                };
+
+                if (seen.Contains(key))
+                {
+                    var index = result.FindIndex(x =>
+                        NormalizeKey($"{GetText(x, "AssignmentId", "assignmentId")}_{GetText(x, "StudentNo", "studentNo")}_{GetText(x, "Title", "title")}_{GetText(x, "LessonName", "lessonName")}_{GetText(x, "ClassName", "className")}") == key
+                    );
+
+                    if (index >= 0 && IsEvaluatedStatus(GetText(item, "Status", "status")))
+                    {
+                        result[index] = item;
+                    }
+
+                    continue;
+                }
+
+                seen.Add(key);
+                result.Add(item);
+            }
+        }
+
+        return result
+            .OrderByDescending(x => GetDate(x, "submittedAt", "SubmittedAt", "createdAt", "CreatedAt") ?? DateTime.MinValue)
+            .ToList();
+    }
+
+    private async Task<List<Dictionary<string, object>>> LoadTeacherAnnouncements()
+    {
+        var result = new List<Dictionary<string, object>>();
+
+        var snapshot = await _firestore.Collection("announcements").GetSnapshotAsync();
+
+        foreach (var doc in snapshot.Documents)
+        {
+            var data = doc.ToDictionary();
+
+            if (IsDeleted(data))
+            {
+                continue;
             }
 
+            var target = FirstNonEmpty(
+                GetText(data, "target", "Target"),
+                GetText(data, "targetRole", "TargetRole"),
+                GetText(data, "audience", "Audience"),
+                "Tüm Okul"
+            );
+
+            var targetKey = NormalizeKey(target);
+
+            if (targetKey != "tumokul" && targetKey != "ogretmen")
+            {
+                continue;
+            }
+
+            var title = FirstNonEmpty(
+                GetText(data, "title", "Title"),
+                GetText(data, "name", "Name"),
+                "Duyuru"
+            );
+
+            var content = FirstNonEmpty(
+                GetText(data, "content", "Content"),
+                GetText(data, "message", "Message"),
+                GetText(data, "description", "Description")
+            );
+
+            if (string.IsNullOrWhiteSpace(title) && string.IsNullOrWhiteSpace(content))
+            {
+                continue;
+            }
+
+            data["Id"] = doc.Id;
+            data["id"] = doc.Id;
+            data["Title"] = title;
+            data["title"] = title;
+            data["Content"] = content;
+            data["content"] = content;
+            data["Target"] = target;
+            data["target"] = target;
+
+            result.Add(data);
+        }
+
+        return result
+            .OrderByDescending(x => GetDate(x, "createdAt", "CreatedAt", "publishedAt", "PublishedAt") ?? DateTime.MinValue)
+            .ToList();
+    }
+
+    private async Task UpdateAssignmentEverywhere(string assignmentId, Dictionary<string, object?> update)
+    {
+        var collections = new[] { "homeworks", "assignments" };
+
+        foreach (var collection in collections)
+        {
+            var directDoc = await _firestore.Collection(collection).Document(assignmentId).GetSnapshotAsync();
+
+            if (directDoc.Exists)
+            {
+                await directDoc.Reference.SetAsync(update, SetOptions.MergeAll);
+            }
+        }
+    }
+
+    private async Task UpdateSubmissionEverywhere(string submissionId, Dictionary<string, object?> update)
+    {
+        var collections = new[] { "homework_submissions", "submissions" };
+
+        foreach (var collection in collections)
+        {
+            var directDoc = await _firestore.Collection(collection).Document(submissionId).GetSnapshotAsync();
+
+            if (directDoc.Exists)
+            {
+                await directDoc.Reference.SetAsync(update, SetOptions.MergeAll);
+            }
+        }
+    }
+
+    private string GetSessionValue(params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            var value = HttpContext.Session.GetString(key);
+
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return value.Trim();
+            }
+        }
+
+        return "";
+    }
+
+    private static bool IsDeleted(Dictionary<string, object> data)
+    {
+        var deleted = GetText(data, "isDeleted", "IsDeleted", "deleted", "Deleted").Trim().ToLowerInvariant();
+        var active = GetText(data, "isActive", "IsActive", "active", "Active").Trim().ToLowerInvariant();
+
+        if (deleted is "true" or "1" or "evet" or "yes")
+        {
+            return true;
+        }
+
+        if (active is "false" or "0" or "hayir" or "hayır" or "no")
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsEvaluatedStatus(string status)
+    {
+        var key = NormalizeKey(status);
+
+        return key.Contains("degerlendirildi") ||
+               key.Contains("notlandi") ||
+               key.Contains("notlandı") ||
+               key.Contains("graded") ||
+               key.Contains("evaluated");
+    }
+
+    private static string GetText(Dictionary<string, object> data, params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            if (!data.TryGetValue(key, out var value) || value == null)
+            {
+                continue;
+            }
+
+            if (value is Timestamp timestamp)
+            {
+                return timestamp.ToDateTime().ToLocalTime().ToString("dd.MM.yyyy HH:mm");
+            }
+
+            var text = value.ToString();
+
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                return text.Trim();
+            }
+        }
+
+        return "";
+    }
+
+    private static string FirstNonEmpty(params string[] values)
+    {
+        foreach (var value in values)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return value.Trim();
+            }
+        }
+
+        return "";
+    }
+
+    private static DateTime? GetDate(Dictionary<string, object> data, params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            if (!data.TryGetValue(key, out var value) || value == null)
+            {
+                continue;
+            }
+
+            if (value is Timestamp timestamp)
+            {
+                return timestamp.ToDateTime().ToLocalTime();
+            }
+
+            if (value is DateTime dateTime)
+            {
+                return dateTime.ToLocalTime();
+            }
+
+            if (DateTime.TryParse(value.ToString(), out var parsed))
+            {
+                return parsed;
+            }
+        }
+
+        return null;
+    }
+
+    private static string OnlyDigits(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
             return "";
         }
 
-        private static string OnlyDigits(string value)
+        return new string(value.Where(char.IsDigit).ToArray());
+    }
+
+    private static string NormalizeClassName(string value)
+    {
+        var original = (value ?? "").Trim();
+
+        if (string.IsNullOrWhiteSpace(original))
         {
-            return new string((value ?? "").Where(char.IsDigit).ToArray());
-        }
-
-        private static string NormalizeClassName(string value)
-        {
-            var text = (value ?? "")
-                .Trim()
-                .ToUpperInvariant()
-                .Replace("SINIF", "")
-                .Replace("ŞUBE", "")
-                .Replace("SUBE", "")
-                .Replace("_", "-")
-                .Replace("/", "-")
-                .Replace("\\", "-")
-                .Replace(".", "-");
-
-            text = System.Text.RegularExpressions.Regex.Replace(text, @"\s+", "");
-
-            var match = System.Text.RegularExpressions.Regex.Match(text, @"(9|10|11|12)[^\dA-F]*([A-F])");
-
-            if (match.Success)
-            {
-                return $"{match.Groups[1].Value}-{match.Groups[2].Value}";
-            }
-
-            match = System.Text.RegularExpressions.Regex.Match(text, @"([A-F])[^\dA-F]*(9|10|11|12)");
-
-            if (match.Success)
-            {
-                return $"{match.Groups[2].Value}-{match.Groups[1].Value}";
-            }
-
             return "";
         }
 
-        private static string NormalizeKey(string value)
+        var text = original
+            .ToUpperInvariant()
+            .Replace("SINIF", "")
+            .Replace("SİNİF", "")
+            .Replace("ŞUBE", "")
+            .Replace("SUBE", "")
+            .Replace("_", "-")
+            .Replace("/", "-")
+            .Replace("\\", "-")
+            .Replace(".", "-");
+
+        text = Regex.Replace(text, @"\s+", "");
+
+        var match = Regex.Match(text, @"(9|10|11|12)[^\dA-Z]*([A-Z])");
+
+        if (match.Success)
         {
-            return (value ?? "")
-                .Trim()
-                .ToLowerInvariant()
-                .Replace("ı", "i")
-                .Replace("ğ", "g")
-                .Replace("ü", "u")
-                .Replace("ş", "s")
-                .Replace("ö", "o")
-                .Replace("ç", "c")
-                .Replace(" ", "")
-                .Replace("-", "")
-                .Replace("_", "")
-                .Replace("/", "")
-                .Replace("\\", "")
-                .Replace(".", "")
-                .Replace(":", "")
-                .Replace(";", "")
-                .Replace(",", "");
+            return $"{match.Groups[1].Value}-{match.Groups[2].Value}";
         }
+
+        match = Regex.Match(text, @"([A-Z])[^\dA-Z]*(9|10|11|12)");
+
+        if (match.Success)
+        {
+            return $"{match.Groups[2].Value}-{match.Groups[1].Value}";
+        }
+
+        return original.ToUpperInvariant();
+    }
+
+    private static string NormalizeKey(string value)
+    {
+        value = (value ?? "").Trim().ToLowerInvariant();
+
+        value = value
+            .Replace("ı", "i")
+            .Replace("ğ", "g")
+            .Replace("ü", "u")
+            .Replace("ş", "s")
+            .Replace("ö", "o")
+            .Replace("ç", "c")
+            .Replace("İ", "i")
+            .Replace("Ğ", "g")
+            .Replace("Ü", "u")
+            .Replace("Ş", "s")
+            .Replace("Ö", "o")
+            .Replace("Ç", "c");
+
+        return new string(value.Where(char.IsLetterOrDigit).ToArray());
     }
 }

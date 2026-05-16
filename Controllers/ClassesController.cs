@@ -3,9 +3,11 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using mvc_web.Models;
 using System.Text.RegularExpressions;
+using mvc_web.Filters;
 
 namespace mvc_web.Controllers
 {
+    [AdminOnly]
     public class ClassesController : Controller
     {
         private readonly FirestoreDb _firestore;

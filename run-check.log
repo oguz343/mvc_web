@@ -1,0 +1,11 @@
+C:\Users\ob371\Desktop\Proje\mvc_web\Properties\launchSettings.json içindeki başlatma ayarları kullanılıyor...
+info: Microsoft.Hosting.Lifetime[14]
+      Now listening on: http://127.0.0.1:5217
+info: Microsoft.Hosting.Lifetime[0]
+      Application started. Press Ctrl+C to shut down.
+info: Microsoft.Hosting.Lifetime[0]
+      Hosting environment: Development
+info: Microsoft.Hosting.Lifetime[0]
+      Content root path: C:\Users\ob371\Desktop\Proje\mvc_web
+warn: Microsoft.AspNetCore.HttpsPolicy.HttpsRedirectionMiddleware[3]
+      Failed to determine the https port for redirect.

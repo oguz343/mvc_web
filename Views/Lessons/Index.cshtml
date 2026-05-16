@@ -2,23 +2,53 @@
 
 @{
     Layout = "_AdminLayout";
-    ViewData["Title"] = "Dersler";
+    ViewData["Title"] = "Ders Atamaları";
 
     var lessons = Model ?? new List<mvc_web.Models.LessonViewModel>();
+    var teacherCount = lessons
+        .Select(x => (x.TeacherName ?? "").Trim())
+        .Where(x => !string.IsNullOrWhiteSpace(x))
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .Count();
+    var classCount = lessons
+        .Select(x => (x.ClassName ?? "").Trim())
+        .Where(x => !string.IsNullOrWhiteSpace(x))
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .Count();
 }
 
 <div class="page-shell">
-    <section class="page-header-card">
+    <section class="page-header-card lessons-premium-header">
         <div>
             <div class="eyebrow">Yönetim Paneli</div>
-            <h1>Dersler</h1>
-            <p>Dersleri sınıf ve öğretmenlerle eşleştirerek düzenli bir yapı kurun.</p>
+            <h1>Ders Atamaları</h1>
+            <p>
+                Dersleri sadece aktif sınıf ve aktif öğretmenlerle eşleştirerek düzenli bir yapı kurun.
+            </p>
         </div>
 
-        <div class="page-actions">
+        <div class="page-actions lesson-actions">
+            <form asp-controller="Lessons" asp-action="Cleanup" method="post" class="inline-form">
+                @Html.AntiForgeryToken()
+                <button type="submit" class="btn-secondary">
+                    🧹 Temizle
+                </button>
+            </form>
+
             <a asp-controller="Lessons" asp-action="Create" class="btn-primary">
-                📚 Yeni Ders
+                📚 Yeni Ders Ataması
             </a>
+        </div>
+    </section>
+
+    <section class="lesson-info-card">
+        <div class="lesson-info-icon">🧹</div>
+        <div>
+            <strong>Aktif bağlantı sistemi açık</strong>
+            <span>
+                Silinmiş öğretmen, silinmiş sınıf veya kopmuş bağlantıya sahip dersler otomatik pasife alınır.
+                Böylece eski 9-A, silinmiş öğretmen veya artık olmayan dersler aktif listede kalmaz.
+            </span>
         </div>
     </section>
 
@@ -32,15 +62,45 @@
         <div class="alert alert-danger">@TempData["Error"]</div>
     }
 
+    <section class="stats-grid lesson-summary-grid">
+        <article class="stat-card">
+            <div class="stat-icon primary">📚</div>
+            <div>
+                <h3>@lessons.Count</h3>
+                <p>Toplam ders ataması</p>
+            </div>
+        </article>
+
+        <article class="stat-card">
+            <div class="stat-icon success">👨‍🏫</div>
+            <div>
+                <h3>@teacherCount</h3>
+                <p>Öğretmen sayısı</p>
+            </div>
+        </article>
+
+        <article class="stat-card">
+            <div class="stat-icon warning">🏫</div>
+            <div>
+                <h3>@classCount</h3>
+                <p>Sınıf sayısı</p>
+            </div>
+        </article>
+    </section>
+
     @if (!lessons.Any())
     {
-        <div class="empty-state">
-            Henüz ders eklenmedi.
+        <div class="empty-state premium-empty-state">
+            <div class="empty-icon">📚</div>
+            <h2>Aktif ders bulunmuyor</h2>
+            <p>
+                Ders eklemek için önce aktif öğretmen ve aktif sınıf tanımlanmış olmalıdır.
+            </p>
         </div>
     }
     else
     {
-        <section class="entity-grid">
+        <section class="entity-grid lessons-grid">
             @foreach (var item in lessons)
             {
                 var lessonName = string.IsNullOrWhiteSpace(item.Name) ? "-" : item.Name;
@@ -48,9 +108,9 @@
                 var teacherName = string.IsNullOrWhiteSpace(item.TeacherName) ? "Atanmadı" : item.TeacherName;
                 var teacherBranch = string.IsNullOrWhiteSpace(item.TeacherBranch) ? "-" : item.TeacherBranch;
 
-                <article class="entity-card">
+                <article class="entity-card lesson-card-premium">
                     <div class="entity-head">
-                        <div class="entity-icon info">📘</div>
+                        <div class="entity-icon info lesson-icon-premium">📘</div>
 
                         <div class="entity-title">
                             <h3>@lessonName</h3>
@@ -63,15 +123,25 @@
                         <span class="badge-pill badge-primary">@lessonName</span>
                     </div>
 
-                    <div class="meta-list">
+                    <div class="meta-list lesson-meta-list">
                         <div class="meta-item">
-                            <span>👨‍🏫</span>
-                            <span>Öğretmen: @teacherName</span>
+                            <span>Ders</span>
+                            <span>@lessonName</span>
                         </div>
 
                         <div class="meta-item">
-                            <span>🧠</span>
-                            <span>Branş: @teacherBranch</span>
+                            <span>Sınıf</span>
+                            <span>@className</span>
+                        </div>
+
+                        <div class="meta-item">
+                            <span>Öğretmen</span>
+                            <span>@teacherName</span>
+                        </div>
+
+                        <div class="meta-item">
+                            <span>Branş</span>
+                            <span>@teacherBranch</span>
                         </div>
                     </div>
 
@@ -95,3 +165,196 @@
         </section>
     }
 </div>
+
+<style>
+    .lessons-premium-header {
+        position: relative;
+        overflow: hidden;
+    }
+
+    .lessons-premium-header::before {
+        content: "";
+        position: absolute;
+        width: 220px;
+        height: 220px;
+        right: -80px;
+        top: -90px;
+        border-radius: 999px;
+        background: rgba(79, 70, 229, .12);
+        pointer-events: none;
+    }
+
+    .lessons-premium-header::after {
+        content: "";
+        position: absolute;
+        width: 180px;
+        height: 180px;
+        left: 42%;
+        bottom: -110px;
+        border-radius: 999px;
+        background: rgba(6, 182, 212, .12);
+        pointer-events: none;
+    }
+
+    .lesson-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .lesson-info-card {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin: 16px 0;
+        padding: 16px 18px;
+        border-radius: 26px;
+        background: linear-gradient(135deg, rgba(236, 254, 255, .95), rgba(238, 242, 255, .95));
+        border: 1px solid rgba(186, 230, 253, .95);
+        box-shadow: 0 18px 38px rgba(15, 23, 42, .06);
+    }
+
+    .lesson-info-icon {
+        width: 52px;
+        height: 52px;
+        min-width: 52px;
+        border-radius: 20px;
+        display: grid;
+        place-items: center;
+        background: #ffffff;
+        font-size: 25px;
+        box-shadow: 0 12px 26px rgba(15, 23, 42, .07);
+    }
+
+    .lesson-info-card strong,
+    .lesson-info-card span {
+        display: block;
+    }
+
+    .lesson-info-card strong {
+        color: #0f172a;
+        font-weight: 950;
+        font-size: 15px;
+    }
+
+    .lesson-info-card span {
+        margin-top: 4px;
+        color: #0369a1;
+        font-weight: 800;
+        font-size: 13px;
+        line-height: 1.45;
+    }
+
+    .lessons-grid {
+        align-items: stretch;
+    }
+
+    .lesson-summary-grid {
+        margin: 2px 0 0;
+    }
+
+    .lesson-card-premium {
+        position: relative;
+        overflow: hidden;
+    }
+
+    .lesson-card-premium::before {
+        content: "";
+        position: absolute;
+        width: 110px;
+        height: 110px;
+        right: -48px;
+        top: -48px;
+        border-radius: 999px;
+        background: rgba(6, 182, 212, .10);
+        pointer-events: none;
+    }
+
+    .lesson-card-premium::after {
+        content: "";
+        position: absolute;
+        width: 80px;
+        height: 80px;
+        left: -42px;
+        bottom: -42px;
+        border-radius: 999px;
+        background: rgba(79, 70, 229, .09);
+        pointer-events: none;
+    }
+
+    .lesson-card-premium > * {
+        position: relative;
+        z-index: 1;
+    }
+
+    .lesson-icon-premium {
+        box-shadow: 0 14px 28px rgba(6, 182, 212, .12);
+    }
+
+    .lesson-meta-list {
+        padding: 12px;
+        border-radius: 22px;
+        background: rgba(248, 250, 252, .92);
+        border: 1px solid rgba(226, 232, 240, .95);
+    }
+
+    .premium-empty-state {
+        text-align: center;
+        padding: 46px 24px;
+        border-radius: 34px;
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 22px 50px rgba(15, 23, 42, .08);
+    }
+
+    .premium-empty-state .empty-icon {
+        width: 78px;
+        height: 78px;
+        margin: 0 auto 15px;
+        border-radius: 28px;
+        display: grid;
+        place-items: center;
+        background: linear-gradient(135deg, rgba(79, 70, 229, .12), rgba(6, 182, 212, .12));
+        font-size: 38px;
+    }
+
+    .premium-empty-state h2 {
+        margin: 0;
+        color: #0f172a;
+        font-weight: 950;
+        font-size: 24px;
+        letter-spacing: -.6px;
+    }
+
+    .premium-empty-state p {
+        max-width: 520px;
+        margin: 8px auto 0;
+        color: #64748b;
+        font-weight: 800;
+        line-height: 1.45;
+    }
+
+    @@media (max-width: 700px) {
+        .lesson-info-card {
+            align-items: flex-start;
+        }
+
+        .lesson-info-card span {
+            font-size: 12px;
+        }
+    }
+</style>
+
+<script>
+    document.querySelectorAll('.js-delete-form').forEach(function (form) {
+        form.addEventListener('submit', function (event) {
+            const name = form.getAttribute('data-delete-name') || 'bu ders';
+            const ok = confirm(name + ' silinsin mi? Bu derse bağlı aktif ödevler de pasife alınacak.');
+
+            if (!ok) {
+                event.preventDefault();
+            }
+        });
+    });
+</script>

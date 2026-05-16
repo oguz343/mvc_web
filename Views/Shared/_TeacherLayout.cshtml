@@ -51,7 +51,7 @@
                     </div>
 
                     <div class="brand-subtitle">
-                        Öğretmen Panel
+                        Öğretmen Paneli
                     </div>
                 </div>
             </div>
@@ -61,14 +61,14 @@
                    asp-controller="Teacher"
                    asp-action="Index">
                     <span>📊</span>
-                    <strong>Dashboard</strong>
+                    <strong>Kontrol Paneli</strong>
                 </a>
 
                 <a class="nav-link @(currentController == "Teacher" && (currentAction == "Assignments" || currentAction == "CreateAssignment" || currentAction == "EditAssignment") ? "active teacher-active" : "")"
                    asp-controller="Teacher"
                    asp-action="Assignments">
                     <span>📝</span>
-                    <strong>Ödevlerim</strong>
+                    <strong>Verdiğim Ödevler</strong>
                 </a>
 
                 <a class="nav-link @ActiveTeacher("Submissions")"
@@ -128,6 +128,47 @@
             </section>
         </main>
     </div>
+
+    <style>
+        :where(.page-header-card, .form-card, .table-card, .entity-card, .stat-card, .teacher-panel, .teacher-stat-card, .lesson-row, .submission-row, .announcement-card-premium, .portal-card, .empty-state-mini) {
+            background:
+                radial-gradient(circle at 10% 0%, rgba(6, 182, 212, .14), transparent 34%),
+                radial-gradient(circle at 96% 10%, rgba(79, 70, 229, .11), transparent 30%),
+                linear-gradient(135deg, rgba(255,255,255,.98), rgba(248,250,252,.92)) !important;
+            border-color: rgba(148, 163, 184, .44) !important;
+            box-shadow:
+                0 22px 58px rgba(15, 23, 42, .12),
+                inset 0 1px 0 rgba(255,255,255,.88) !important;
+        }
+
+        :where(.topbar) {
+            background:
+                radial-gradient(circle at 12% 0%, rgba(6, 182, 212, .13), transparent 34%),
+                linear-gradient(135deg, rgba(255,255,255,.98), rgba(241,245,249,.94)) !important;
+            border-color: rgba(148, 163, 184, .46) !important;
+            box-shadow: 0 24px 64px rgba(15, 23, 42, .13) !important;
+        }
+
+        :where(.teacher-hero, .teacher-panel, .teacher-stat-card, .lesson-row, .submission-row, .table-card, .form-card) {
+            transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+        }
+
+        :where(.teacher-stat-card, .lesson-row, .submission-row):hover {
+            border-color: rgba(6, 182, 212, .45) !important;
+            box-shadow:
+                0 28px 70px rgba(15, 23, 42, .15),
+                0 0 0 1px rgba(6, 182, 212, .08) !important;
+        }
+
+        :where(.premium-table th) {
+            background: #eef2f7 !important;
+            border-bottom-color: rgba(148, 163, 184, .38) !important;
+        }
+
+        :where(.premium-table td) {
+            border-bottom-color: rgba(203, 213, 225, .7) !important;
+        }
+    </style>
 
     <script src="~/js/site.js" asp-append-version="true"></script>
 

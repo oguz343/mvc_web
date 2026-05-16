@@ -7,6 +7,7 @@ obj/
 
 appsettings.Development.json
 firebase-service-account.json
+App_Data/DataProtectionKeys/
 *.pfx
 *.key
 *.pem

@@ -2,9 +2,10 @@ using Google.Cloud.Firestore;
 using Microsoft.AspNetCore.Mvc;
 using mvc_web.Models;
 using mvc_web.Services;
-
+using mvc_web.Filters;
 namespace mvc_web.Controllers;
 
+[AdminOnly]
 public class AnnouncementsController : Controller
 {
     private readonly FirestoreService _firestore;

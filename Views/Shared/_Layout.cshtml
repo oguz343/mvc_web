@@ -21,6 +21,31 @@
         @RenderBody()
     </main>
 
+    <style>
+        :where(.portal-header, .stat-card, .announcement-card, .homework-card, .form-card, .lessons-card, .teacher-card, .selected-lesson-preview, .lesson-mini-card, .empty-box, .submission-box, .grade-box) {
+            background:
+                radial-gradient(circle at 10% 0%, rgba(79, 70, 229, .13), transparent 34%),
+                radial-gradient(circle at 96% 10%, rgba(6, 182, 212, .11), transparent 30%),
+                linear-gradient(135deg, rgba(255,255,255,.98), rgba(248,250,252,.92)) !important;
+            border-color: rgba(148, 163, 184, .44) !important;
+            box-shadow:
+                0 22px 58px rgba(15, 23, 42, .12),
+                inset 0 1px 0 rgba(255,255,255,.88) !important;
+        }
+
+        :where(.announcement-card, .homework-card, .stat-card, .lesson-mini-card, .selected-lesson-preview) {
+            transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+        }
+
+        :where(.announcement-card, .homework-card, .stat-card, .lesson-mini-card):hover {
+            transform: translateY(-2px);
+            border-color: rgba(99, 102, 241, .42) !important;
+            box-shadow:
+                0 28px 70px rgba(15, 23, 42, .15),
+                0 0 0 1px rgba(99, 102, 241, .08) !important;
+        }
+    </style>
+
     <script src="~/js/site.js" asp-append-version="true"></script>
 
     @await RenderSectionAsync("Scripts", required: false)

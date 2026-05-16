@@ -1,11 +1,11 @@
-@model LessonViewModel
+@model mvc_web.Controllers.LessonEditPageModel
 
 @{
     Layout = "_AdminLayout";
-    ViewData["Title"] = "Ders Düzenle";
+    ViewData["Title"] = "Ders Ataması Düzenle";
 
-    var classes = ViewBag.Classes as List<string> ?? new List<string>();
-    var teachers = ViewBag.Teachers as List<TeacherOptionViewModel> ?? new List<TeacherOptionViewModel>();
+    var classes = Model.Classes ?? new List<mvc_web.Services.ClassOption>();
+    var teachers = Model.Teachers ?? new List<mvc_web.Services.TeacherOption>();
 
     var defaultLessons = new List<string>
     {
@@ -52,12 +52,12 @@
     <form asp-controller="Lessons" asp-action="Edit" method="post">
         @Html.AntiForgeryToken()
 
-        <input type="hidden" asp-for="Id" />
+        <input type="hidden" name="id" value="@Model.Id" />
 
         <div class="form-grid">
             <div class="form-group">
-                <label class="form-label">Ders Adı</label>
-                <select class="form-control" id="lessonSelect" name="@(isCustomLesson ? "" : "Name")">
+                <label class="form-label" for="lessonSelect">Ders Adı</label>
+                <select class="form-control" id="lessonSelect" name="@(isCustomLesson ? "" : "name")">
                     @foreach (var lessonName in defaultLessons)
                     {
                         <option value="@lessonName" selected="@(Model.Name == lessonName)">
@@ -66,11 +66,10 @@
                     }
                     <option value="Diğer" selected="@isCustomLesson">Diğer</option>
                 </select>
-                <span asp-validation-for="Name" class="text-danger"></span>
             </div>
 
             <div class="form-group" id="customLessonGroup" style="display:none;">
-                <label class="form-label">Özel Ders Adı</label>
+                <label class="form-label" for="customLessonInput">Özel Ders Adı</label>
                 <input class="form-control"
                        id="customLessonInput"
                        value="@(isCustomLesson ? Model.Name : "")"
@@ -78,43 +77,45 @@
             </div>
 
             <div class="form-group full">
-                <label class="form-label" asp-for="ClassName">Sınıf</label>
-                <select class="form-control" asp-for="ClassName">
+                <label class="form-label" for="className">Sınıf</label>
+                <select class="form-control" id="className" name="className">
                     <option value="">Sınıf seç</option>
-                    @foreach (var className in classes)
+                    @foreach (var classItem in classes)
                     {
-                        <option value="@className">@className</option>
+                        <option value="@classItem.Name" selected="@(Model.ClassName == classItem.Name)">
+                            @classItem.Name
+                        </option>
                     }
                 </select>
-                <span asp-validation-for="ClassName" class="text-danger"></span>
             </div>
 
             <div class="form-group full">
-                <label class="form-label" asp-for="TeacherId">Öğretmen</label>
-                <select class="form-control" asp-for="TeacherId">
+                <label class="form-label" for="teacherNo">Öğretmen</label>
+                <select class="form-control" id="teacherNo" name="teacherNo">
                     <option value="">Öğretmen seç</option>
                     @foreach (var teacher in teachers)
                     {
-                        <option value="@teacher.Id">@teacher.Name • @teacher.Branch</option>
+                        <option value="@teacher.Number" selected="@(Model.TeacherNo == teacher.Number)">
+                            @teacher.Name - @teacher.Branch - No: @teacher.Number
+                        </option>
                     }
                 </select>
-                <span asp-validation-for="TeacherId" class="text-danger"></span>
             </div>
         </div>
 
         <div style="height: 22px;"></div>
 
         <div class="alert alert-warning">
-            Güncel öğretmen: <strong>@Model.TeacherName</strong> • Branş: <strong>@Model.TeacherBranch</strong>
+            Güncel öğretmen no: <strong>@Model.TeacherNo</strong>
         </div>
 
         <div class="page-actions">
             <button class="btn btn-primary" type="submit" @(classes.Count == 0 || teachers.Count == 0 ? "disabled" : "")>
-                💾 Değişiklikleri Kaydet
+                Değişiklikleri Kaydet
             </button>
 
             <a class="btn btn-light" asp-controller="Lessons" asp-action="Index">
-                ← Geri Dön
+                Geri Dön
             </a>
         </div>
     </form>
@@ -129,12 +130,12 @@
         function updateLessonInput() {
             if (lessonSelect.value === "Diğer") {
                 customGroup.style.display = "flex";
-                customInput.setAttribute("name", "Name");
+                customInput.setAttribute("name", "name");
                 lessonSelect.removeAttribute("name");
             } else {
                 customGroup.style.display = "none";
                 customInput.removeAttribute("name");
-                lessonSelect.setAttribute("name", "Name");
+                lessonSelect.setAttribute("name", "name");
             }
         }
 

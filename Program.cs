@@ -1,9 +1,26 @@
 using Google.Cloud.Firestore;
+using Microsoft.AspNetCore.DataProtection;
 using mvc_web.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
+builder.Logging.AddDebug();
+
 builder.Services.AddControllersWithViews();
+
+var dataProtectionPath = Path.Combine(
+    builder.Environment.ContentRootPath,
+    "App_Data",
+    "DataProtectionKeys"
+);
+
+Directory.CreateDirectory(dataProtectionPath);
+
+builder.Services
+    .AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionPath));
 
 builder.Services.AddHttpContextAccessor();
 
@@ -45,9 +62,9 @@ if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Auth/Login");
     app.UseHsts();
+    app.UseHttpsRedirection();
 }
 
-app.UseHttpsRedirection();
 app.UseStaticFiles();
 
 app.UseRouting();

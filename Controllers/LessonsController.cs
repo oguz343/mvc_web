@@ -1,55 +1,27 @@
 using Google.Cloud.Firestore;
 using Microsoft.AspNetCore.Mvc;
-using mvc_web.Models;
 using mvc_web.Services;
-
+using mvc_web.Filters;
 namespace mvc_web.Controllers;
 
+[AdminOnly]
 public class LessonsController : Controller
 {
-    private readonly FirestoreService _firestore;
-    private readonly SessionService _session;
+    private readonly FirestoreDb _firestore;
+    private readonly DataIntegrityService _integrity;
 
-    public LessonsController(
-        FirestoreService firestore,
-        SessionService session
-    )
+    public LessonsController(FirestoreDb firestore)
     {
         _firestore = firestore;
-        _session = session;
+        _integrity = new DataIntegrityService(firestore);
     }
 
+    [HttpGet]
     public async Task<IActionResult> Index()
     {
-        if (!_session.IsAdmin(HttpContext))
-        {
-            return RedirectToAction("Login", "Auth");
-        }
+        await _integrity.CleanupOrphanActiveLinksAsync();
 
-        ViewData["Title"] = "Dersler";
-        ViewData["PageTitle"] = "Dersler";
-        ViewData["PageSubtitle"] = "Dersleri sınıf ve öğretmenlerle eşleştirin.";
-
-        var snapshot = await _firestore.Lessons
-            .OrderByDescending("createdAt")
-            .GetSnapshotAsync();
-
-        var lessons = new List<LessonViewModel>();
-
-        foreach (var doc in snapshot.Documents)
-        {
-            var data = doc.ToDictionary();
-
-            lessons.Add(new LessonViewModel
-            {
-                Id = doc.Id,
-                Name = GetValue(data, "name", "-"),
-                ClassName = GetValue(data, "className", "-"),
-                TeacherId = GetValue(data, "teacherId"),
-                TeacherName = GetValue(data, "teacherName", GetValue(data, "teacher", "Atanmadı")),
-                TeacherBranch = GetValue(data, "teacherBranch", "Branş yok")
-            });
-        }
+        var lessons = await _integrity.LoadVisibleLessonsAsync();
 
         return View(lessons);
     }
@@ -57,258 +29,369 @@ public class LessonsController : Controller
     [HttpGet]
     public async Task<IActionResult> Create()
     {
-        if (!_session.IsAdmin(HttpContext))
-        {
-            return RedirectToAction("Login", "Auth");
-        }
+        await _integrity.CleanupOrphanActiveLinksAsync();
 
-        ViewData["Title"] = "Ders Ekle";
-        ViewData["PageTitle"] = "Yeni Ders";
-        ViewData["PageSubtitle"] = "Dersi bir sınıfa ve öğretmene atayın.";
+        ViewBag.Teachers = await _integrity.LoadActiveTeachersAsync();
+        ViewBag.Classes = await _integrity.LoadActiveClassesAsync();
 
-        await LoadOptions();
-
-        return View(new LessonViewModel());
+        return View();
     }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Create(LessonViewModel model)
+    public async Task<IActionResult> Create(IFormCollection form)
     {
-        if (!_session.IsAdmin(HttpContext))
+        var name = (form["name"].ToString() ?? "").Trim();
+        var teacherNo = DataIntegrityService.OnlyDigits(form["teacherNo"].ToString() ?? "");
+
+        var selectedClassNames = form["classNames"]
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => DataIntegrityService.NormalizeClassName(x ?? ""))
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct()
+            .ToList();
+
+        var legacyClassName = DataIntegrityService.NormalizeClassName(form["className"].ToString() ?? "");
+
+        if (!string.IsNullOrWhiteSpace(legacyClassName) &&
+            !selectedClassNames.Contains(legacyClassName))
         {
-            return RedirectToAction("Login", "Auth");
+            selectedClassNames.Add(legacyClassName);
         }
 
-        await LoadOptions();
-        await FillTeacherInfo(model);
-
-        if (string.IsNullOrWhiteSpace(model.TeacherName))
+        if (string.IsNullOrWhiteSpace(name))
         {
-            ModelState.AddModelError(nameof(model.TeacherId), "Seçilen öğretmen bulunamadı.");
+            TempData["Error"] = "Ders ataması için ders adı boş bırakılamaz.";
+            return RedirectToAction(nameof(Create));
         }
 
-        if (!ModelState.IsValid)
+        if (!selectedClassNames.Any())
         {
-            ViewData["Title"] = "Ders Ekle";
-            ViewData["PageTitle"] = "Yeni Ders";
-            ViewData["PageSubtitle"] = "Dersi bir sınıfa ve öğretmene atayın.";
-            return View(model);
+            TempData["Error"] = "En az bir sınıf seçmelisiniz.";
+            return RedirectToAction(nameof(Create));
         }
 
-        await _firestore.Lessons.AddAsync(new Dictionary<string, object?>
+        if (string.IsNullOrWhiteSpace(teacherNo))
         {
-            { "name", model.Name.Trim() },
-            { "className", model.ClassName.Trim() },
-            { "teacherId", model.TeacherId.Trim() },
-            { "teacherName", model.TeacherName.Trim() },
-            { "teacher", model.TeacherName.Trim() },
-            { "teacherBranch", string.IsNullOrWhiteSpace(model.TeacherBranch) ? "Branş yok" : model.TeacherBranch.Trim() },
-            { "createdAt", Timestamp.GetCurrentTimestamp() },
-            { "updatedAt", Timestamp.GetCurrentTimestamp() }
-        });
+            TempData["Error"] = "Öğretmen seçmelisiniz.";
+            return RedirectToAction(nameof(Create));
+        }
 
-        TempData["Success"] = $"{model.Name} dersi oluşturuldu.";
-        return RedirectToAction("Index");
+        await _integrity.CleanupOrphanActiveLinksAsync();
+
+        var teachers = await _integrity.LoadActiveTeachersAsync();
+        var classes = await _integrity.LoadActiveClassesAsync();
+
+        var teacher = teachers.FirstOrDefault(x =>
+            DataIntegrityService.OnlyDigits(x.Number) == teacherNo
+        );
+
+        var selectedClasses = classes
+            .Where(x => selectedClassNames.Contains(DataIntegrityService.NormalizeClassName(x.Name)))
+            .ToList();
+
+        if (teacher == null)
+        {
+            TempData["Error"] = "Seçilen öğretmen aktif değil veya silinmiş.";
+            return RedirectToAction(nameof(Create));
+        }
+
+        if (selectedClasses.Count != selectedClassNames.Count)
+        {
+            TempData["Error"] = "Seçilen sınıflardan biri aktif değil veya silinmiş.";
+            return RedirectToAction(nameof(Create));
+        }
+
+        var createdCount = 0;
+        var skippedCount = 0;
+
+        foreach (var selectedClass in selectedClasses)
+        {
+            var className = DataIntegrityService.NormalizeClassName(selectedClass.Name);
+            var exists = await _integrity.LessonExistsAsync(name, className, teacherNo);
+
+            if (exists)
+            {
+                skippedCount++;
+                continue;
+            }
+
+            var now = Timestamp.FromDateTime(DateTime.UtcNow);
+
+            var data = new Dictionary<string, object?>
+            {
+                ["name"] = name,
+                ["Name"] = name,
+                ["lessonName"] = name,
+                ["LessonName"] = name,
+                ["title"] = name,
+                ["Title"] = name,
+                ["courseName"] = name,
+                ["CourseName"] = name,
+
+                ["className"] = selectedClass.Name,
+                ["ClassName"] = selectedClass.Name,
+                ["class"] = selectedClass.Name,
+                ["Class"] = selectedClass.Name,
+                ["targetClass"] = selectedClass.Name,
+                ["TargetClass"] = selectedClass.Name,
+
+                ["teacherId"] = teacher.Id,
+                ["TeacherId"] = teacher.Id,
+                ["teacherName"] = teacher.Name,
+                ["TeacherName"] = teacher.Name,
+                ["teacher"] = teacher.Name,
+                ["Teacher"] = teacher.Name,
+                ["teacherNo"] = teacher.Number,
+                ["TeacherNo"] = teacher.Number,
+                ["teacherNumber"] = teacher.Number,
+                ["TeacherNumber"] = teacher.Number,
+
+                ["branch"] = teacher.Branch,
+                ["Branch"] = teacher.Branch,
+                ["teacherBranch"] = teacher.Branch,
+                ["TeacherBranch"] = teacher.Branch,
+
+                ["isDeleted"] = false,
+                ["IsDeleted"] = false,
+                ["isActive"] = true,
+                ["IsActive"] = true,
+                ["createdAt"] = now,
+                ["CreatedAt"] = now,
+                ["updatedAt"] = now,
+                ["UpdatedAt"] = now,
+            };
+
+            await _firestore.Collection("lessons").AddAsync(data);
+            createdCount++;
+        }
+
+        if (createdCount == 0)
+        {
+            TempData["Error"] = "Seçtiğiniz ders, sınıf ve öğretmen eşleşmeleri zaten kayıtlı.";
+            return RedirectToAction(nameof(Create));
+        }
+
+        TempData["Success"] = createdCount == 1
+            ? "Ders ataması başarıyla eklendi."
+            : $"{createdCount} ders ataması başarıyla eklendi.";
+
+        if (skippedCount > 0)
+        {
+            TempData["Success"] += $" {skippedCount} mevcut atama tekrar eklenmedi.";
+        }
+
+        return RedirectToAction(nameof(Index));
     }
 
     [HttpGet]
     public async Task<IActionResult> Edit(string id)
     {
-        if (!_session.IsAdmin(HttpContext))
-        {
-            return RedirectToAction("Login", "Auth");
-        }
+        id = (id ?? "").Trim();
 
         if (string.IsNullOrWhiteSpace(id))
         {
-            return RedirectToAction("Index");
+            TempData["Error"] = "Ders ataması bulunamadı.";
+            return RedirectToAction(nameof(Index));
         }
 
-        var doc = await _firestore.Lessons.Document(id).GetSnapshotAsync();
+        await _integrity.CleanupOrphanActiveLinksAsync();
+
+        var doc = await _firestore.Collection("lessons").Document(id).GetSnapshotAsync();
 
         if (!doc.Exists)
         {
-            TempData["Error"] = "Ders bulunamadı.";
-            return RedirectToAction("Index");
+            TempData["Error"] = "Ders ataması bulunamadı.";
+            return RedirectToAction(nameof(Index));
         }
 
         var data = doc.ToDictionary();
 
-        var model = new LessonViewModel
+        if (DataIntegrityService.IsDeleted(data))
+        {
+            TempData["Error"] = "Bu ders ataması silinmiş veya bağlantısı kopmuş.";
+            return RedirectToAction(nameof(Index));
+        }
+
+        var model = new LessonEditPageModel
         {
             Id = doc.Id,
-            Name = GetValue(data, "name"),
-            ClassName = GetValue(data, "className"),
-            TeacherId = GetValue(data, "teacherId"),
-            TeacherName = GetValue(data, "teacherName", GetValue(data, "teacher")),
-            TeacherBranch = GetValue(data, "teacherBranch")
+            Name = DataIntegrityService.FirstNonEmpty(
+                DataIntegrityService.GetString(data, "name", "Name"),
+                DataIntegrityService.GetString(data, "lessonName", "LessonName"),
+                DataIntegrityService.GetString(data, "title", "Title"),
+                DataIntegrityService.GetString(data, "courseName", "CourseName")
+            ),
+            ClassName = DataIntegrityService.NormalizeClassName(
+                DataIntegrityService.FirstNonEmpty(
+                    DataIntegrityService.GetString(data, "className", "ClassName"),
+                    DataIntegrityService.GetString(data, "class", "Class"),
+                    DataIntegrityService.GetString(data, "targetClass", "TargetClass")
+                )
+            ),
+            TeacherNo = DataIntegrityService.OnlyDigits(
+                DataIntegrityService.FirstNonEmpty(
+                    DataIntegrityService.GetString(data, "teacherNo", "TeacherNo"),
+                    DataIntegrityService.GetString(data, "teacherNumber", "TeacherNumber"),
+                    DataIntegrityService.GetString(data, "number", "Number")
+                )
+            ),
+            Teachers = await _integrity.LoadActiveTeachersAsync(),
+            Classes = await _integrity.LoadActiveClassesAsync(),
         };
-
-        ViewData["Title"] = "Ders Düzenle";
-        ViewData["PageTitle"] = "Ders Düzenle";
-        ViewData["PageSubtitle"] = $"{model.Name} dersini güncelleyin.";
-
-        await LoadOptions();
 
         return View(model);
     }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Edit(LessonViewModel model)
+    public async Task<IActionResult> Edit(string id, string name, string className, string teacherNo)
     {
-        if (!_session.IsAdmin(HttpContext))
+        id = (id ?? "").Trim();
+        name = (name ?? "").Trim();
+        className = DataIntegrityService.NormalizeClassName(className);
+        teacherNo = DataIntegrityService.OnlyDigits(teacherNo);
+
+        if (string.IsNullOrWhiteSpace(id))
         {
-            return RedirectToAction("Login", "Auth");
+            TempData["Error"] = "Ders ataması bulunamadı.";
+            return RedirectToAction(nameof(Index));
         }
 
-        await LoadOptions();
-        await FillTeacherInfo(model);
-
-        if (string.IsNullOrWhiteSpace(model.TeacherName))
+        if (string.IsNullOrWhiteSpace(name))
         {
-            ModelState.AddModelError(nameof(model.TeacherId), "Seçilen öğretmen bulunamadı.");
+            TempData["Error"] = "Ders ataması için ders adı boş bırakılamaz.";
+            return RedirectToAction(nameof(Edit), new { id });
         }
 
-        if (!ModelState.IsValid)
+        if (string.IsNullOrWhiteSpace(className))
         {
-            ViewData["Title"] = "Ders Düzenle";
-            ViewData["PageTitle"] = "Ders Düzenle";
-            ViewData["PageSubtitle"] = "Ders bilgilerini güncelleyin.";
-            return View(model);
+            TempData["Error"] = "Sınıf seçmelisiniz.";
+            return RedirectToAction(nameof(Edit), new { id });
         }
 
-        var lessonRef = _firestore.Lessons.Document(model.Id);
-        var lessonDoc = await lessonRef.GetSnapshotAsync();
-
-        if (!lessonDoc.Exists)
+        if (string.IsNullOrWhiteSpace(teacherNo))
         {
-            TempData["Error"] = "Ders bulunamadı.";
-            return RedirectToAction("Index");
+            TempData["Error"] = "Öğretmen seçmelisiniz.";
+            return RedirectToAction(nameof(Edit), new { id });
         }
 
-        await lessonRef.UpdateAsync(new Dictionary<string, object?>
-        {
-            { "name", model.Name.Trim() },
-            { "className", model.ClassName.Trim() },
-            { "teacherId", model.TeacherId.Trim() },
-            { "teacherName", model.TeacherName.Trim() },
-            { "teacher", model.TeacherName.Trim() },
-            { "teacherBranch", string.IsNullOrWhiteSpace(model.TeacherBranch) ? "Branş yok" : model.TeacherBranch.Trim() },
-            { "updatedAt", Timestamp.GetCurrentTimestamp() }
-        });
+        await _integrity.CleanupOrphanActiveLinksAsync();
 
-        TempData["Success"] = "Ders güncellendi.";
-        return RedirectToAction("Index");
+        var teachers = await _integrity.LoadActiveTeachersAsync();
+        var classes = await _integrity.LoadActiveClassesAsync();
+
+        var teacher = teachers.FirstOrDefault(x =>
+            DataIntegrityService.OnlyDigits(x.Number) == teacherNo
+        );
+
+        var selectedClass = classes.FirstOrDefault(x =>
+            DataIntegrityService.NormalizeClassName(x.Name) == className
+        );
+
+        if (teacher == null)
+        {
+            TempData["Error"] = "Seçilen öğretmen aktif değil veya silinmiş.";
+            return RedirectToAction(nameof(Edit), new { id });
+        }
+
+        if (selectedClass == null)
+        {
+            TempData["Error"] = "Seçilen sınıf aktif değil veya silinmiş.";
+            return RedirectToAction(nameof(Edit), new { id });
+        }
+
+        var exists = await _integrity.LessonExistsAsync(name, className, teacherNo, id);
+
+        if (exists)
+        {
+            TempData["Error"] = "Bu ders, sınıf ve öğretmen eşleşmesi zaten kayıtlı.";
+            return RedirectToAction(nameof(Edit), new { id });
+        }
+
+        var update = new Dictionary<string, object?>
+        {
+            ["name"] = name,
+            ["Name"] = name,
+            ["lessonName"] = name,
+            ["LessonName"] = name,
+            ["title"] = name,
+            ["Title"] = name,
+            ["courseName"] = name,
+            ["CourseName"] = name,
+
+            ["className"] = selectedClass.Name,
+            ["ClassName"] = selectedClass.Name,
+            ["class"] = selectedClass.Name,
+            ["Class"] = selectedClass.Name,
+            ["targetClass"] = selectedClass.Name,
+            ["TargetClass"] = selectedClass.Name,
+
+            ["teacherId"] = teacher.Id,
+            ["TeacherId"] = teacher.Id,
+            ["teacherName"] = teacher.Name,
+            ["TeacherName"] = teacher.Name,
+            ["teacher"] = teacher.Name,
+            ["Teacher"] = teacher.Name,
+            ["teacherNo"] = teacher.Number,
+            ["TeacherNo"] = teacher.Number,
+            ["teacherNumber"] = teacher.Number,
+            ["TeacherNumber"] = teacher.Number,
+
+            ["branch"] = teacher.Branch,
+            ["Branch"] = teacher.Branch,
+            ["teacherBranch"] = teacher.Branch,
+            ["TeacherBranch"] = teacher.Branch,
+
+            ["isDeleted"] = false,
+            ["IsDeleted"] = false,
+            ["isActive"] = true,
+            ["IsActive"] = true,
+            ["updatedAt"] = Timestamp.FromDateTime(DateTime.UtcNow),
+            ["UpdatedAt"] = Timestamp.FromDateTime(DateTime.UtcNow),
+        };
+
+        await _firestore.Collection("lessons").Document(id).SetAsync(update, SetOptions.MergeAll);
+
+        TempData["Success"] = "Ders ataması başarıyla güncellendi.";
+        return RedirectToAction(nameof(Index));
     }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Delete(string id)
     {
-        if (!_session.IsAdmin(HttpContext))
-        {
-            return RedirectToAction("Login", "Auth");
-        }
+        id = (id ?? "").Trim();
 
         if (string.IsNullOrWhiteSpace(id))
         {
-            return RedirectToAction("Index");
+            TempData["Error"] = "Ders ataması bulunamadı.";
+            return RedirectToAction(nameof(Index));
         }
 
-        await _firestore.Lessons.Document(id).DeleteAsync();
+        await _integrity.SoftDeleteLessonAndItsActiveAssignmentsAsync(id);
 
-        TempData["Success"] = "Ders silindi.";
-        return RedirectToAction("Index");
+        TempData["Success"] = "Ders ataması ve bağlı aktif ödevleri pasife alındı.";
+        return RedirectToAction(nameof(Index));
     }
 
-    private async Task LoadOptions()
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Cleanup()
     {
-        await LoadClassOptions();
-        await LoadTeacherOptions();
+        await _integrity.CleanupOrphanActiveLinksAsync();
+
+        TempData["Success"] = "Bozuk bağlantılı ders ve aktif ödevler temizlendi.";
+        return RedirectToAction(nameof(Index));
     }
+}
 
-    private async Task LoadClassOptions()
-    {
-        var snapshot = await _firestore.Classes.GetSnapshotAsync();
-
-        var classes = snapshot.Documents
-            .Select(doc =>
-            {
-                var data = doc.ToDictionary();
-                return GetValue(data, "name");
-            })
-            .Where(x => !string.IsNullOrWhiteSpace(x))
-            .Distinct()
-            .OrderBy(x => x)
-            .ToList();
-
-        ViewBag.Classes = classes;
-    }
-
-    private async Task LoadTeacherOptions()
-    {
-        var snapshot = await _firestore.Users
-            .WhereEqualTo("role", "Öğretmen")
-            .GetSnapshotAsync();
-
-        var teachers = new List<TeacherOptionViewModel>();
-
-        foreach (var doc in snapshot.Documents)
-        {
-            var data = doc.ToDictionary();
-
-            teachers.Add(new TeacherOptionViewModel
-            {
-                Id = doc.Id,
-                Name = GetValue(data, "name", "İsimsiz"),
-                Branch = GetValue(data, "branch", "Branş yok")
-            });
-        }
-
-        ViewBag.Teachers = teachers
-            .OrderBy(x => x.Name)
-            .ToList();
-    }
-
-    private async Task FillTeacherInfo(LessonViewModel model)
-    {
-        if (string.IsNullOrWhiteSpace(model.TeacherId))
-        {
-            model.TeacherName = "";
-            model.TeacherBranch = "";
-            return;
-        }
-
-        var teacherDoc = await _firestore.Users
-            .Document(model.TeacherId)
-            .GetSnapshotAsync();
-
-        if (!teacherDoc.Exists)
-        {
-            model.TeacherName = "";
-            model.TeacherBranch = "";
-            return;
-        }
-
-        var data = teacherDoc.ToDictionary();
-
-        model.TeacherName = GetValue(data, "name", "İsimsiz");
-        model.TeacherBranch = GetValue(data, "branch", "Branş yok");
-    }
-
-    private static string GetValue(
-        Dictionary<string, object> data,
-        string key,
-        string defaultValue = ""
-    )
-    {
-        if (!data.ContainsKey(key) || data[key] == null)
-        {
-            return defaultValue;
-        }
-
-        return data[key]?.ToString() ?? defaultValue;
-    }
+public class LessonEditPageModel
+{
+    public string Id { get; set; } = "";
+    public string Name { get; set; } = "";
+    public string ClassName { get; set; } = "";
+    public string TeacherNo { get; set; } = "";
+    public List<TeacherOption> Teachers { get; set; } = new();
+    public List<ClassOption> Classes { get; set; } = new();
 }

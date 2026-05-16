@@ -1,151 +1,39 @@
-@using System.Collections
-@using System.Reflection
-@using Microsoft.AspNetCore.Http
-@model dynamic
-
 @{
     Layout = "_TeacherLayout";
-    ViewData["Title"] = "Ödevlerim";
-    ViewData["PageTitle"] = "Ödevlerim";
-    ViewData["PageSubtitle"] = "Kendi derslerinize verdiğiniz ödevleri yönetin.";
+    ViewData["Title"] = "Verdiğim Ödevler";
 
-    var assignments = GetList("Assignments", "Homeworks", "TeacherAssignments", "MyAssignments");
-
-    var teacherName =
-        Context.Session.GetString("UserName") ??
-        Context.Session.GetString("Name") ??
-        "Öğretmen";
+    var teacherName = GetText(ViewBag.TeacherName);
+    var assignments = ReadAssignments(ViewBag.Assignments);
 }
 
-@functions {
-    private object? GetPropertyValue(object? item, string key)
-    {
-        if (item == null)
-        {
-            return null;
-        }
-
-        if (item is IDictionary<string, object> objectDict)
-        {
-            foreach (var pair in objectDict)
-            {
-                if (string.Equals(pair.Key, key, StringComparison.OrdinalIgnoreCase))
-                {
-                    return pair.Value;
-                }
-            }
-        }
-
-        var type = item.GetType();
-
-        var prop = type.GetProperty(
-            key,
-            BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase
-        );
-
-        return prop?.GetValue(item);
-    }
-
-    private string GetText(object? item, params string[] keys)
-    {
-        foreach (var key in keys)
-        {
-            var value = GetPropertyValue(item, key);
-
-            if (value != null && !string.IsNullOrWhiteSpace(value.ToString()))
-            {
-                return value.ToString() ?? "";
-            }
-        }
-
-        return "";
-    }
-
-    private List<object> GetList(params string[] keys)
-    {
-        foreach (var key in keys)
-        {
-            object? raw = null;
-
-            if (ViewData.ContainsKey(key))
-            {
-                raw = ViewData[key];
-            }
-
-            raw ??= GetPropertyValue(Model, key);
-
-            if (raw is IEnumerable enumerable && raw is not string)
-            {
-                return enumerable.Cast<object>().ToList();
-            }
-        }
-
-        if (Model is IEnumerable modelEnumerable && Model is not string)
-        {
-            return modelEnumerable.Cast<object>().ToList();
-        }
-
-        return new List<object>();
-    }
-
-    private string Safe(string value)
-    {
-        return string.IsNullOrWhiteSpace(value) ? "-" : value;
-    }
-
-    private string DateText(object? item)
-    {
-        var raw =
-            GetPropertyValue(item, "DueDate") ??
-            GetPropertyValue(item, "Deadline") ??
-            GetPropertyValue(item, "EndDate");
-
-        if (raw == null)
-        {
-            return "-";
-        }
-
-        if (raw is DateTime date)
-        {
-            return date.ToString("dd.MM.yyyy");
-        }
-
-        if (DateTime.TryParse(raw.ToString(), out var parsed))
-        {
-            return parsed.ToString("dd.MM.yyyy");
-        }
-
-        return raw.ToString() ?? "-";
-    }
-
-    private bool IsSubmitted(object? item)
-    {
-        var status = GetText(item, "Status");
-
-        var normalized = status
-            .ToLowerInvariant()
-            .Replace("ı", "i")
-            .Replace("ğ", "g")
-            .Replace("ü", "u")
-            .Replace("ş", "s")
-            .Replace("ö", "o")
-            .Replace("ç", "c");
-
-        return normalized.Contains("teslim") ||
-               normalized.Contains("submitted") ||
-               normalized.Contains("deger");
-    }
-}
-
-<div class="assignments-page">
-    <section class="assignments-hero">
+<div class="page-shell">
+    <section class="page-header-card teacher-assignment-top">
         <div>
-            <div class="hero-kicker">Öğretmen Paneli</div>
-            <h1>Ödevlerim</h1>
-            <p>@teacherName, bu sayfadan oluşturduğunuz ödevleri düzenleyebilir ve teslimleri görüntüleyebilirsiniz.</p>
+            <div class="eyebrow">Öğretmen Paneli</div>
+            <h1>Verdiğim Ödevler</h1>
+            <p>Kendi derslerinize yayınladığınız aktif ödevleri yönetin.</p>
         </div>
 
-        <a asp-controller="Teacher" asp-action="CreateAssignment" class="create-assignment-btn">
+        <div class="teacher-mini-profile">
+            <div class="teacher-mini-avatar">Ö</div>
+            <div>
+                <strong>@(string.IsNullOrWhiteSpace(teacherName) ? "Öğretmen" : teacherName)</strong>
+                <span>Ödev yönetimi</span>
+            </div>
+        </div>
+    </section>
+
+    <section class="teacher-assignment-hero">
+        <div>
+            <div class="eyebrow">Ödev Yönetimi</div>
+            <h2>Yayınladığınız Ödevler</h2>
+            <p>
+                @(string.IsNullOrWhiteSpace(teacherName) ? "Bu sayfadan" : teacherName + ", bu sayfadan")
+                oluşturduğunuz ödevleri düzenleyebilir, teslimleri görüntüleyebilir ve gerekli olmayanları silebilirsiniz.
+            </p>
+        </div>
+
+        <a asp-controller="Teacher" asp-action="CreateAssignment" class="btn-primary premium-create-btn">
             📝 Yeni Ödev Oluştur
         </a>
     </section>
@@ -160,83 +48,80 @@
         <div class="alert alert-danger">@TempData["Error"]</div>
     }
 
-    @if (!assignments.Any())
+    @if (assignments.Count == 0)
     {
-        <div class="empty-assignment">
-            <div class="empty-icon">📭</div>
-            <h2>Henüz ödev oluşturmadınız</h2>
-            <p>Yeni ödev oluşturduğunuzda burada kart olarak görünecek.</p>
-
-            <a asp-controller="Teacher" asp-action="CreateAssignment">
+        <section class="teacher-empty-state">
+            <div class="empty-icon">📝</div>
+            <h2>Henüz aktif ödev yok</h2>
+            <p>
+                Size atanmış aktif derslerden birine ödev verdiğinizde burada görünecek.
+            </p>
+            <a asp-controller="Teacher" asp-action="CreateAssignment" class="empty-action">
                 İlk Ödevi Oluştur
             </a>
-        </div>
+        </section>
     }
     else
     {
-        <section class="assignments-grid">
-            @foreach (var assignment in assignments)
+        <section class="assignment-grid">
+            @foreach (var item in assignments)
             {
-                var id = GetText(assignment, "Id");
-                var title = Safe(GetText(assignment, "Title", "Name", "HomeworkTitle", "AssignmentTitle"));
-                var description = Safe(GetText(assignment, "Description", "Content", "Text"));
-                var lessonName = Safe(GetText(assignment, "LessonName", "Lesson", "CourseName", "Course"));
-                var className = Safe(GetText(assignment, "ClassName", "Class", "TargetClass"));
-                var fileType = Safe(GetText(assignment, "FileType", "Type", "SubmissionType"));
-                var status = IsSubmitted(assignment) ? "Teslim Var" : "Teslim Bekliyor";
-                var dueDate = DateText(assignment);
+                var title = string.IsNullOrWhiteSpace(item.Title) ? "Ödev" : item.Title;
+                var lessonName = string.IsNullOrWhiteSpace(item.LessonName) ? "-" : item.LessonName;
+                var className = string.IsNullOrWhiteSpace(item.ClassName) ? "-" : item.ClassName;
+                var description = string.IsNullOrWhiteSpace(item.Description) ? "Açıklama girilmemiş." : item.Description;
+                var fileType = string.IsNullOrWhiteSpace(item.FileType) ? "Metin / Link" : item.FileType;
+                var dueDate = FormatDate(item.DueDateRaw);
+                var status = string.IsNullOrWhiteSpace(item.Status) ? "Teslim Bekliyor" : item.Status;
 
                 <article class="assignment-card">
-                    <div class="assignment-head">
+                    <div class="assignment-card-top">
                         <div class="assignment-icon">📝</div>
 
-                        <div>
-                            <h2>@title</h2>
+                        <div class="assignment-title">
+                            <h3>@title</h3>
                             <p>@lessonName • @className</p>
                         </div>
                     </div>
 
                     <div class="assignment-badges">
-                        <span class="badge lesson">@lessonName</span>
-                        <span class="badge class">@className</span>
-
-                        @if (IsSubmitted(assignment))
-                        {
-                            <span class="badge success">@status</span>
-                        }
-                        else
-                        {
-                            <span class="badge warning">@status</span>
-                        }
+                        <span class="badge badge-lesson">@lessonName</span>
+                        <span class="badge badge-class">@className</span>
+                        <span class="badge badge-status">@status</span>
                     </div>
 
                     <div class="assignment-description">
                         @description
                     </div>
 
-                    <div class="assignment-meta">
-                        <div>
-                            <span>📅</span>
-                            <strong>Son Teslim:</strong>
-                            <b>@dueDate</b>
+                    <div class="assignment-details">
+                        <div class="detail-item">
+                            <span class="detail-icon">📅</span>
+                            <div>
+                                <small>Son Teslim</small>
+                                <strong>@dueDate</strong>
+                            </div>
                         </div>
 
-                        <div>
-                            <span>📎</span>
-                            <strong>Tür:</strong>
-                            <b>@fileType</b>
+                        <div class="detail-item">
+                            <span class="detail-icon">📎</span>
+                            <div>
+                                <small>Teslim Türü</small>
+                                <strong>@fileType</strong>
+                            </div>
                         </div>
                     </div>
 
                     <div class="assignment-actions">
                         <a asp-controller="Teacher"
                            asp-action="EditAssignment"
-                           asp-route-id="@id"
+                           asp-route-id="@item.Id"
                            class="action-btn edit">
                             ✏️ Düzenle
                         </a>
 
-                        <a href="/Teacher/Submissions"
+                        <a asp-controller="Teacher"
+                           asp-action="Submissions"
                            class="action-btn submissions">
                             📥 Teslimler
                         </a>
@@ -244,13 +129,10 @@
                         <form asp-controller="Teacher"
                               asp-action="DeleteAssignment"
                               method="post"
-                              class="delete-assignment-form"
-                              onsubmit="return confirm('Bu ödev silinsin mi?');">
-
+                              class="inline-form js-delete-assignment"
+                              data-title="@title">
                             @Html.AntiForgeryToken()
-
-                            <input type="hidden" name="id" value="@id" />
-
+                            <input type="hidden" name="id" value="@item.Id" />
                             <button type="submit" class="action-btn delete">
                                 🗑️ Sil
                             </button>
@@ -263,293 +145,583 @@
 </div>
 
 <style>
-    .assignments-page {
-        display: grid;
-        gap: 20px;
+    .teacher-assignment-top {
+        position: relative;
+        overflow: hidden;
     }
 
-    .assignments-hero {
-        background:
-            radial-gradient(circle at top left, rgba(79, 70, 229, .14), transparent 34%),
-            linear-gradient(135deg, #ffffff, #f8fafc);
-        border: 1px solid rgba(255,255,255,.75);
-        box-shadow: 0 22px 55px rgba(15, 23, 42, .08);
-        border-radius: 32px;
+    .teacher-assignment-top::before {
+        content: "";
+        position: absolute;
+        width: 220px;
+        height: 220px;
+        right: -90px;
+        top: -90px;
+        border-radius: 999px;
+        background: rgba(79, 70, 229, .10);
+        pointer-events: none;
+    }
+
+    .teacher-mini-profile {
+        position: relative;
+        z-index: 1;
+        padding: 10px 14px;
+        border-radius: 24px;
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 14px 32px rgba(15, 23, 42, .07);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .teacher-mini-avatar {
+        width: 48px;
+        height: 48px;
+        border-radius: 18px;
+        background: linear-gradient(135deg, #4f46e5, #06b6d4);
+        display: grid;
+        place-items: center;
+        color: white;
+        font-weight: 950;
+        font-size: 20px;
+    }
+
+    .teacher-mini-profile strong,
+    .teacher-mini-profile span {
+        display: block;
+    }
+
+    .teacher-mini-profile strong {
+        color: #0f172a;
+        font-weight: 950;
+        font-size: 14px;
+    }
+
+    .teacher-mini-profile span {
+        color: #64748b;
+        font-weight: 800;
+        font-size: 12px;
+        margin-top: 2px;
+    }
+
+    .teacher-assignment-hero {
+        margin: 18px 0 18px;
         padding: 28px;
+        border-radius: 34px;
+        background:
+            radial-gradient(circle at top left, rgba(79, 70, 229, .13), transparent 34%),
+            linear-gradient(135deg, rgba(255,255,255,.96), rgba(248,250,252,.92));
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 22px 55px rgba(15, 23, 42, .08);
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 22px;
-    }
-
-    .hero-kicker {
-        color: #4f46e5;
-        font-size: 13px;
-        font-weight: 950;
-        margin-bottom: 4px;
-    }
-
-    .assignments-hero h1 {
-        margin: 0;
-        color: #0f172a;
-        font-size: 34px;
-        font-weight: 950;
-        letter-spacing: -.8px;
-    }
-
-    .assignments-hero p {
-        margin: 8px 0 0;
-        color: #64748b;
-        font-weight: 800;
-        line-height: 1.5;
-        max-width: 680px;
-    }
-
-    .create-assignment-btn {
-        min-height: 54px;
-        padding: 0 18px;
-        border-radius: 18px;
-        background: linear-gradient(135deg, #4f46e5, #06b6d4);
-        color: #fff;
-        text-decoration: none;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: 950;
-        box-shadow: 0 18px 34px rgba(79, 70, 229, .22);
-        white-space: nowrap;
-    }
-
-    .alert {
-        padding: 14px 18px;
-        border-radius: 18px;
-        font-weight: 900;
-    }
-
-    .alert-success {
-        background: #dcfce7;
-        color: #166534;
-    }
-
-    .alert-danger {
-        background: #fee2e2;
-        color: #991b1b;
-    }
-
-    .assignments-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
         gap: 18px;
     }
 
-    .assignment-card {
-        background: #fff;
-        border: 1px solid #eef2f7;
-        border-radius: 30px;
-        padding: 22px;
+    .teacher-assignment-hero h2 {
+        margin: 0;
+        color: #0f172a;
+        font-size: 32px;
+        font-weight: 950;
+        letter-spacing: -1.1px;
+    }
+
+    .teacher-assignment-hero p {
+        margin: 8px 0 0;
+        color: #64748b;
+        font-weight: 850;
+        max-width: 640px;
+        line-height: 1.45;
+    }
+
+    .premium-create-btn {
+        min-width: 190px;
+        min-height: 54px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        white-space: nowrap;
+    }
+
+    .assignment-grid {
         display: grid;
-        gap: 16px;
-        box-shadow: 0 18px 42px rgba(15, 23, 42, .07);
-        transition: .18s ease;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 18px;
+        align-items: stretch;
     }
 
-    .assignment-card:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 24px 55px rgba(15, 23, 42, .10);
+    .assignment-card {
+        position: relative;
+        overflow: hidden;
+        padding: 20px;
+        background: white;
+        border-radius: 32px;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 22px 50px rgba(15, 23, 42, .08);
     }
 
-    .assignment-head {
+    .assignment-card::before {
+        content: "";
+        position: absolute;
+        width: 120px;
+        height: 120px;
+        right: -58px;
+        top: -58px;
+        border-radius: 999px;
+        background: rgba(79, 70, 229, .09);
+        pointer-events: none;
+    }
+
+    .assignment-card > * {
+        position: relative;
+        z-index: 1;
+    }
+
+    .assignment-card-top {
         display: flex;
         align-items: center;
-        gap: 14px;
+        gap: 13px;
+        margin-bottom: 14px;
     }
 
     .assignment-icon {
-        width: 58px;
-        height: 58px;
-        border-radius: 20px;
-        background: #eef2ff;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        width: 56px;
+        height: 56px;
+        min-width: 56px;
+        border-radius: 21px;
+        display: grid;
+        place-items: center;
+        background: linear-gradient(135deg, rgba(79, 70, 229, .12), rgba(6, 182, 212, .12));
         font-size: 27px;
-        flex: 0 0 auto;
     }
 
-    .assignment-head h2 {
+    .assignment-title h3 {
         margin: 0;
         color: #0f172a;
-        font-size: 22px;
         font-weight: 950;
-        word-break: break-word;
+        font-size: 20px;
+        letter-spacing: -.5px;
     }
 
-    .assignment-head p {
+    .assignment-title p {
         margin: 4px 0 0;
         color: #64748b;
         font-weight: 850;
+        font-size: 13px;
     }
 
     .assignment-badges {
         display: flex;
         flex-wrap: wrap;
         gap: 8px;
+        margin-bottom: 14px;
     }
 
     .badge {
+        padding: 8px 11px;
         border-radius: 999px;
-        padding: 8px 12px;
-        font-size: 12px;
+        font-size: 11px;
         font-weight: 950;
     }
 
-    .badge.lesson {
+    .badge-lesson {
         background: #eef2ff;
-        color: #3730a3;
+        color: #4f46e5;
     }
 
-    .badge.class {
-        background: #cffafe;
-        color: #155e75;
+    .badge-class {
+        background: #ccfbf1;
+        color: #0f766e;
     }
 
-    .badge.success {
-        background: #dcfce7;
-        color: #166534;
-    }
-
-    .badge.warning {
+    .badge-status {
         background: #ffedd5;
-        color: #9a3412;
+        color: #c2410c;
     }
 
     .assignment-description {
-        background: #f8fafc;
-        border: 1px solid #eef2f7;
-        color: #334155;
-        border-radius: 18px;
+        min-height: 58px;
         padding: 14px;
-        min-height: 70px;
-        font-weight: 800;
-        line-height: 1.5;
+        border-radius: 20px;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        color: #0f172a;
+        font-weight: 850;
+        line-height: 1.45;
+        margin-bottom: 15px;
         word-break: break-word;
     }
 
-    .assignment-meta {
+    .assignment-details {
         display: grid;
+        gap: 10px;
+        margin-bottom: 16px;
+    }
+
+    .detail-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+    }
+
+    .detail-icon {
+        width: 28px;
+        height: 28px;
+        display: grid;
+        place-items: center;
+    }
+
+    .detail-item div {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
         gap: 10px;
     }
 
-    .assignment-meta div {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        color: #475569;
-        font-weight: 850;
+    .detail-item small {
+        color: #64748b;
+        font-weight: 900;
+        font-size: 12px;
     }
 
-    .assignment-meta b {
-        margin-left: auto;
+    .detail-item strong {
         color: #0f172a;
         font-weight: 950;
+        font-size: 13px;
+        text-align: right;
     }
 
     .assignment-actions {
-        display: grid;
-        grid-template-columns: 1fr 1fr 1fr;
-        gap: 10px;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        flex-wrap: wrap;
+    }
+
+    .assignment-actions form {
+        margin: 0;
     }
 
     .action-btn {
-        min-height: 48px;
-        border: 0;
-        border-radius: 16px;
-        text-decoration: none;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: 950;
+        border: none;
         cursor: pointer;
-        width: 100%;
-    }
-
-    .action-btn.edit {
-        background: #eef2ff;
-        color: #4338ca;
-    }
-
-    .action-btn.submissions {
-        background: #dcfce7;
-        color: #166534;
-    }
-
-    .action-btn.delete {
-        background: #fee2e2;
-        color: #991b1b;
-    }
-
-    .delete-assignment-form {
-        margin: 0;
-    }
-
-    .empty-assignment {
-        background: #fff;
-        border: 1px dashed #cbd5e1;
-        border-radius: 30px;
-        padding: 42px;
-        text-align: center;
-        box-shadow: 0 18px 42px rgba(15, 23, 42, .07);
-    }
-
-    .empty-icon {
-        font-size: 44px;
-        margin-bottom: 12px;
-    }
-
-    .empty-assignment h2 {
-        margin: 0;
-        color: #0f172a;
-        font-size: 25px;
-        font-weight: 950;
-    }
-
-    .empty-assignment p {
-        color: #64748b;
-        font-weight: 850;
-    }
-
-    .empty-assignment a {
-        margin-top: 10px;
-        min-height: 50px;
-        padding: 0 18px;
-        border-radius: 17px;
-        background: #4f46e5;
-        color: #fff;
         text-decoration: none;
+        min-height: 44px;
+        padding: 0 14px;
+        border-radius: 16px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
         font-weight: 950;
+        font-size: 13px;
     }
 
-    @@media (max-width: 860px) {
-        .assignments-hero {
+    .action-btn.edit {
+        background: #eef2ff;
+        color: #4f46e5;
+    }
+
+    .action-btn.submissions {
+        background: #dcfce7;
+        color: #047857;
+    }
+
+    .action-btn.delete {
+        background: #fee2e2;
+        color: #dc2626;
+    }
+
+    .teacher-empty-state {
+        padding: 46px 24px;
+        text-align: center;
+        border-radius: 34px;
+        background: white;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 22px 50px rgba(15, 23, 42, .08);
+    }
+
+    .teacher-empty-state .empty-icon {
+        width: 78px;
+        height: 78px;
+        margin: 0 auto 15px;
+        border-radius: 28px;
+        display: grid;
+        place-items: center;
+        background: linear-gradient(135deg, rgba(79, 70, 229, .12), rgba(6, 182, 212, .12));
+        font-size: 38px;
+    }
+
+    .teacher-empty-state h2 {
+        margin: 0;
+        color: #0f172a;
+        font-weight: 950;
+        font-size: 24px;
+    }
+
+    .teacher-empty-state p {
+        margin: 8px auto 16px;
+        max-width: 520px;
+        color: #64748b;
+        font-weight: 800;
+        line-height: 1.45;
+    }
+
+    .empty-action {
+        display: inline-flex;
+        min-height: 48px;
+        padding: 0 18px;
+        border-radius: 17px;
+        align-items: center;
+        justify-content: center;
+        text-decoration: none;
+        color: white;
+        font-weight: 950;
+        background: linear-gradient(135deg, #4f46e5, #06b6d4);
+    }
+
+    @@media (max-width: 1180px) {
+        .assignment-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @@media (max-width: 760px) {
+        .teacher-assignment-hero {
             flex-direction: column;
-            align-items: flex-start;
+            align-items: stretch;
         }
 
-        .create-assignment-btn {
-            width: 100%;
-        }
-
-        .assignment-actions {
+        .assignment-grid {
             grid-template-columns: 1fr;
         }
-    }
 
-    @@media (max-width: 520px) {
-        .assignments-grid {
-            grid-template-columns: 1fr;
+        .teacher-mini-profile {
+            display: none;
         }
     }
 </style>
+
+<script>
+    document.querySelectorAll('.js-delete-assignment').forEach(function (form) {
+        form.addEventListener('submit', function (event) {
+            const title = form.getAttribute('data-title') || 'bu ödev';
+            const ok = confirm(title + ' silinsin mi?');
+
+            if (!ok) {
+                event.preventDefault();
+            }
+        });
+    });
+</script>
+
+@functions {
+    public class AssignmentCardItem
+    {
+        public string Id { get; set; } = "";
+        public string Title { get; set; } = "";
+        public string Description { get; set; } = "";
+        public string LessonName { get; set; } = "";
+        public string ClassName { get; set; } = "";
+        public string FileType { get; set; } = "";
+        public string Status { get; set; } = "";
+        public object? DueDateRaw { get; set; }
+    }
+
+    private static List<AssignmentCardItem> ReadAssignments(object? source)
+    {
+        var result = new List<AssignmentCardItem>();
+
+        if (source == null)
+        {
+            return result;
+        }
+
+        if (source is System.Collections.IEnumerable list)
+        {
+            foreach (var item in list)
+            {
+                if (item == null)
+                {
+                    continue;
+                }
+
+                var id = ReadProperty(item, "Id", "id");
+                var title = FirstNonEmpty(
+                    ReadProperty(item, "Title", "title"),
+                    ReadProperty(item, "Name", "name"),
+                    ReadProperty(item, "homeworkTitle", "assignmentTitle")
+                );
+
+                var description = FirstNonEmpty(
+                    ReadProperty(item, "Description", "description"),
+                    ReadProperty(item, "Content", "content")
+                );
+
+                var lessonName = FirstNonEmpty(
+                    ReadProperty(item, "LessonName", "lessonName"),
+                    ReadProperty(item, "Lesson", "lesson"),
+                    ReadProperty(item, "CourseName", "courseName")
+                );
+
+                var className = FirstNonEmpty(
+                    ReadProperty(item, "ClassName", "className"),
+                    ReadProperty(item, "Class", "class"),
+                    ReadProperty(item, "TargetClass", "targetClass")
+                );
+
+                var fileType = FirstNonEmpty(
+                    ReadProperty(item, "FileType", "fileType"),
+                    ReadProperty(item, "Type", "type")
+                );
+
+                var status = FirstNonEmpty(
+                    ReadProperty(item, "Status", "status"),
+                    "Teslim Bekliyor"
+                );
+
+                var dueDateRaw = ReadRawProperty(
+                    item,
+                    "DueDate",
+                    "dueDate",
+                    "Deadline",
+                    "deadline",
+                    "EndDate",
+                    "endDate"
+                );
+
+                if (string.IsNullOrWhiteSpace(id) && string.IsNullOrWhiteSpace(title))
+                {
+                    continue;
+                }
+
+                result.Add(new AssignmentCardItem
+                {
+                    Id = id,
+                    Title = title,
+                    Description = description,
+                    LessonName = lessonName,
+                    ClassName = className,
+                    FileType = fileType,
+                    Status = status,
+                    DueDateRaw = dueDateRaw
+                });
+            }
+        }
+
+        return result;
+    }
+
+    private static string GetText(object? value)
+    {
+        return value?.ToString()?.Trim() ?? "";
+    }
+
+    private static string FirstNonEmpty(params string[] values)
+    {
+        foreach (var value in values)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return value.Trim();
+            }
+        }
+
+        return "";
+    }
+
+    private static string ReadProperty(object item, params string[] names)
+    {
+        var raw = ReadRawProperty(item, names);
+        return RawToText(raw);
+    }
+
+    private static object? ReadRawProperty(object item, params string[] names)
+    {
+        if (item is IDictionary<string, object> dict)
+        {
+            foreach (var name in names)
+            {
+                if (dict.TryGetValue(name, out var value) && value != null)
+                {
+                    return value;
+                }
+            }
+        }
+
+        var type = item.GetType();
+
+        foreach (var name in names)
+        {
+            var property = type.GetProperty(name);
+
+            if (property == null)
+            {
+                continue;
+            }
+
+            var value = property.GetValue(item);
+
+            if (value != null)
+            {
+                return value;
+            }
+        }
+
+        return null;
+    }
+
+    private static string RawToText(object? value)
+    {
+        if (value == null)
+        {
+            return "";
+        }
+
+        var text = value.ToString()?.Trim() ?? "";
+
+        if (text.StartsWith("Timestamp:", StringComparison.OrdinalIgnoreCase))
+        {
+            return text.Replace("Timestamp:", "").Trim();
+        }
+
+        return text;
+    }
+
+    private static string FormatDate(object? value)
+    {
+        if (value == null)
+        {
+            return "-";
+        }
+
+        if (value is Google.Cloud.Firestore.Timestamp timestamp)
+        {
+            return timestamp.ToDateTime().ToLocalTime().ToString("dd.MM.yyyy HH:mm");
+        }
+
+        if (value is DateTime dateTime)
+        {
+            return dateTime.ToLocalTime().ToString("dd.MM.yyyy HH:mm");
+        }
+
+        var text = value.ToString()?.Trim() ?? "";
+
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return "-";
+        }
+
+        text = text.Replace("Timestamp:", "", StringComparison.OrdinalIgnoreCase).Trim();
+
+        if (DateTime.TryParse(text, out var parsed))
+        {
+            return parsed.ToLocalTime().ToString("dd.MM.yyyy HH:mm");
+        }
+
+        return text;
+    }
+}
