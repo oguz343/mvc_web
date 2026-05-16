@@ -1,5 +1,6 @@
 using Google.Cloud.Firestore;
 using Microsoft.AspNetCore.Mvc;
+using mvc_web.Models;
 using mvc_web.Services;
 using System.Text.RegularExpressions;
 
@@ -419,9 +420,10 @@ public class TeacherController : Controller
         ViewBag.TeacherBranch = teacherBranch;
         ViewBag.Teacher = teacherProfile;
         ViewBag.Lessons = lessons;
+        ViewBag.TeacherLessons = BuildLessonOptions(lessons);
         ViewBag.Assignment = assignment;
 
-        return View();
+        return View(BuildAssignmentViewModel(assignment));
     }
 
     [HttpPost]
@@ -430,11 +432,13 @@ public class TeacherController : Controller
     {
         await _integrity.CleanupOrphanActiveLinksAsync();
 
-        var id = (form["id"].ToString() ?? "").Trim();
+        var id = FirstNonEmpty(form["id"].ToString(), form["Id"].ToString());
+        var lessonId = FirstNonEmpty(form["lessonId"].ToString(), form["LessonId"].ToString());
         var title = (form["title"].ToString() ?? "").Trim();
         var description = (form["description"].ToString() ?? "").Trim();
-        var fileType = (form["fileType"].ToString() ?? "").Trim();
-        var dueDateRaw = (form["dueDate"].ToString() ?? "").Trim();
+        var fileType = FirstNonEmpty(form["fileType"].ToString(), form["Type"].ToString());
+        var dueDateRaw = FirstNonEmpty(form["dueDate"].ToString(), form["DueDate"].ToString());
+        var status = FirstNonEmpty(form["status"].ToString(), form["Status"].ToString(), "Aktif");
 
         if (string.IsNullOrWhiteSpace(id))
         {
@@ -467,9 +471,41 @@ public class TeacherController : Controller
             ["type"] = string.IsNullOrWhiteSpace(fileType) ? "Metin / Link" : fileType,
             ["Type"] = string.IsNullOrWhiteSpace(fileType) ? "Metin / Link" : fileType,
 
+            ["status"] = status,
+            ["Status"] = status,
+
             ["updatedAt"] = Timestamp.FromDateTime(DateTime.UtcNow),
             ["UpdatedAt"] = Timestamp.FromDateTime(DateTime.UtcNow),
         };
+
+        if (!string.IsNullOrWhiteSpace(lessonId))
+        {
+            var lessonDoc = await _firestore.Collection("lessons").Document(lessonId).GetSnapshotAsync();
+
+            if (lessonDoc.Exists)
+            {
+                var lessonData = lessonDoc.ToDictionary();
+                var lessonName = FirstNonEmpty(GetText(lessonData, "name", "Name"), GetText(lessonData, "lessonName", "LessonName"), "Ders");
+                var className = NormalizeClassName(FirstNonEmpty(GetText(lessonData, "className", "ClassName"), GetText(lessonData, "class", "Class")));
+
+                update["lessonId"] = lessonId;
+                update["LessonId"] = lessonId;
+                update["courseId"] = lessonId;
+                update["CourseId"] = lessonId;
+                update["lessonName"] = lessonName;
+                update["LessonName"] = lessonName;
+                update["lesson"] = lessonName;
+                update["Lesson"] = lessonName;
+                update["courseName"] = lessonName;
+                update["CourseName"] = lessonName;
+                update["className"] = className;
+                update["ClassName"] = className;
+                update["class"] = className;
+                update["Class"] = className;
+                update["targetClass"] = className;
+                update["TargetClass"] = className;
+            }
+        }
 
         if (!string.IsNullOrWhiteSpace(dueDateRaw) && DateTime.TryParse(dueDateRaw, out var parsedDueDate))
         {
@@ -569,7 +605,7 @@ public class TeacherController : Controller
         ViewBag.Assignments = assignments;
         ViewBag.Submissions = submissions;
 
-        return View();
+        return View(BuildSubmissionViewModels(submissions));
     }
 
     [HttpPost]
@@ -1279,6 +1315,65 @@ public class TeacherController : Controller
                 await directDoc.Reference.SetAsync(update, SetOptions.MergeAll);
             }
         }
+    }
+
+    private static AssignmentViewModel BuildAssignmentViewModel(Dictionary<string, object> data)
+    {
+        return new AssignmentViewModel
+        {
+            Id = GetText(data, "Id", "id"),
+            Title = FirstNonEmpty(GetText(data, "Title", "title"), GetText(data, "Name", "name")),
+            LessonId = GetText(data, "LessonId", "lessonId"),
+            Lesson = GetText(data, "LessonName", "lessonName", "Lesson", "lesson"),
+            ClassName = GetText(data, "ClassName", "className", "Class", "class"),
+            TeacherId = GetText(data, "TeacherId", "teacherId"),
+            TeacherName = GetText(data, "TeacherName", "teacherName"),
+            TeacherBranch = GetText(data, "TeacherBranch", "teacherBranch", "Branch", "branch"),
+            DueDate = FormatDateInput(GetDate(data, "DueDate", "dueDate", "Deadline", "deadline", "EndDate", "endDate")),
+            Type = FirstNonEmpty(GetText(data, "FileType", "fileType"), GetText(data, "Type", "type"), "Metin / Link"),
+            Status = FirstNonEmpty(GetText(data, "Status", "status"), "Aktif"),
+            Description = FirstNonEmpty(GetText(data, "Description", "description"), GetText(data, "Content", "content"))
+        };
+    }
+
+    private static List<TeacherLessonOptionViewModel> BuildLessonOptions(List<Dictionary<string, object>> lessons)
+    {
+        return lessons
+            .Select(x => new TeacherLessonOptionViewModel
+            {
+                Id = GetText(x, "Id", "id"),
+                Name = FirstNonEmpty(GetText(x, "Name", "name"), GetText(x, "LessonName", "lessonName"), "Ders"),
+                ClassName = FirstNonEmpty(GetText(x, "ClassName", "className"), GetText(x, "Class", "class"), "-")
+            })
+            .Where(x => !string.IsNullOrWhiteSpace(x.Id))
+            .GroupBy(x => x.Id)
+            .Select(x => x.First())
+            .OrderBy(x => x.ClassName)
+            .ThenBy(x => x.Name)
+            .ToList();
+    }
+
+    private static List<SubmissionViewModel> BuildSubmissionViewModels(List<Dictionary<string, object>> submissions)
+    {
+        return submissions.Select(x => new SubmissionViewModel
+        {
+            Id = GetText(x, "Id", "id"),
+            AssignmentId = GetText(x, "AssignmentId", "assignmentId"),
+            AssignmentTitle = FirstNonEmpty(GetText(x, "Title", "title"), GetText(x, "AssignmentTitle", "assignmentTitle"), "Ödev"),
+            Lesson = FirstNonEmpty(GetText(x, "LessonName", "lessonName"), GetText(x, "Lesson", "lesson"), "-"),
+            ClassName = FirstNonEmpty(GetText(x, "ClassName", "className"), "-"),
+            StudentNo = FirstNonEmpty(GetText(x, "StudentNo", "studentNo"), "-"),
+            Answer = FirstNonEmpty(GetText(x, "Answer", "answer"), GetText(x, "Content", "content")),
+            Link = GetText(x, "Link", "link"),
+            Status = FirstNonEmpty(GetText(x, "Status", "status"), "Bekliyor"),
+            Grade = GetText(x, "Score", "score", "Grade", "grade"),
+            Feedback = GetText(x, "Feedback", "feedback")
+        }).ToList();
+    }
+
+    private static string FormatDateInput(DateTime? date)
+    {
+        return date?.ToString("yyyy-MM-dd") ?? "";
     }
 
     private async Task UpdateSubmissionEverywhere(string submissionId, Dictionary<string, object?> update)
