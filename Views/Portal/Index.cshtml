@@ -7,6 +7,14 @@
     var isStudent = Model.Role == "Öğrenci";
     var icon = Model.Role == "Veli" ? "👪" : "🎒";
     var color = Model.Role == "Veli" ? "#f59e0b" : "#4f46e5";
+
+    var submittedHomeworkCount = Model.Homeworks.Count(x => x.IsSubmitted);
+    var pendingHomeworkCount = Model.Homeworks.Count - submittedHomeworkCount;
+    var gradedHomeworkCount = Model.Homeworks.Count(x => !string.IsNullOrWhiteSpace(x.Grade) || !string.IsNullOrWhiteSpace(x.Feedback));
+    var nextHomework = Model.Homeworks
+        .Where(x => !x.IsSubmitted)
+        .OrderBy(x => x.DueDate ?? DateTime.MaxValue)
+        .FirstOrDefault();
 }
 
 <div class="portal-page">
@@ -64,6 +72,58 @@
             <div class="stat-card">
                 <span>Ödev</span>
                 <strong>@Model.Homeworks.Count</strong>
+            </div>
+        </div>
+
+        <div class="premium-insight-grid">
+            <div class="premium-insight-card" style="--card-accent: rgba(79,70,229,.13); --icon-bg: #eef2ff; --icon-color: #4338ca;">
+                <div class="premium-insight-top">
+                    <div class="premium-insight-icon">📌</div>
+                    <div>
+                        <strong>@Model.Homeworks.Count</strong>
+                        <span>Ödev özeti</span>
+                    </div>
+                </div>
+                <p>@submittedHomeworkCount teslim edildi, @pendingHomeworkCount ödev bekliyor.</p>
+            </div>
+
+            <div class="premium-insight-card" style="--card-accent: rgba(14,165,233,.14); --icon-bg: #e0f2fe; --icon-color: #0369a1;">
+                <div class="premium-insight-top">
+                    <div class="premium-insight-icon">🔔</div>
+                    <div>
+                        <strong>@Model.Announcements.Count</strong>
+                        <span>Duyuru merkezi</span>
+                    </div>
+                </div>
+                <p>Okuldan gelen duyurular ve sınıf bilgilendirmeleri burada listelenir.</p>
+            </div>
+
+            <div class="premium-insight-card" style="--card-accent: rgba(245,158,11,.16); --icon-bg: #fef3c7; --icon-color: #b45309;">
+                <div class="premium-insight-top">
+                    <div class="premium-insight-icon">⏱</div>
+                    <div>
+                        <strong>@(nextHomework?.DueDate?.ToString("dd.MM") ?? "-")</strong>
+                        <span>Sıradaki teslim</span>
+                    </div>
+                </div>
+                <p>@(nextHomework == null ? "Bekleyen teslim görünmüyor." : nextHomework.Title)</p>
+            </div>
+        </div>
+
+        <div class="portal-status-strip">
+            <div>
+                <strong>@submittedHomeworkCount / @Model.Homeworks.Count</strong>
+                <span>Teslim ilerlemesi</span>
+            </div>
+
+            <div>
+                <strong>@gradedHomeworkCount</strong>
+                <span>Not veya geri dönüş alan ödev</span>
+            </div>
+
+            <div>
+                <strong>@(isStudent ? "Teslim aktif" : "Veli izleme")</strong>
+                <span>@(isStudent ? "Ödev formları kullanılabilir." : "Öğrenci durumu görüntülenir.")</span>
             </div>
         </div>
 

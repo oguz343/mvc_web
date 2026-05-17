@@ -197,6 +197,12 @@ public class AuthController : Controller
             }
         }
 
+        if (!passwordOk && wantedRoleKey == "admin" && Number == "0000")
+        {
+            passwordOk = await VerifySystemAdminPasswordAsync(Password);
+            shouldMigrateToHash = passwordOk;
+        }
+
         if (!passwordOk)
         {
             TempData["Error"] = "Numara, rol veya şifre hatalı.";
@@ -555,6 +561,42 @@ public class AuthController : Controller
         }
 
         return null;
+    }
+
+    private async Task<bool> VerifySystemAdminPasswordAsync(string password)
+    {
+        var doc = await _firestore
+            .Collection("system")
+            .Document("admin_account")
+            .GetSnapshotAsync();
+
+        if (!doc.Exists)
+        {
+            return false;
+        }
+
+        var data = doc.ToDictionary();
+        var passwordHash = GetString(data, "passwordHash", "PasswordHash", "hash", "Hash");
+
+        if (PasswordHashService.IsHash(passwordHash) &&
+            PasswordHashService.VerifyPassword(password, passwordHash))
+        {
+            return true;
+        }
+
+        var legacyPassword = GetString(
+            data,
+            "password",
+            "Password",
+            "adminPassword",
+            "AdminPassword",
+            "sifre",
+            "Sifre",
+            "ÅŸifre",
+            "Åifre"
+        );
+
+        return !string.IsNullOrWhiteSpace(legacyPassword) && legacyPassword == password;
     }
 
     private async Task EnsureDefaultAdminAsync()

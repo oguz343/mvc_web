@@ -29,6 +29,7 @@
     var lessonsRaw = GetList("Lessons", "TeacherLessons", "MyLessons");
     var assignmentsRaw = GetList("Assignments", "Homeworks", "TeacherAssignments", "MyAssignments");
     var submissionsRaw = GetList("Submissions", "RecentSubmissions", "LastSubmissions");
+    var announcementsRaw = GetList("Announcements", "TeacherAnnouncements", "RecentAnnouncements");
 
     var lessons = lessonsRaw
         .GroupBy(x => NormalizeKey($"{GetAnyText(x, "Name", "LessonName", "Title")}_{GetAnyText(x, "ClassName", "Class", "TargetClass")}"))
@@ -56,6 +57,12 @@
     var assignmentCount = assignments.Count;
     var submissionCount = submissions.Count;
     var evaluatedCount = submissions.Count(x => IsEvaluatedByStatusOnly(x));
+    var pendingSubmissionCount = Math.Max(0, submissionCount - evaluatedCount);
+    var latestAssignments = assignments.Take(3).ToList();
+    var latestAnnouncements = announcementsRaw.Take(3).ToList();
+    var focusText = pendingSubmissionCount > 0
+        ? $"{pendingSubmissionCount} teslim değerlendirme bekliyor."
+        : "Bekleyen teslim görünmüyor.";
 }
 
 @functions {
@@ -360,6 +367,41 @@
         </div>
     </section>
 
+    <section class="premium-insight-grid">
+        <div class="premium-insight-card" style="--card-accent: rgba(14,165,233,.14); --icon-bg: #e0f2fe; --icon-color: #0369a1;">
+            <div class="premium-insight-top">
+                <div class="premium-insight-icon">🎯</div>
+                <div>
+                    <strong>@pendingSubmissionCount</strong>
+                    <span>Bugünkü odak</span>
+                </div>
+            </div>
+            <p>@focusText</p>
+        </div>
+
+        <div class="premium-insight-card" style="--card-accent: rgba(79,70,229,.13); --icon-bg: #eef2ff; --icon-color: #4338ca;">
+            <div class="premium-insight-top">
+                <div class="premium-insight-icon">📝</div>
+                <div>
+                    <strong>@assignmentCount</strong>
+                    <span>Ödev havuzu</span>
+                </div>
+            </div>
+            <p>@lessonCount ders için hazırlanan ödevleri ve teslimleri buradan izleyebilirsiniz.</p>
+        </div>
+
+        <div class="premium-insight-card" style="--card-accent: rgba(245,158,11,.16); --icon-bg: #fef3c7; --icon-color: #b45309;">
+            <div class="premium-insight-top">
+                <div class="premium-insight-icon">📣</div>
+                <div>
+                    <strong>@latestAnnouncements.Count</strong>
+                    <span>Güncel duyuru</span>
+                </div>
+            </div>
+            <p>Duyurular ve sınıf hareketleri öğretmen ekranında ayrı ayrı okunabilir.</p>
+        </div>
+    </section>
+
     <section class="teacher-dashboard-grid">
         <div class="teacher-panel">
             <div class="panel-head">
@@ -441,6 +483,62 @@
                     }
                 </div>
             }
+        </div>
+
+        <div class="teacher-panel">
+            <div class="panel-head">
+                <div>
+                    <h2>Ödev ve Duyuru Akışı</h2>
+                    <p>Son hazırlanan içerikler tek bakışta.</p>
+                </div>
+
+                <a asp-controller="Teacher" asp-action="Assignments">Ödevler</a>
+            </div>
+
+            <div class="premium-detail-feed">
+                @if (latestAssignments.Any())
+                {
+                    @foreach (var assignment in latestAssignments)
+                    {
+                        var title = GetDisplayTitle(assignment);
+                        var lessonName = GetAnyText(assignment, "LessonName", "Lesson", "CourseName", "Course");
+                        var className = GetAnyText(assignment, "ClassName", "Class", "TargetClass");
+
+                        <div class="premium-feed-item" style="--feed-accent: rgba(79,70,229,.10); --feed-icon-bg: #eef2ff; --feed-icon-color: #4338ca;">
+                            <div class="premium-feed-icon">📝</div>
+                            <div class="premium-feed-body">
+                                <strong>@title</strong>
+                                <span>@lessonName • @className</span>
+                            </div>
+                            <div class="premium-feed-tag">Ödev</div>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div class="premium-empty-note">
+                        Henüz ödev görünmüyor. Yeni ödev oluşturunca öğrencilerin teslim akışı bu paneli dolduracak.
+                    </div>
+                }
+
+                @if (latestAnnouncements.Any())
+                {
+                    @foreach (var announcement in latestAnnouncements)
+                    {
+                        var title = GetAnyText(announcement, "Title", "Name");
+                        var target = GetAnyText(announcement, "Target", "Role", "Audience");
+
+                        <div class="premium-feed-item" style="--feed-accent: rgba(245,158,11,.12); --feed-icon-bg: #fef3c7; --feed-icon-color: #b45309;">
+                            <div class="premium-feed-icon">📣</div>
+                            <div class="premium-feed-body">
+                                <strong>@title</strong>
+                                <span>Hedef: @target</span>
+                            </div>
+                            <div class="premium-feed-tag">Duyuru</div>
+                        </div>
+                    }
+                }
+            </div>
         </div>
     </section>
 </div>

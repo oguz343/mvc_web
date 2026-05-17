@@ -359,7 +359,11 @@ public class UsersController : Controller
             }
 
             var rows = worksheet.RangeUsed()!.RowsUsed().ToList();
-            var startIndex = LooksLikeHeader(rows.First()) ? 1 : 0;
+            var hasHeader = LooksLikeHeader(rows.First());
+            var headerMap = hasHeader
+                ? BuildHeaderMap(rows.First())
+                : new Dictionary<string, int>();
+            var startIndex = hasHeader ? 1 : 0;
 
             var importedNumbers = new HashSet<string>();
 
@@ -375,11 +379,49 @@ public class UsersController : Controller
             {
                 var row = rows[i];
 
-                var name = CleanText(GetCell(row, 1));
-                var tc = OnlyDigits(GetCell(row, 2));
-                var number = OnlyDigits(GetCell(row, 3));
-                var fourth = CleanText(GetCell(row, 4));
-                var phone = NormalizePhone(GetCell(row, 5));
+                string name;
+                string tc;
+                string number;
+                string fourth;
+                string phone;
+
+                if (hasHeader)
+                {
+                    name = CleanText(GetByAliases(row, headerMap, "adsoyad", "adi", "ad", "isim", "ogrenciadi", "ogretmenadi", "name", "fullname"));
+                    number = OnlyDigits(GetByAliases(row, headerMap, "numara", "no", "ogrencino", "ogretmenno", "okulno", "schoolno", "studentno", "teacherno", "number"));
+                    fourth = CleanText(GetByAliases(row, headerMap, "sinif", "sınıf", "sube", "şube", "sinifsube", "class", "classname", "brans", "branş", "branch"));
+                    tc = OnlyDigits(GetByAliases(row, headerMap, "tc", "tckimlik", "kimlik", "identity"));
+                    phone = NormalizePhone(GetByAliases(row, headerMap, "telefon", "phone", "tel", "gsm", "cep"));
+                }
+                else
+                {
+                    name = CleanText(GetCell(row, 1));
+
+                    var second = GetCell(row, 2);
+                    var third = GetCell(row, 3);
+                    var fourthRaw = GetCell(row, 4);
+                    var fifth = GetCell(row, 5);
+
+                    var secondDigits = OnlyDigits(second);
+                    var thirdDigits = OnlyDigits(third);
+
+                    if (secondDigits.Length == 11 && !string.IsNullOrWhiteSpace(thirdDigits))
+                    {
+                        // Eski MVC sırası: Ad Soyad | TC | Numara | Sınıf/Branş | Telefon
+                        tc = secondDigits;
+                        number = thirdDigits;
+                        fourth = CleanText(fourthRaw);
+                        phone = NormalizePhone(fifth);
+                    }
+                    else
+                    {
+                        // Flutter ile ortak sıra: Ad Soyad | Numara | Sınıf/Branş | TC | Telefon
+                        number = secondDigits;
+                        fourth = CleanText(third);
+                        tc = OnlyDigits(fourthRaw);
+                        phone = NormalizePhone(fifth);
+                    }
+                }
 
                 var hasAnyValue =
                     !string.IsNullOrWhiteSpace(name) ||
@@ -707,7 +749,7 @@ public class UsersController : Controller
 
     private static bool LooksLikeHeader(IXLRangeRow row)
     {
-        var joined = string.Join(" ", Enumerable.Range(1, 5).Select(i => Normalize(GetCell(row, i))));
+        var joined = string.Join(" ", Enumerable.Range(1, 10).Select(i => Normalize(GetCell(row, i))));
 
         return joined.Contains("ad") ||
                joined.Contains("soyad") ||
@@ -719,6 +761,41 @@ public class UsersController : Controller
                joined.Contains("sube") ||
                joined.Contains("telefon") ||
                joined.Contains("brans");
+    }
+
+    private static Dictionary<string, int> BuildHeaderMap(IXLRangeRow row)
+    {
+        var map = new Dictionary<string, int>();
+
+        for (var i = 1; i <= 20; i++)
+        {
+            var key = Normalize(GetCell(row, i));
+
+            if (!string.IsNullOrWhiteSpace(key) && !map.ContainsKey(key))
+            {
+                map[key] = i;
+            }
+        }
+
+        return map;
+    }
+
+    private static string GetByAliases(
+        IXLRangeRow row,
+        Dictionary<string, int> headerMap,
+        params string[] aliases)
+    {
+        foreach (var alias in aliases)
+        {
+            var key = Normalize(alias);
+
+            if (headerMap.TryGetValue(key, out var index))
+            {
+                return GetCell(row, index);
+            }
+        }
+
+        return "";
     }
 
     private static string GetString(Dictionary<string, object> data, params string[] keys)

@@ -914,6 +914,216 @@ body {
     font-weight: 700;
 }
 
+/* -------------------- PREMIUM DASHBOARD DETAILS -------------------- */
+
+.premium-insight-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 16px;
+}
+
+.premium-insight-card {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(135deg, rgba(255,255,255,.99), rgba(248,250,252,.94));
+    border: 1px solid rgba(203,213,225,.86);
+    border-radius: 26px;
+    padding: 18px;
+    box-shadow: 0 18px 42px rgba(15,23,42,.08);
+}
+
+.premium-insight-card::after {
+    content: "";
+    position: absolute;
+    top: -42px;
+    right: -42px;
+    width: 122px;
+    height: 122px;
+    border-radius: 34px;
+    transform: rotate(16deg);
+    background: var(--card-accent, rgba(79,70,229,.12));
+    pointer-events: none;
+}
+
+.premium-insight-top {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.premium-insight-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 16px;
+    display: grid;
+    place-items: center;
+    background: var(--icon-bg, #eef2ff);
+    color: var(--icon-color, #4338ca);
+    font-size: 21px;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.58);
+    flex: 0 0 auto;
+}
+
+.premium-insight-card strong {
+    position: relative;
+    z-index: 1;
+    display: block;
+    color: #0f172a;
+    font-size: 24px;
+    line-height: 1;
+    font-weight: 950;
+}
+
+.premium-insight-card span,
+.premium-insight-card p {
+    position: relative;
+    z-index: 1;
+    display: block;
+    color: #64748b;
+    font-weight: 800;
+}
+
+.premium-insight-card p {
+    margin: 8px 0 0;
+    line-height: 1.48;
+}
+
+.premium-detail-feed {
+    display: grid;
+    gap: 12px;
+}
+
+.premium-feed-item {
+    position: relative;
+    overflow: hidden;
+    background: #ffffff;
+    border: 1px solid rgba(203,213,225,.84);
+    border-radius: 20px;
+    padding: 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-shadow: 0 12px 26px rgba(15,23,42,.055);
+}
+
+.premium-feed-item::after {
+    content: "";
+    position: absolute;
+    top: -28px;
+    right: -26px;
+    width: 76px;
+    height: 76px;
+    border-radius: 24px;
+    background: var(--feed-accent, rgba(79,70,229,.08));
+    transform: rotate(18deg);
+}
+
+.premium-feed-icon {
+    position: relative;
+    z-index: 1;
+    width: 42px;
+    height: 42px;
+    border-radius: 15px;
+    display: grid;
+    place-items: center;
+    background: var(--feed-icon-bg, #f1f5f9);
+    color: var(--feed-icon-color, #334155);
+    font-size: 19px;
+    flex: 0 0 auto;
+}
+
+.premium-feed-body {
+    position: relative;
+    z-index: 1;
+    min-width: 0;
+    flex: 1;
+}
+
+.premium-feed-body strong {
+    display: block;
+    color: #0f172a;
+    font-weight: 950;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.premium-feed-body span {
+    display: block;
+    color: #64748b;
+    font-size: 13px;
+    line-height: 1.35;
+    font-weight: 780;
+    margin-top: 3px;
+}
+
+.premium-feed-tag {
+    position: relative;
+    z-index: 1;
+    white-space: nowrap;
+    border-radius: 999px;
+    padding: 7px 10px;
+    background: #f8fafc;
+    color: #475569;
+    border: 1px solid rgba(203,213,225,.84);
+    font-size: 12px;
+    font-weight: 950;
+}
+
+.premium-empty-stack {
+    display: grid;
+    gap: 10px;
+}
+
+.premium-empty-note {
+    background: #ffffff;
+    border: 1px dashed rgba(148,163,184,.82);
+    border-radius: 20px;
+    padding: 16px;
+    color: #64748b;
+    font-weight: 850;
+    line-height: 1.45;
+}
+
+.premium-section-spacer {
+    margin-top: 18px;
+}
+
+.portal-status-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+    margin: 16px 0 24px;
+}
+
+.portal-status-strip > div {
+    background: rgba(255,255,255,.94);
+    border: 1px solid rgba(203,213,225,.84);
+    border-radius: 20px;
+    padding: 15px 16px;
+    box-shadow: 0 14px 32px rgba(15,23,42,.07);
+}
+
+.portal-status-strip strong,
+.portal-status-strip span {
+    display: block;
+}
+
+.portal-status-strip strong {
+    color: #0f172a;
+    font-weight: 950;
+    font-size: 18px;
+}
+
+.portal-status-strip span {
+    color: #64748b;
+    font-weight: 800;
+    margin-top: 4px;
+}
+
 /* -------------------- RESPONSIVE -------------------- */
 
 @media (max-width: 1200px) {

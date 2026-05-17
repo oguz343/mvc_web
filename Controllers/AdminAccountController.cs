@@ -1,8 +1,9 @@
 using Google.Cloud.Firestore;
 using Microsoft.AspNetCore.Mvc;
+using mvc_web.Filters;
 using mvc_web.Models;
 using mvc_web.Services;
-using mvc_web.Filters;
+
 namespace mvc_web.Controllers
 {
     [AdminOnly]
@@ -48,29 +49,33 @@ namespace mvc_web.Controllers
 
             if (string.IsNullOrWhiteSpace(model.CurrentPassword))
             {
-                ModelState.AddModelError(nameof(model.CurrentPassword), "Mevcut şifre boş bırakılamaz.");
+                ModelState.AddModelError(nameof(model.CurrentPassword), "Mevcut sifre bos birakilamaz.");
             }
 
             if (string.IsNullOrWhiteSpace(model.NewPassword))
             {
-                ModelState.AddModelError(nameof(model.NewPassword), "Yeni şifre boş bırakılamaz.");
+                ModelState.AddModelError(nameof(model.NewPassword), "Yeni sifre bos birakilamaz.");
             }
 
             if (model.NewPassword.Length < 6)
             {
-                ModelState.AddModelError(nameof(model.NewPassword), "Yeni şifre en az 6 karakter olmalıdır.");
+                ModelState.AddModelError(nameof(model.NewPassword), "Yeni sifre en az 6 karakter olmalidir.");
             }
 
             if (model.NewPassword != model.RepeatPassword)
             {
-                ModelState.AddModelError(nameof(model.RepeatPassword), "Yeni şifreler eşleşmiyor.");
+                ModelState.AddModelError(nameof(model.RepeatPassword), "Yeni sifreler eslesmiyor.");
             }
 
-            var currentAdminPassword = await GetAdminPassword();
+            var adminDoc = await FindAdminUserAsync();
 
-            if (model.CurrentPassword != currentAdminPassword)
+            if (adminDoc == null)
             {
-                ModelState.AddModelError(nameof(model.CurrentPassword), "Mevcut şifre hatalı.");
+                ModelState.AddModelError("", "Admin kullanicisi bulunamadi.");
+            }
+            else if (!await VerifyCurrentPasswordAsync(adminDoc, model.CurrentPassword))
+            {
+                ModelState.AddModelError(nameof(model.CurrentPassword), "Mevcut sifre hatali.");
             }
 
             if (!ModelState.IsValid)
@@ -79,25 +84,87 @@ namespace mvc_web.Controllers
             }
 
             var now = Timestamp.GetCurrentTimestamp();
+            var newHash = PasswordHashService.HashPassword(model.NewPassword);
+
+            await adminDoc!.Reference.SetAsync(
+                new Dictionary<string, object?>
+                {
+                    ["passwordHash"] = newHash,
+                    ["PasswordHash"] = newHash,
+                    ["password"] = "",
+                    ["Password"] = "",
+                    ["mustChangePassword"] = false,
+                    ["MustChangePassword"] = false,
+                    ["updatedAt"] = now,
+                    ["UpdatedAt"] = now,
+                },
+                SetOptions.MergeAll
+            );
 
             await _firestore
                 .Collection("system")
                 .Document("admin_account")
                 .SetAsync(
-                    new Dictionary<string, object>
+                    new Dictionary<string, object?>
                     {
-                        { "number", "0000" },
-                        { "password", model.NewPassword },
-                        { "updatedAt", now }
+                        ["number"] = "0000",
+                        ["password"] = "",
+                        ["passwordHash"] = newHash,
+                        ["updatedAt"] = now,
                     },
                     SetOptions.MergeAll
                 );
 
-            TempData["Success"] = "Admin şifresi başarıyla güncellendi.";
+            TempData["Success"] = "Admin sifresi basariyla guncellendi.";
             return RedirectToAction(nameof(ChangePassword));
         }
 
-        private async Task<string> GetAdminPassword()
+        private async Task<bool> VerifyCurrentPasswordAsync(DocumentSnapshot adminDoc, string password)
+        {
+            var data = adminDoc.ToDictionary();
+            var passwordHash = GetString(data, "passwordHash", "PasswordHash", "hash", "Hash");
+            var legacyPassword = GetString(data, "password", "Password");
+
+            if (PasswordHashService.IsHash(passwordHash))
+            {
+                return PasswordHashService.VerifyPassword(password, passwordHash)
+                    || await VerifySystemAdminPasswordAsync(password);
+            }
+
+            if (!string.IsNullOrWhiteSpace(legacyPassword))
+            {
+                return legacyPassword == password
+                    || await VerifySystemAdminPasswordAsync(password);
+            }
+
+            return await VerifySystemAdminPasswordAsync(password);
+        }
+
+        private async Task<DocumentSnapshot?> FindAdminUserAsync()
+        {
+            var users = await _firestore.Collection("users").GetSnapshotAsync();
+
+            foreach (var doc in users.Documents)
+            {
+                if (!doc.Exists)
+                {
+                    continue;
+                }
+
+                var data = doc.ToDictionary();
+                var role = NormalizeKey(GetString(data, "role", "Role", "userRole", "UserRole"));
+                var number = OnlyDigits(GetString(data, "number", "Number", "schoolNo", "SchoolNo", "adminNo", "AdminNo"));
+
+                if (role == "admin" || number == "0000")
+                {
+                    return doc;
+                }
+            }
+
+            return null;
+        }
+
+        private async Task<string> GetSystemAdminPasswordAsync()
         {
             var doc = await _firestore
                 .Collection("system")
@@ -110,18 +177,55 @@ namespace mvc_web.Controllers
             }
 
             var data = doc.ToDictionary();
+            return GetString(data, "password", "Password", "adminPassword", "AdminPassword", "sifre", "Sifre", "ÅŸifre", "Åifre");
+        }
 
-            if (data.TryGetValue("password", out var value) && value != null)
+        private async Task<bool> VerifySystemAdminPasswordAsync(string password)
+        {
+            var systemPassword = await GetSystemAdminPasswordAsync();
+            return !string.IsNullOrWhiteSpace(systemPassword) && systemPassword == password;
+        }
+
+        private static string GetString(Dictionary<string, object> data, params string[] keys)
+        {
+            foreach (var key in keys)
             {
-                var password = value.ToString();
-
-                if (!string.IsNullOrWhiteSpace(password))
+                if (!data.TryGetValue(key, out var value) || value == null)
                 {
-                    return password;
+                    continue;
+                }
+
+                var text = value.ToString();
+
+                if (!string.IsNullOrWhiteSpace(text))
+                {
+                    return text.Trim();
                 }
             }
 
-            return "admin123";
+            return "";
+        }
+
+        private static string OnlyDigits(string value)
+        {
+            return string.IsNullOrWhiteSpace(value)
+                ? ""
+                : new string(value.Where(char.IsDigit).ToArray());
+        }
+
+        private static string NormalizeKey(string value)
+        {
+            value = (value ?? "").Trim().ToLowerInvariant();
+
+            value = value
+                .Replace("Ä±", "i")
+                .Replace("ÄŸ", "g")
+                .Replace("Ã¼", "u")
+                .Replace("ÅŸ", "s")
+                .Replace("Ã¶", "o")
+                .Replace("Ã§", "c");
+
+            return new string(value.Where(char.IsLetterOrDigit).ToArray());
         }
     }
 }

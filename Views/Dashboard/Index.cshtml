@@ -91,6 +91,15 @@
     var passwordRequestCount = GetInt("PasswordRequestCount", "PasswordRequestsCount", "SifreTalebiCount", "SifreTalepSayisi");
 
     var recentUsers = GetRecentUsers();
+    var totalUserCount = studentCount + teacherCount + parentCount;
+    var setupCount = classCount + lessonCount;
+    var visibleSchoolFlow = submissionCount + announcementCount;
+    var userBalanceText = totalUserCount > 0
+        ? $"{studentCount} öğrenci, {teacherCount} öğretmen, {parentCount} veli"
+        : "Kullanıcı eklenince dağılım burada görünür.";
+    var securityText = passwordRequestCount > 0
+        ? $"{passwordRequestCount} şifre talebi bekliyor."
+        : "Açık şifre talebi yok.";
 }
 
 <div class="dash-page">
@@ -104,7 +113,7 @@
         <div class="dash-hero-card">
             <div class="dash-hero-icon">📊</div>
             <div>
-                <strong>@(studentCount + teacherCount + parentCount)</strong>
+                <strong>@totalUserCount</strong>
                 <span>Toplam Kullanıcı</span>
             </div>
         </div>
@@ -174,6 +183,52 @@
                 <span>Şifre Talebi</span>
             </div>
         </a>
+    </section>
+
+    <section class="premium-insight-grid">
+        <div class="premium-insight-card" style="--card-accent: rgba(79,70,229,.13); --icon-bg: #eef2ff; --icon-color: #4338ca;">
+            <div class="premium-insight-top">
+                <div class="premium-insight-icon">👥</div>
+                <div>
+                    <strong>@totalUserCount</strong>
+                    <span>Kullanıcı dengesi</span>
+                </div>
+            </div>
+            <p>@userBalanceText</p>
+        </div>
+
+        <div class="premium-insight-card" style="--card-accent: rgba(14,165,233,.14); --icon-bg: #e0f2fe; --icon-color: #0369a1;">
+            <div class="premium-insight-top">
+                <div class="premium-insight-icon">📚</div>
+                <div>
+                    <strong>@setupCount</strong>
+                    <span>Akademik kurulum</span>
+                </div>
+            </div>
+            <p>@classCount sınıf ve @lessonCount ders ataması aktif görünüyor.</p>
+        </div>
+
+        <div class="premium-insight-card" style="--card-accent: rgba(16,185,129,.14); --icon-bg: #dcfce7; --icon-color: #047857;">
+            <div class="premium-insight-top">
+                <div class="premium-insight-icon">✅</div>
+                <div>
+                    <strong>@submissionCount</strong>
+                    <span>Ödev akışı</span>
+                </div>
+            </div>
+            <p>@visibleSchoolFlow toplam teslim ve duyuru hareketi panelden takip ediliyor.</p>
+        </div>
+
+        <div class="premium-insight-card" style="--card-accent: rgba(244,63,94,.13); --icon-bg: #ffe4e6; --icon-color: #be123c;">
+            <div class="premium-insight-top">
+                <div class="premium-insight-icon">🛡️</div>
+                <div>
+                    <strong>@passwordRequestCount</strong>
+                    <span>Güvenlik gündemi</span>
+                </div>
+            </div>
+            <p>@securityText</p>
+        </div>
     </section>
 
     <section class="dash-bottom-grid">
@@ -254,7 +309,27 @@
                 </div>
             </div>
 
-            <div class="quick-actions">
+            <div class="premium-detail-feed">
+                <div class="premium-feed-item" style="--feed-accent: rgba(244,63,94,.10); --feed-icon-bg: #ffe4e6; --feed-icon-color: #be123c;">
+                    <div class="premium-feed-icon">🔐</div>
+                    <div class="premium-feed-body">
+                        <strong>Şifre talepleri</strong>
+                        <span>@securityText</span>
+                    </div>
+                    <div class="premium-feed-tag">@passwordRequestCount</div>
+                </div>
+
+                <div class="premium-feed-item" style="--feed-accent: rgba(16,185,129,.10); --feed-icon-bg: #dcfce7; --feed-icon-color: #047857;">
+                    <div class="premium-feed-icon">📥</div>
+                    <div class="premium-feed-body">
+                        <strong>Teslim hareketi</strong>
+                        <span>Öğretmenlerin değerlendireceği son teslimler.</span>
+                    </div>
+                    <div class="premium-feed-tag">@submissionCount</div>
+                </div>
+            </div>
+
+            <div class="quick-actions premium-section-spacer">
                 <a asp-controller="Users" asp-action="Create">
                     <span>👥</span>
                     Yeni Kullanıcı
