@@ -28,26 +28,26 @@
         </div>
 
         <div class="page-actions lesson-actions">
-            <form asp-controller="Lessons" asp-action="Cleanup" method="post" class="inline-form">
+            <form asp-controller="Lessons" asp-action="Cleanup" method="post" class="inline-form js-cleanup-form">
                 @Html.AntiForgeryToken()
                 <button type="submit" class="btn-secondary">
-                    🧹 Temizle
+                    Temizle
                 </button>
             </form>
 
             <a asp-controller="Lessons" asp-action="Create" class="btn-primary">
-                📚 Yeni Ders Ataması
+                Yeni Ders Ataması
             </a>
         </div>
     </section>
 
     <section class="lesson-info-card">
-        <div class="lesson-info-icon">🧹</div>
+        <div class="lesson-info-icon">!</div>
         <div>
-            <strong>Aktif bağlantı sistemi açık</strong>
+            <strong>Manuel bakım modu</strong>
             <span>
-                Silinmiş öğretmen, silinmiş sınıf veya kopmuş bağlantıya sahip dersler otomatik pasife alınır.
-                Böylece eski 9-A, silinmiş öğretmen veya artık olmayan dersler aktif listede kalmaz.
+                Silinmiş öğretmen, silinmiş sınıf veya kopmuş bağlantıya sahip dersler otomatik pasife alınmaz.
+                Bu bakım yalnızca admin bu ekrandaki Temizle butonunu onayladığında çalışır.
             </span>
         </div>
     </section>
@@ -147,7 +147,7 @@
 
                     <div class="card-actions">
                         <a asp-controller="Lessons" asp-action="Edit" asp-route-id="@item.Id" class="btn-secondary">
-                            ✏️ Düzenle
+                            Düzenle
                         </a>
 
                         <form asp-controller="Lessons"
@@ -157,7 +157,7 @@
                               data-delete-name="@lessonName">
                             @Html.AntiForgeryToken()
                             <input type="hidden" name="id" value="@item.Id" />
-                            <button type="submit" class="btn-danger">🗑️ Sil</button>
+                            <button type="submit" class="btn-danger">Sil</button>
                         </form>
                     </div>
                 </article>
@@ -347,6 +347,16 @@
 </style>
 
 <script>
+    document.querySelectorAll('.js-cleanup-form').forEach(function (form) {
+        form.addEventListener('submit', function (event) {
+            const ok = confirm('Kopmuş ders bağlantıları ve bağlı aktif ödevler pasife alınacak. Devam edilsin mi?');
+
+            if (!ok) {
+                event.preventDefault();
+            }
+        });
+    });
+
     document.querySelectorAll('.js-delete-form').forEach(function (form) {
         form.addEventListener('submit', function (event) {
             const name = form.getAttribute('data-delete-name') || 'bu ders';
