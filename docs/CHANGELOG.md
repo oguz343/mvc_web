@@ -7,3 +7,4 @@
 - FAZ 5: Teslim durumları web ve mobilde `Teslim Edildi`, değerlendirme sonrası `Değerlendirildi` olacak şekilde tekilleştirildi; dashboard sayımları status veya not/geri dönüş bilgisiyle tutarlı kaldı.
 - FAZ 6: Öğretmen ödev düzenleme/silme/değerlendirme işlemleri sahiplik guard'larıyla doğrulandı; teslim değerlendirmede koleksiyon whitelist'i ve sahipsiz ödev reddi netleştirildi.
 - FAZ 7: Flutter dashboard/ödev/teslim/veli/admin ekranlarında Firestore stream'leri build içinde yeniden üretilmeyecek şekilde `initState` akışına taşındı.
+- FAZ 8: Mobil Firestore erişimi için Firebase Auth/rules riski ve production güvenlik planı `flutter_mobile/docs/SECURITY.md` altında dokümante edildi.
