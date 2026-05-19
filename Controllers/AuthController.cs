@@ -82,10 +82,10 @@ public class AuthController : Controller
         password = password?.Trim() ?? "";
         repeatPassword = repeatPassword?.Trim() ?? "";
 
-        if (password.Length < 4)
+        if (password.Length < 8)
         {
             KeepSetPasswordState(userId, name, role, number);
-            ModelState.AddModelError("", "Şifre en az 4 karakter olmalıdır.");
+            ModelState.AddModelError("", "Şifre en az 8 karakter olmalıdır.");
             return View();
         }
 

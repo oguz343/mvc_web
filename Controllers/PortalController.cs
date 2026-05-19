@@ -154,16 +154,40 @@ namespace mvc_web.Controllers
 
             if (file != null && file.Length > 0)
             {
-                var allowedExtensions = new[]
+                const long maxUploadBytes = 10 * 1024 * 1024;
+
+                if (file.Length > maxUploadBytes)
                 {
-                    ".pdf", ".doc", ".docx", ".jpg", ".jpeg", ".png", ".txt", ".zip"
+                    TempData["Error"] = "Dosya boyutu en fazla 10 MB olabilir.";
+                    return RedirectToAction(nameof(Index));
+                }
+
+                var allowedContentTypes = new Dictionary<string, string[]>
+                {
+                    [".pdf"] = new[] { "application/pdf" },
+                    [".doc"] = new[] { "application/msword", "application/octet-stream" },
+                    [".docx"] = new[] { "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/octet-stream" },
+                    [".jpg"] = new[] { "image/jpeg" },
+                    [".jpeg"] = new[] { "image/jpeg" },
+                    [".png"] = new[] { "image/png" },
+                    [".txt"] = new[] { "text/plain", "application/octet-stream" },
+                    [".zip"] = new[] { "application/zip", "application/x-zip-compressed", "application/octet-stream" }
                 };
 
                 var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
 
-                if (!allowedExtensions.Contains(extension))
+                if (!allowedContentTypes.ContainsKey(extension))
                 {
                     TempData["Error"] = "Dosya türü desteklenmiyor. PDF, Word, görsel, TXT veya ZIP yükleyin.";
+                    return RedirectToAction(nameof(Index));
+                }
+
+                var contentType = (file.ContentType ?? "").Trim().ToLowerInvariant();
+
+                if (!string.IsNullOrWhiteSpace(contentType) &&
+                    !allowedContentTypes[extension].Contains(contentType))
+                {
+                    TempData["Error"] = "Dosya içeriği seçilen uzantıyla uyumlu değil.";
                     return RedirectToAction(nameof(Index));
                 }
 

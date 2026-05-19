@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using mvc_web.Models;
 using mvc_web.Services; 
 using mvc_web.Filters;
+using System.Security.Cryptography;
 
 namespace mvc_web.Controllers
 {
@@ -533,7 +534,7 @@ namespace mvc_web.Controllers
 
         private static string GenerateActivationCode()
         {
-            return Random.Shared.Next(100000, 999999).ToString();
+            return RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
         }
 
         private static string FirstNonEmpty(params string[] values)

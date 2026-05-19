@@ -47,9 +47,9 @@ namespace mvc_web.Controllers
                 ModelState.AddModelError(nameof(model.NewPassword), "Yeni şifre boş bırakılamaz.");
             }
 
-            if (model.NewPassword.Length < 6)
+            if (model.NewPassword.Length < 8)
             {
-                ModelState.AddModelError(nameof(model.NewPassword), "Yeni şifre en az 6 karakter olmalıdır.");
+                ModelState.AddModelError(nameof(model.NewPassword), "Yeni şifre en az 8 karakter olmalıdır.");
             }
 
             if (model.NewPassword != model.RepeatPassword)

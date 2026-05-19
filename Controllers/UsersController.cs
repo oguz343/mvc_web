@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using mvc_web.Filters;
 using mvc_web.Models;
 using mvc_web.Services;
+using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 
 namespace mvc_web.Controllers;
@@ -718,12 +719,11 @@ public class UsersController : Controller
     private static string GenerateActivationCode()
     {
         const string chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-        var random = new Random();
 
         return new string(
             Enumerable
                 .Repeat(chars, 6)
-                .Select(s => s[random.Next(s.Length)])
+                .Select(s => s[RandomNumberGenerator.GetInt32(s.Length)])
                 .ToArray()
         );
     }
