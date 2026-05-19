@@ -8,3 +8,4 @@
 - FAZ 6: Öğretmen ödev düzenleme/silme/değerlendirme işlemleri sahiplik guard'larıyla doğrulandı; teslim değerlendirmede koleksiyon whitelist'i ve sahipsiz ödev reddi netleştirildi.
 - FAZ 7: Flutter dashboard/ödev/teslim/veli/admin ekranlarında Firestore stream'leri build içinde yeniden üretilmeyecek şekilde `initState` akışına taşındı.
 - FAZ 8: Mobil Firestore erişimi için Firebase Auth/rules riski ve production güvenlik planı `flutter_mobile/docs/SECURITY.md` altında dokümante edildi.
+- FAZ 9: Kullanılmayan web `CreatePassword` artifact'ları kaldırıldı; mobil route guard, proje README'si ve mobil/web parite notları eklendi.
