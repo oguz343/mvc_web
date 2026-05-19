@@ -39,22 +39,22 @@ namespace mvc_web.Controllers
 
             if (string.IsNullOrWhiteSpace(model.CurrentPassword))
             {
-                ModelState.AddModelError(nameof(model.CurrentPassword), "Mevcut sifre bos birakilamaz.");
+                ModelState.AddModelError(nameof(model.CurrentPassword), "Mevcut şifre boş bırakılamaz.");
             }
 
             if (string.IsNullOrWhiteSpace(model.NewPassword))
             {
-                ModelState.AddModelError(nameof(model.NewPassword), "Yeni sifre bos birakilamaz.");
+                ModelState.AddModelError(nameof(model.NewPassword), "Yeni şifre boş bırakılamaz.");
             }
 
             if (model.NewPassword.Length < 6)
             {
-                ModelState.AddModelError(nameof(model.NewPassword), "Yeni sifre en az 6 karakter olmalidir.");
+                ModelState.AddModelError(nameof(model.NewPassword), "Yeni şifre en az 6 karakter olmalıdır.");
             }
 
             if (model.NewPassword != model.RepeatPassword)
             {
-                ModelState.AddModelError(nameof(model.RepeatPassword), "Yeni sifreler eslesmiyor.");
+                ModelState.AddModelError(nameof(model.RepeatPassword), "Yeni şifreler eşleşmiyor.");
             }
 
             var adminDoc = await FindAdminUserAsync();
@@ -65,7 +65,7 @@ namespace mvc_web.Controllers
             }
             else if (!await VerifyCurrentPasswordAsync(adminDoc, model.CurrentPassword))
             {
-                ModelState.AddModelError(nameof(model.CurrentPassword), "Mevcut sifre hatali.");
+                ModelState.AddModelError(nameof(model.CurrentPassword), "Mevcut şifre hatalı.");
             }
 
             if (!ModelState.IsValid)
@@ -105,7 +105,7 @@ namespace mvc_web.Controllers
                     SetOptions.MergeAll
                 );
 
-            TempData["Success"] = "Admin sifresi basariyla guncellendi.";
+            TempData["Success"] = "Admin şifresi başarıyla güncellendi.";
             return RedirectToAction(nameof(ChangePassword));
         }
 

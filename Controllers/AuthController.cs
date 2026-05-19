@@ -42,7 +42,7 @@ public class AuthController : Controller
 
         if (string.IsNullOrWhiteSpace(userId))
         {
-            TempData["Error"] = "Yeni sifre olusturmak icin once aktivasyon kodu ile giris yapmalisiniz.";
+            TempData["Error"] = "Yeni şifre oluşturmak için önce aktivasyon kodu ile giriş yapmalısınız.";
             return RedirectToAction(nameof(Login));
         }
 
@@ -61,7 +61,7 @@ public class AuthController : Controller
 
         if (string.IsNullOrWhiteSpace(userId))
         {
-            TempData["Error"] = "Yeni sifre olusturmak icin once aktivasyon kodu ile giris yapmalisiniz.";
+            TempData["Error"] = "Yeni şifre oluşturmak için önce aktivasyon kodu ile giriş yapmalısınız.";
             return RedirectToAction(nameof(Login));
         }
 
@@ -71,14 +71,14 @@ public class AuthController : Controller
         if (password.Length < 4)
         {
             KeepSetPasswordState(userId, name, role, number);
-            ModelState.AddModelError("", "Sifre en az 4 karakter olmalidir.");
+            ModelState.AddModelError("", "Şifre en az 4 karakter olmalıdır.");
             return View();
         }
 
         if (password != repeatPassword)
         {
             KeepSetPasswordState(userId, name, role, number);
-            ModelState.AddModelError("", "Sifreler eslesmiyor.");
+            ModelState.AddModelError("", "Şifreler eşleşmiyor.");
             return View();
         }
 

@@ -5,61 +5,151 @@
     ViewData["Title"] = "Duyuru Ekle";
 }
 
-<div class="form-card">
-    @if (!ViewData.ModelState.IsValid)
-    {
-        <div class="alert alert-danger">
-            @foreach (var error in ViewData.ModelState.Values.SelectMany(v => v.Errors))
-            {
-                <div>@error.ErrorMessage</div>
-            }
+<div class="announcement-create-page">
+    <section class="announcement-create-hero">
+        <div class="announce-icon">D</div>
+        <div>
+            <p>Admin Duyuru Merkezi</p>
+            <h2>Yeni duyuru oluştur</h2>
+            <span>Hedef kitleyi seçin, mesajınızı yazın ve panellere temiz bir duyuru olarak yayınlayın.</span>
         </div>
+    </section>
+
+    <div class="form-card announcement-create-card">
+        @if (!ViewData.ModelState.IsValid)
+        {
+            <div class="alert alert-danger">
+                @foreach (var error in ViewData.ModelState.Values.SelectMany(v => v.Errors))
+                {
+                    <div>@error.ErrorMessage</div>
+                }
+            </div>
+        }
+
+        <form asp-controller="Announcements" asp-action="Create" method="post">
+            @Html.AntiForgeryToken()
+
+            <div class="form-grid">
+                <div class="form-group full">
+                    <label class="form-label" asp-for="Title">Başlık</label>
+                    <input class="form-control" asp-for="Title" placeholder="Duyuru başlığı" />
+                    <span asp-validation-for="Title" class="text-danger"></span>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" asp-for="Author">Yayınlayan</label>
+                    <input class="form-control" asp-for="Author" placeholder="Admin" />
+                    <span asp-validation-for="Author" class="text-danger"></span>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" asp-for="Target">Hedef Kitle</label>
+                    <select class="form-control" asp-for="Target">
+                        <option value="Tüm Okul">Tüm Okul</option>
+                        <option value="Öğrenciler">Öğrenciler</option>
+                        <option value="Öğretmenler">Öğretmenler</option>
+                        <option value="Veliler">Veliler</option>
+                    </select>
+                    <span asp-validation-for="Target" class="text-danger"></span>
+                </div>
+
+                <div class="form-group full">
+                    <label class="form-label" asp-for="Content">Duyuru İçeriği</label>
+                    <textarea class="form-control" asp-for="Content" placeholder="Duyuru metnini yaz"></textarea>
+                    <span asp-validation-for="Content" class="text-danger"></span>
+                </div>
+            </div>
+
+            <div style="height: 22px;"></div>
+
+            <div class="page-actions">
+                <button class="btn btn-primary" type="submit">
+                    Duyuruyu Yayınla
+                </button>
+
+                <a class="btn btn-light" asp-controller="Announcements" asp-action="Index">
+                    Geri Dön
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+    .announcement-create-page {
+        display: grid;
+        gap: 18px;
     }
 
-    <form asp-controller="Announcements" asp-action="Create" method="post">
-        @Html.AntiForgeryToken()
+    .announcement-create-hero {
+        border-radius: 28px;
+        padding: 24px;
+        background: linear-gradient(135deg, #0f172a, #4f46e5 58%, #06b6d4);
+        color: #fff;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        box-shadow: 0 24px 56px rgba(15, 23, 42, .18);
+    }
 
-        <div class="form-grid">
-            <div class="form-group full">
-                <label class="form-label" asp-for="Title">Başlık</label>
-                <input class="form-control" asp-for="Title" placeholder="Duyuru başlığı" />
-                <span asp-validation-for="Title" class="text-danger"></span>
-            </div>
+    .announce-icon {
+        width: 62px;
+        height: 62px;
+        border-radius: 22px;
+        background: rgba(255,255,255,.18);
+        border: 1px solid rgba(255,255,255,.24);
+        display: grid;
+        place-items: center;
+        font-weight: 950;
+        font-size: 25px;
+    }
 
-            <div class="form-group">
-                <label class="form-label" asp-for="Author">Yayınlayan</label>
-                <input class="form-control" asp-for="Author" placeholder="Admin" />
-                <span asp-validation-for="Author" class="text-danger"></span>
-            </div>
+    .announcement-create-hero p,
+    .announcement-create-hero h2,
+    .announcement-create-hero span {
+        margin: 0;
+    }
 
-            <div class="form-group">
-                <label class="form-label" asp-for="Target">Hedef Kitle</label>
-                <select class="form-control" asp-for="Target">
-                    <option value="Tüm Okul">Tüm Okul</option>
-                    <option value="Öğrenciler">Öğrenciler</option>
-                    <option value="Öğretmenler">Öğretmenler</option>
-                    <option value="Veliler">Veliler</option>
-                </select>
-                <span asp-validation-for="Target" class="text-danger"></span>
-            </div>
+    .announcement-create-hero p {
+        opacity: .74;
+        font-weight: 900;
+        margin-bottom: 5px;
+    }
 
-            <div class="form-group full">
-                <label class="form-label" asp-for="Content">Duyuru İçeriği</label>
-                <textarea class="form-control" asp-for="Content" placeholder="Duyuru metnini yaz"></textarea>
-                <span asp-validation-for="Content" class="text-danger"></span>
-            </div>
-        </div>
+    .announcement-create-hero h2 {
+        font-size: 31px;
+        font-weight: 950;
+        letter-spacing: 0;
+    }
 
-        <div style="height: 22px;"></div>
+    .announcement-create-hero span {
+        display: block;
+        margin-top: 7px;
+        opacity: .82;
+        font-weight: 750;
+    }
 
-        <div class="page-actions">
-            <button class="btn btn-primary" type="submit">
-                📢 Duyuruyu Yayınla
-            </button>
+    .announcement-create-card {
+        border-radius: 28px;
+        padding: 24px;
+    }
 
-            <a class="btn btn-light" asp-controller="Announcements" asp-action="Index">
-                ← Geri Dön
-            </a>
-        </div>
-    </form>
-</div>
+    .announcement-create-card textarea {
+        min-height: 190px;
+        resize: vertical;
+        line-height: 1.55;
+    }
+
+    .announcement-create-card .form-control {
+        border-radius: 18px;
+        min-height: 50px;
+        font-weight: 800;
+        background: #f8fafc;
+    }
+
+    .announcement-create-card .form-control:focus {
+        background: #fff;
+        border-color: #4f46e5;
+        box-shadow: 0 0 0 4px rgba(79, 70, 229, .10);
+    }
+</style>
