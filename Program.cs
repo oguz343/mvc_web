@@ -59,6 +59,7 @@ builder.Services.AddSingleton(provider =>
 
 builder.Services.AddScoped<FirestoreService>();
 builder.Services.AddScoped<SessionService>();
+builder.Services.AddScoped<AuthLoginService>();
 
 var app = builder.Build();
 

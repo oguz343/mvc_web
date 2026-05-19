@@ -9,11 +9,16 @@ public class AuthController : Controller
 {
     private readonly FirestoreDb _firestore;
     private readonly IWebHostEnvironment _environment;
+    private readonly AuthLoginService _authLoginService;
 
-    public AuthController(FirestoreDb firestore, IWebHostEnvironment environment)
+    public AuthController(
+        FirestoreDb firestore,
+        IWebHostEnvironment environment,
+        AuthLoginService authLoginService)
     {
         _firestore = firestore;
         _environment = environment;
+        _authLoginService = authLoginService;
     }
 
     [HttpGet]
@@ -180,153 +185,66 @@ public class AuthController : Controller
             return View();
         }
 
-        var wantedRoleKey = NormalizeRole(Role);
-        var user = await FindUserAsync(wantedRoleKey, Number);
+        var login = await _authLoginService.ValidateAsync(Role, Number, Password);
 
-        if (user == null)
+        if (!login.IsSuccess && login.Failure == AuthLoginFailure.UserNotFound)
         {
             TempData["Error"] = "Kullanıcı bulunamadı veya rol hatalı.";
             await FillLoginStatsAsync();
             return View();
         }
 
-        var data = user.ToDictionary();
-
-        if (IsDeleted(data))
+        if (!login.IsSuccess && login.Failure == AuthLoginFailure.Deleted)
         {
             TempData["Error"] = "Bu kullanıcı pasif veya silinmiş.";
             await FillLoginStatsAsync();
             return View();
         }
 
-        var passwordHash = GetString(data, "passwordHash", "PasswordHash", "hash", "Hash");
-        var legacyPassword = GetString(data, "password", "Password");
-        var activationCode = GetString(data, "activationCode", "ActivationCode");
-        var mustChangePassword = GetBool(data, "mustChangePassword", "MustChangePassword", "forcePasswordChange", "ForcePasswordChange");
-
-        var passwordOk = false;
-        var shouldMigrateToHash = false;
-
-        if (mustChangePassword && PasswordHashService.IsHash(passwordHash))
+        if (!login.IsSuccess && login.Failure == AuthLoginFailure.SystemAdminNotConfigured)
         {
-            passwordOk = PasswordHashService.VerifyPassword(Password, passwordHash);
-        }
-        else if (mustChangePassword && !string.IsNullOrWhiteSpace(activationCode))
-        {
-            passwordOk = activationCode == Password;
-        }
-        else if (PasswordHashService.IsHash(passwordHash))
-        {
-            passwordOk = PasswordHashService.VerifyPassword(Password, passwordHash);
-        }
-        else if (!string.IsNullOrWhiteSpace(legacyPassword))
-        {
-            passwordOk = legacyPassword == Password;
-
-            if (passwordOk)
-            {
-                shouldMigrateToHash = true;
-            }
+            TempData["Error"] = "Admin hesabı production ortamında yapılandırılmamış. Lütfen system/admin_account kaydını güvenli bir şifreyle oluşturun.";
+            await FillLoginStatsAsync();
+            return View();
         }
 
-        if (!passwordOk && wantedRoleKey == "admin" && Number == "0000")
-        {
-            var systemAdminConfigured = await SystemAdminAccountHasPasswordAsync();
-            passwordOk = await VerifySystemAdminPasswordAsync(Password);
-            shouldMigrateToHash = passwordOk;
-
-            if (!passwordOk && !IsDevelopment() && !systemAdminConfigured)
-            {
-                TempData["Error"] = "Admin hesabı production ortamında yapılandırılmamış. Lütfen system/admin_account kaydını güvenli bir şifreyle oluşturun.";
-                await FillLoginStatsAsync();
-                return View();
-            }
-        }
-
-        if (!passwordOk)
+        if (!login.IsSuccess)
         {
             TempData["Error"] = "Numara, rol veya şifre hatalı.";
             await FillLoginStatsAsync();
             return View();
         }
 
-        var cleanRole = NormalizeRoleToDisplay(wantedRoleKey);
-
-        var cleanName = FirstNonEmpty(
-            GetString(data, "name", "Name"),
-            GetString(data, "fullName", "FullName"),
-            GetString(data, "userName", "UserName"),
-            cleanRole
-        );
-
-        var cleanBranch = FirstNonEmpty(
-            GetString(data, "branch", "Branch"),
-            GetString(data, "teacherBranch", "TeacherBranch")
-        );
-
-        var cleanClass = FirstNonEmpty(
-            GetString(data, "className", "ClassName"),
-            GetString(data, "class", "Class"),
-            GetString(data, "studentClass", "StudentClass")
-        );
-
-        var cleanNumber = OnlyDigits(FirstNonEmpty(
-            GetString(data, "number", "Number"),
-            GetString(data, "schoolNo", "SchoolNo"),
-            GetString(data, "studentNo", "StudentNo"),
-            GetString(data, "teacherNo", "TeacherNo"),
-            Number
-        ));
-
-        if (shouldMigrateToHash)
-        {
-            var newHash = PasswordHashService.HashPassword(Password);
-
-            await user.Reference.SetAsync(
-                new Dictionary<string, object?>
-                {
-                    ["passwordHash"] = newHash,
-                    ["PasswordHash"] = newHash,
-
-                    ["password"] = "",
-                    ["Password"] = "",
-
-                    ["updatedAt"] = Timestamp.FromDateTime(DateTime.UtcNow),
-                    ["UpdatedAt"] = Timestamp.FromDateTime(DateTime.UtcNow),
-                },
-                SetOptions.MergeAll
-            );
-        }
-
-        if (mustChangePassword)
+        if (login.MustChangePassword)
         {
             HttpContext.Session.Clear();
-            KeepSetPasswordState(user.Id, cleanName, cleanRole, cleanNumber);
+            KeepSetPasswordState(login.UserId, login.Name, login.Role, login.Number);
             return RedirectToAction(nameof(SetPassword));
         }
 
         HttpContext.Session.Clear();
-        HttpContext.Session.SetString("UserId", user.Id);
-        HttpContext.Session.SetString("UserDocId", user.Id);
+        HttpContext.Session.SetString("UserId", login.UserId);
+        HttpContext.Session.SetString("UserDocId", login.UserId);
 
-        HttpContext.Session.SetString("UserRole", cleanRole);
-        HttpContext.Session.SetString("Role", cleanRole);
+        HttpContext.Session.SetString("UserRole", login.Role);
+        HttpContext.Session.SetString("Role", login.Role);
 
-        HttpContext.Session.SetString("UserNumber", cleanNumber);
-        HttpContext.Session.SetString("Number", cleanNumber);
-        HttpContext.Session.SetString("SchoolNo", cleanNumber);
-        HttpContext.Session.SetString("LoginNumber", cleanNumber);
+        HttpContext.Session.SetString("UserNumber", login.Number);
+        HttpContext.Session.SetString("Number", login.Number);
+        HttpContext.Session.SetString("SchoolNo", login.Number);
+        HttpContext.Session.SetString("LoginNumber", login.Number);
 
-        HttpContext.Session.SetString("UserName", cleanName);
-        HttpContext.Session.SetString("Name", cleanName);
+        HttpContext.Session.SetString("UserName", login.Name);
+        HttpContext.Session.SetString("Name", login.Name);
 
-        HttpContext.Session.SetString("UserBranch", cleanBranch);
-        HttpContext.Session.SetString("Branch", cleanBranch);
+        HttpContext.Session.SetString("UserBranch", login.Branch);
+        HttpContext.Session.SetString("Branch", login.Branch);
 
-        HttpContext.Session.SetString("UserClass", cleanClass);
-        HttpContext.Session.SetString("ClassName", cleanClass);
+        HttpContext.Session.SetString("UserClass", login.ClassName);
+        HttpContext.Session.SetString("ClassName", login.ClassName);
 
-        return RedirectByRole(cleanRole);
+        return RedirectByRole(login.Role);
+
     }
 
     private IActionResult RedirectByRole(string role)
@@ -1051,7 +969,13 @@ public class AuthController : Controller
             .Replace("ü", "u")
             .Replace("ş", "s")
             .Replace("ö", "o")
-            .Replace("ç", "c");
+            .Replace("ç", "c")
+            .Replace("Ä±", "i")
+            .Replace("ÄŸ", "g")
+            .Replace("Ã¼", "u")
+            .Replace("ÅŸ", "s")
+            .Replace("Ã¶", "o")
+            .Replace("Ã§", "c");
 
         return new string(value.Where(char.IsLetterOrDigit).ToArray());
     }
