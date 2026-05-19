@@ -92,14 +92,20 @@ namespace mvc_web.Controllers
             }
 
             var activationCode = GenerateActivationCode();
+            var activationHash = PasswordHashService.HashPassword(activationCode);
             var now = Timestamp.GetCurrentTimestamp();
 
             await userDoc.Reference.SetAsync(
                 new Dictionary<string, object>
                 {
-                    { "activationCode", activationCode },
+                    { "activationCode", "" },
+                    { "ActivationCode", "" },
+                    { "passwordHash", activationHash },
+                    { "PasswordHash", activationHash },
                     { "mustChangePassword", true },
+                    { "MustChangePassword", true },
                     { "password", "" },
+                    { "Password", "" },
                     { "updatedAt", now },
                     { "passwordResetAt", now }
                 },
@@ -109,7 +115,8 @@ namespace mvc_web.Controllers
             var requestUpdate = new Dictionary<string, object>
             {
                 { "status", "Onaylandı" },
-                { "activationCode", activationCode },
+                { "passwordDeliveredInUi", true },
+                { "PasswordDeliveredInUi", true },
                 { "approvedAt", now },
                 { "updatedAt", now },
                 { "isActive", false }

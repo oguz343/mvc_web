@@ -207,7 +207,11 @@ public class AuthController : Controller
         var passwordOk = false;
         var shouldMigrateToHash = false;
 
-        if (mustChangePassword && !string.IsNullOrWhiteSpace(activationCode))
+        if (mustChangePassword && PasswordHashService.IsHash(passwordHash))
+        {
+            passwordOk = PasswordHashService.VerifyPassword(Password, passwordHash);
+        }
+        else if (mustChangePassword && !string.IsNullOrWhiteSpace(activationCode))
         {
             passwordOk = activationCode == Password;
         }
@@ -368,8 +372,11 @@ public class AuthController : Controller
         var data = userDoc.ToDictionary();
         var mustChangePassword = GetBool(data, "mustChangePassword", "MustChangePassword", "forcePasswordChange", "ForcePasswordChange");
         var activationCode = GetString(data, "activationCode", "ActivationCode");
+        var passwordHash = GetString(data, "passwordHash", "PasswordHash", "hash", "Hash");
 
-        return mustChangePassword && !string.IsNullOrWhiteSpace(activationCode);
+        return mustChangePassword &&
+            (!string.IsNullOrWhiteSpace(activationCode) ||
+             PasswordHashService.IsHash(passwordHash));
     }
 
     private async Task FillLoginStatsAsync()

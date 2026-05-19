@@ -136,8 +136,8 @@ public class UsersController : Controller
             { "teacherBranch", model.Role == "Öğretmen" ? model.Branch : "" },
             { "TeacherBranch", model.Role == "Öğretmen" ? model.Branch : "" },
 
-            { "activationCode", activationCode },
-            { "ActivationCode", activationCode },
+            { "activationCode", "" },
+            { "ActivationCode", "" },
 
             { "mustChangePassword", true },
             { "MustChangePassword", true },
@@ -513,8 +513,8 @@ public class UsersController : Controller
                     { "userRole", role },
                     { "UserRole", role },
 
-                    { "activationCode", activationCode },
-                    { "ActivationCode", activationCode },
+                    { "activationCode", "" },
+                    { "ActivationCode", "" },
 
                     { "mustChangePassword", true },
                     { "MustChangePassword", true },

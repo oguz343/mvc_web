@@ -1,5 +1,6 @@
 # Changelog
 
+- P1 security: Web-created activation and password reset codes are now stored as hashes while legacy plaintext activation fallback remains.
 - P5 maintenance: Documented a behavior-preserving `TeacherController` split plan and extraction guardrails.
 - P2 performance: Auth, forgot-password, and password request user lookups now try role/number Firestore queries before legacy full `users` scans.
 
