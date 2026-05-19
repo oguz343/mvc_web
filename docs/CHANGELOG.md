@@ -5,3 +5,4 @@
 - FAZ 3: `admin123` fallback sadece geliştirme/debug ortamında kalacak şekilde doğrulandı; production/release için eksik `system/admin_account` yapılandırmasında açık hata mesajı eklendi.
 - FAZ 4: Admin policy `role=admin` ve `number=0000` olarak tekilleştirildi; admin route guard kullanımı sadeleştirildi ve 0000 dışı admin hesabının desteklenmediği dokümante edildi.
 - FAZ 5: Teslim durumları web ve mobilde `Teslim Edildi`, değerlendirme sonrası `Değerlendirildi` olacak şekilde tekilleştirildi; dashboard sayımları status veya not/geri dönüş bilgisiyle tutarlı kaldı.
+- FAZ 6: Öğretmen ödev düzenleme/silme/değerlendirme işlemleri sahiplik guard'larıyla doğrulandı; teslim değerlendirmede koleksiyon whitelist'i ve sahipsiz ödev reddi netleştirildi.

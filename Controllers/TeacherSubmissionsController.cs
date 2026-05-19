@@ -39,26 +39,39 @@ namespace mvc_web.Controllers
             var submissions = new List<TeacherSubmissionViewModel>();
 
             submissions.AddRange(await LoadSubmissionsFromCollection(
-                submissionCollection: "homework_submissions",
-                teacherId: teacherId,
-                teacherName: teacherName,
-                teacherNo: teacherNo
-            ));
-
-            submissions.AddRange(await LoadSubmissionsFromCollection(
                 submissionCollection: "submissions",
                 teacherId: teacherId,
                 teacherName: teacherName,
                 teacherNo: teacherNo
             ));
 
+            submissions.AddRange(await LoadSubmissionsFromCollection(
+                submissionCollection: "homework_submissions",
+                teacherId: teacherId,
+                teacherName: teacherName,
+                teacherNo: teacherNo
+            ));
+
             submissions = submissions
-                .GroupBy(x => $"{x.SubmissionCollection}_{x.Id}")
+                .GroupBy(x => SubmissionGroupKey(x))
                 .Select(x => x.First())
                 .OrderByDescending(x => x.SubmittedAt ?? DateTime.MinValue)
                 .ToList();
 
             return View(submissions);
+        }
+
+        private static string SubmissionGroupKey(TeacherSubmissionViewModel item)
+        {
+            var homeworkKey = NormalizeText(item.HomeworkId);
+            var studentKey = OnlyDigits(item.StudentNo);
+
+            if (!string.IsNullOrWhiteSpace(homeworkKey) && !string.IsNullOrWhiteSpace(studentKey))
+            {
+                return $"{homeworkKey}_{studentKey}";
+            }
+
+            return NormalizeText($"{item.SubmissionCollection}_{item.Id}");
         }
 
         [HttpPost("Evaluate")]
@@ -85,6 +98,12 @@ namespace mvc_web.Controllers
                 ? "homework_submissions"
                 : submissionCollection.Trim();
 
+            if (submissionCollection != "submissions" && submissionCollection != "homework_submissions")
+            {
+                TempData["Error"] = "Teslim bulunamadı.";
+                return RedirectToAction(nameof(Index));
+            }
+
             grade = CleanText(grade);
             feedback = CleanText(feedback);
 
@@ -94,11 +113,46 @@ namespace mvc_web.Controllers
                 return RedirectToAction(nameof(Index));
             }
 
+            var teacherId = _session.GetUserId(HttpContext) ?? "";
+            var teacherName = _session.GetName(HttpContext) ?? "";
+            var teacherNo = _session.GetNumber(HttpContext) ?? "";
+            var submissionDoc = await _firestore
+                .Collection(submissionCollection)
+                .Document(submissionId.Trim())
+                .GetSnapshotAsync();
+
+            if (!submissionDoc.Exists)
+            {
+                TempData["Error"] = "Teslim bulunamadı.";
+                return RedirectToAction(nameof(Index));
+            }
+
+            var submissionData = submissionDoc.ToDictionary();
+            var homeworkId = FirstNonEmpty(
+                GetString(submissionData, "homeworkId", "HomeworkId"),
+                GetString(submissionData, "assignmentId", "AssignmentId")
+            );
+
+            var homeworkCollection = FirstNonEmpty(
+                GetString(submissionData, "homeworkCollection", "HomeworkCollection"),
+                GetString(submissionData, "assignmentCollection", "AssignmentCollection"),
+                "homeworks"
+            );
+
+            var homeworkDoc = await FindHomeworkDoc(homeworkCollection, homeworkId);
+
+            if (homeworkDoc == null ||
+                !HomeworkBelongsToTeacher(homeworkDoc.ToDictionary(), teacherId, teacherName, teacherNo))
+            {
+                TempData["Error"] = "Bu teslim size ait bir ödeve bağlı değil.";
+                return RedirectToAction(nameof(Index));
+            }
+
             var now = Timestamp.GetCurrentTimestamp();
 
             await _firestore
                 .Collection(submissionCollection)
-                .Document(submissionId)
+                .Document(submissionId.Trim())
                 .SetAsync(
                     new Dictionary<string, object>
                     {
@@ -324,7 +378,7 @@ namespace mvc_web.Controllers
 
             if (!hasAnyTeacherInfo)
             {
-                return true;
+                return false;
             }
 
             if (!string.IsNullOrWhiteSpace(homeworkTeacherId) &&

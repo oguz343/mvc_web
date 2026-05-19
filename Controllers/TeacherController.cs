@@ -20,8 +20,6 @@ public class TeacherController : Controller
     [HttpGet]
     public async Task<IActionResult> Index()
     {
-        await _integrity.CleanupOrphanActiveLinksAsync();
-
         var teacherNumber = GetSessionValue(
             "UserNumber",
             "Number",
@@ -76,8 +74,6 @@ public class TeacherController : Controller
     [HttpGet]
     public async Task<IActionResult> Assignments()
     {
-        await _integrity.CleanupOrphanActiveLinksAsync();
-
         var teacherNumber = GetSessionValue(
             "UserNumber",
             "Number",
@@ -123,8 +119,6 @@ public class TeacherController : Controller
     [HttpGet]
     public async Task<IActionResult> CreateAssignment()
     {
-        await _integrity.CleanupOrphanActiveLinksAsync();
-
         var teacherNumber = GetSessionValue(
             "UserNumber",
             "Number",
@@ -170,8 +164,6 @@ public class TeacherController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> CreateAssignment(IFormCollection form)
     {
-        await _integrity.CleanupOrphanActiveLinksAsync();
-
         var teacherNumber = GetSessionValue(
             "UserNumber",
             "Number",
@@ -364,8 +356,6 @@ public class TeacherController : Controller
     [HttpGet]
     public async Task<IActionResult> EditAssignment(string id)
     {
-        await _integrity.CleanupOrphanActiveLinksAsync();
-
         id = (id ?? "").Trim();
 
         if (string.IsNullOrWhiteSpace(id))
@@ -430,8 +420,6 @@ public class TeacherController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> EditAssignment(IFormCollection form)
     {
-        await _integrity.CleanupOrphanActiveLinksAsync();
-
         var id = FirstNonEmpty(form["id"].ToString(), form["Id"].ToString());
         var lessonId = FirstNonEmpty(form["lessonId"].ToString(), form["LessonId"].ToString());
         var title = (form["title"].ToString() ?? "").Trim();
@@ -439,10 +427,36 @@ public class TeacherController : Controller
         var fileType = FirstNonEmpty(form["fileType"].ToString(), form["Type"].ToString());
         var dueDateRaw = FirstNonEmpty(form["dueDate"].ToString(), form["DueDate"].ToString());
         var status = FirstNonEmpty(form["status"].ToString(), form["Status"].ToString(), "Aktif");
+        Dictionary<string, object>? assignment = null;
+        List<Dictionary<string, object>> lessons;
+        string teacherNo;
+        string realTeacherName;
+        string teacherBranch;
+        string teacherId;
 
         if (string.IsNullOrWhiteSpace(id))
         {
             TempData["Error"] = "Ödev bulunamadı.";
+            return RedirectToAction(nameof(Assignments));
+        }
+
+        var teacherProfile = await LoadCurrentTeacherProfile();
+
+        if (teacherProfile.Count == 0)
+        {
+            return RedirectToAction("Login", "Auth");
+        }
+
+        teacherNo = OnlyDigits(GetText(teacherProfile, "Number", "number", "TeacherNo", "teacherNo"));
+        realTeacherName = GetText(teacherProfile, "Name", "name", "TeacherName", "teacherName");
+        teacherBranch = GetText(teacherProfile, "Branch", "branch", "TeacherBranch", "teacherBranch");
+        teacherId = GetText(teacherProfile, "Id", "id", "TeacherId", "teacherId");
+        lessons = await LoadTeacherLessons(teacherNo, realTeacherName, teacherBranch, teacherId);
+        assignment = await LoadOwnedAssignment(id, teacherNo, realTeacherName, teacherId, lessons);
+
+        if (assignment == null)
+        {
+            TempData["Error"] = "Bu ödev aktif değil, silinmiş veya size ait değil.";
             return RedirectToAction(nameof(Assignments));
         }
 
@@ -480,13 +494,18 @@ public class TeacherController : Controller
 
         if (!string.IsNullOrWhiteSpace(lessonId))
         {
-            var lessonDoc = await _firestore.Collection("lessons").Document(lessonId).GetSnapshotAsync();
+            var selectedLesson = lessons.FirstOrDefault(x => GetText(x, "Id", "id") == lessonId);
 
-            if (lessonDoc.Exists)
+            if (selectedLesson == null)
             {
-                var lessonData = lessonDoc.ToDictionary();
-                var lessonName = FirstNonEmpty(GetText(lessonData, "name", "Name"), GetText(lessonData, "lessonName", "LessonName"), "Ders");
-                var className = NormalizeClassName(FirstNonEmpty(GetText(lessonData, "className", "ClassName"), GetText(lessonData, "class", "Class")));
+                TempData["Error"] = "Seçilen ders aktif değil, silinmiş veya size atanmamış.";
+                return RedirectToAction(nameof(EditAssignment), new { id });
+            }
+
+            if (selectedLesson.Count > 0)
+            {
+                var lessonName = FirstNonEmpty(GetText(selectedLesson, "name", "Name"), GetText(selectedLesson, "lessonName", "LessonName"), "Ders");
+                var className = NormalizeClassName(FirstNonEmpty(GetText(selectedLesson, "className", "ClassName"), GetText(selectedLesson, "class", "Class")));
 
                 update["lessonId"] = lessonId;
                 update["LessonId"] = lessonId;
@@ -529,13 +548,31 @@ public class TeacherController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> DeleteAssignment(string id)
     {
-        await _integrity.CleanupOrphanActiveLinksAsync();
-
         id = (id ?? "").Trim();
 
         if (string.IsNullOrWhiteSpace(id))
         {
             TempData["Error"] = "Ödev bulunamadı.";
+            return RedirectToAction(nameof(Assignments));
+        }
+
+        var teacherProfile = await LoadCurrentTeacherProfile();
+
+        if (teacherProfile.Count == 0)
+        {
+            return RedirectToAction("Login", "Auth");
+        }
+
+        var teacherNo = OnlyDigits(GetText(teacherProfile, "Number", "number", "TeacherNo", "teacherNo"));
+        var realTeacherName = GetText(teacherProfile, "Name", "name", "TeacherName", "teacherName");
+        var teacherBranch = GetText(teacherProfile, "Branch", "branch", "TeacherBranch", "teacherBranch");
+        var teacherId = GetText(teacherProfile, "Id", "id", "TeacherId", "teacherId");
+        var lessons = await LoadTeacherLessons(teacherNo, realTeacherName, teacherBranch, teacherId);
+        var assignment = await LoadOwnedAssignment(id, teacherNo, realTeacherName, teacherId, lessons);
+
+        if (assignment == null)
+        {
+            TempData["Error"] = "Bu ödev aktif değil, silinmiş veya size ait değil.";
             return RedirectToAction(nameof(Assignments));
         }
 
@@ -562,8 +599,6 @@ public class TeacherController : Controller
     [HttpGet]
     public async Task<IActionResult> Submissions()
     {
-        await _integrity.CleanupOrphanActiveLinksAsync();
-
         var teacherNumber = GetSessionValue(
             "UserNumber",
             "Number",
@@ -612,8 +647,6 @@ public class TeacherController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> EvaluateSubmission(string submissionId, string score, string feedback)
     {
-        await _integrity.CleanupOrphanActiveLinksAsync();
-
         submissionId = (submissionId ?? "").Trim();
         score = (score ?? "").Trim();
         feedback = (feedback ?? "").Trim();
@@ -621,6 +654,24 @@ public class TeacherController : Controller
         if (string.IsNullOrWhiteSpace(submissionId))
         {
             TempData["Error"] = "Teslim bulunamadı.";
+            return RedirectToAction(nameof(Submissions));
+        }
+
+        var teacherProfile = await LoadCurrentTeacherProfile();
+
+        if (teacherProfile.Count == 0)
+        {
+            return RedirectToAction("Login", "Auth");
+        }
+
+        var teacherNo = OnlyDigits(GetText(teacherProfile, "Number", "number", "TeacherNo", "teacherNo"));
+        var realTeacherName = GetText(teacherProfile, "Name", "name", "TeacherName", "teacherName");
+        var teacherBranch = GetText(teacherProfile, "Branch", "branch", "TeacherBranch", "teacherBranch");
+        var teacherId = GetText(teacherProfile, "Id", "id", "TeacherId", "teacherId");
+        var lessons = await LoadTeacherLessons(teacherNo, realTeacherName, teacherBranch, teacherId);
+        if (!await SubmissionBelongsToTeacher(submissionId, teacherNo, realTeacherName, teacherId, lessons))
+        {
+            TempData["Error"] = "Bu teslim size ait bir ödeve bağlı değil.";
             return RedirectToAction(nameof(Submissions));
         }
 
@@ -666,8 +717,6 @@ public class TeacherController : Controller
     [HttpGet]
     public async Task<IActionResult> Announcements()
     {
-        await _integrity.CleanupOrphanActiveLinksAsync();
-
         var teacherNumber = GetSessionValue(
             "UserNumber",
             "Number",
@@ -704,6 +753,176 @@ public class TeacherController : Controller
         ViewBag.Announcements = announcements;
 
         return View();
+    }
+
+    private async Task<Dictionary<string, object>> LoadCurrentTeacherProfile()
+    {
+        var teacherNumber = GetSessionValue(
+            "UserNumber",
+            "Number",
+            "SchoolNo",
+            "TeacherNo",
+            "LoginNumber",
+            "CurrentUserNumber"
+        );
+
+        var teacherName = GetSessionValue(
+            "UserName",
+            "Name",
+            "TeacherName",
+            "CurrentUserName"
+        );
+
+        return await LoadTeacherProfile(teacherNumber, teacherName);
+    }
+
+    private async Task<Dictionary<string, object>?> LoadOwnedAssignment(
+        string assignmentId,
+        string teacherNumber,
+        string teacherName,
+        string teacherId,
+        List<Dictionary<string, object>> lessons
+    )
+    {
+        foreach (var collection in new[] { "homeworks", "assignments" })
+        {
+            var doc = await _firestore.Collection(collection).Document(assignmentId).GetSnapshotAsync();
+
+            if (!doc.Exists)
+            {
+                continue;
+            }
+
+            var data = doc.ToDictionary();
+            data["Id"] = doc.Id;
+            data["id"] = doc.Id;
+
+            if (AssignmentBelongsToTeacher(data, teacherNumber, teacherName, teacherId, lessons))
+            {
+                return data;
+            }
+        }
+
+        return null;
+    }
+
+    private async Task<bool> SubmissionBelongsToTeacher(
+        string submissionId,
+        string teacherNumber,
+        string teacherName,
+        string teacherId,
+        List<Dictionary<string, object>> lessons
+    )
+    {
+        foreach (var collection in new[] { "submissions", "homework_submissions" })
+        {
+            var doc = await _firestore.Collection(collection).Document(submissionId).GetSnapshotAsync();
+
+            if (!doc.Exists)
+            {
+                continue;
+            }
+
+            var data = doc.ToDictionary();
+            var assignmentId = FirstNonEmpty(
+                GetText(data, "assignmentId", "AssignmentId"),
+                GetText(data, "homeworkId", "HomeworkId")
+            );
+
+            if (string.IsNullOrWhiteSpace(assignmentId))
+            {
+                return false;
+            }
+
+            var assignment = await LoadOwnedAssignment(assignmentId, teacherNumber, teacherName, teacherId, lessons);
+
+            return assignment != null;
+        }
+
+        return false;
+    }
+
+    private static bool AssignmentBelongsToTeacher(
+        Dictionary<string, object> data,
+        string teacherNumber,
+        string teacherName,
+        string teacherId,
+        List<Dictionary<string, object>> lessons
+    )
+    {
+        if (IsDeleted(data))
+        {
+            return false;
+        }
+
+        var lessonId = FirstNonEmpty(
+            GetText(data, "lessonId", "LessonId"),
+            GetText(data, "courseId", "CourseId")
+        );
+
+        var lessonName = FirstNonEmpty(
+            GetText(data, "lessonName", "LessonName"),
+            GetText(data, "lesson", "Lesson"),
+            GetText(data, "courseName", "CourseName")
+        );
+
+        var className = NormalizeClassName(FirstNonEmpty(
+            GetText(data, "className", "ClassName"),
+            GetText(data, "class", "Class"),
+            GetText(data, "targetClass", "TargetClass")
+        ));
+
+        var lessonKeys = lessons
+            .Select(x => NormalizeKey($"{GetText(x, "Name", "name", "LessonName", "lessonName")}_{NormalizeClassName(GetText(x, "ClassName", "className", "Class", "class"))}"))
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .ToHashSet();
+
+        var lessonIds = lessons
+            .Select(x => GetText(x, "Id", "id"))
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .ToHashSet();
+
+        var sameLesson =
+            (!string.IsNullOrWhiteSpace(lessonId) && lessonIds.Contains(lessonId)) ||
+            lessonKeys.Contains(NormalizeKey($"{lessonName}_{className}"));
+
+        var docTeacherId = NormalizeKey(FirstNonEmpty(
+            GetText(data, "teacherId", "TeacherId"),
+            GetText(data, "teacherUid", "TeacherUid"),
+            GetText(data, "userId", "UserId"),
+            GetText(data, "createdById", "CreatedById"),
+            GetText(data, "ownerId", "OwnerId")
+        ));
+
+        var docTeacherNo = OnlyDigits(FirstNonEmpty(
+            GetText(data, "teacherNo", "TeacherNo"),
+            GetText(data, "teacherNumber", "TeacherNumber"),
+            GetText(data, "number", "Number"),
+            GetText(data, "createdByNumber", "CreatedByNumber")
+        ));
+
+        var docTeacherName = NormalizeKey(FirstNonEmpty(
+            GetText(data, "teacherName", "TeacherName"),
+            GetText(data, "teacher", "Teacher"),
+            GetText(data, "createdByName", "CreatedByName")
+        ));
+
+        var hasTeacherIdentity =
+            !string.IsNullOrWhiteSpace(docTeacherId) ||
+            !string.IsNullOrWhiteSpace(docTeacherNo) ||
+            !string.IsNullOrWhiteSpace(docTeacherName);
+
+        if (!hasTeacherIdentity)
+        {
+            return false;
+        }
+
+        var sameTeacher =
+            (!string.IsNullOrWhiteSpace(teacherId) && docTeacherId == NormalizeKey(teacherId)) ||
+            (!string.IsNullOrWhiteSpace(teacherNumber) && docTeacherNo == OnlyDigits(teacherNumber)) ||
+            (!string.IsNullOrWhiteSpace(teacherName) && docTeacherName == NormalizeKey(teacherName));
+
+        return sameTeacher && sameLesson;
     }
 
     private async Task<Dictionary<string, object>> LoadTeacherProfile(string teacherNumber, string teacherName)
@@ -788,8 +1007,6 @@ public class TeacherController : Controller
         string teacherId = ""
     )
     {
-        await _integrity.CleanupOrphanActiveLinksAsync();
-
         var result = new List<Dictionary<string, object>>();
         var seen = new HashSet<string>();
 
@@ -959,8 +1176,6 @@ public class TeacherController : Controller
         List<Dictionary<string, object>> lessons
     )
     {
-        await _integrity.CleanupOrphanActiveLinksAsync();
-
         var result = new List<Dictionary<string, object>>();
         var seen = new HashSet<string>();
 
@@ -1046,6 +1261,11 @@ public class TeacherController : Controller
                     (!string.IsNullOrWhiteSpace(teacherNumberKey) && docTeacherNo == teacherNumberKey) ||
                     (!string.IsNullOrWhiteSpace(teacherNameKey) && docTeacherName == teacherNameKey);
 
+                if (!AssignmentBelongsToTeacher(data, teacherNumber, teacherName, teacherId, lessons))
+                {
+                    continue;
+                }
+
                 if (!sameLesson && !sameTeacher)
                 {
                     continue;
@@ -1056,7 +1276,7 @@ public class TeacherController : Controller
                     continue;
                 }
 
-                var key = NormalizeKey($"{title}_{lessonName}_{className}_{doc.Id}");
+                var key = NormalizeKey($"{title}_{lessonName}_{className}");
 
                 if (seen.Contains(key))
                 {
@@ -1106,8 +1326,6 @@ public class TeacherController : Controller
         List<Dictionary<string, object>> assignments
     )
     {
-        await _integrity.CleanupOrphanActiveLinksAsync();
-
         var result = new List<Dictionary<string, object>>();
         var seen = new HashSet<string>();
 
@@ -1126,7 +1344,7 @@ public class TeacherController : Controller
             .Where(x => !string.IsNullOrWhiteSpace(x))
             .ToHashSet();
 
-        var collections = new[] { "homework_submissions", "submissions" };
+        var collections = new[] { "submissions", "homework_submissions" };
 
         foreach (var collection in collections)
         {
@@ -1378,7 +1596,7 @@ public class TeacherController : Controller
 
     private async Task UpdateSubmissionEverywhere(string submissionId, Dictionary<string, object?> update)
     {
-        var collections = new[] { "homework_submissions", "submissions" };
+        var collections = new[] { "submissions", "homework_submissions" };
 
         foreach (var collection in collections)
         {
