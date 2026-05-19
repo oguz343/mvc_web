@@ -1,5 +1,6 @@
 # Changelog
 
+- P5 maintenance: Documented a behavior-preserving `TeacherController` split plan and extraction guardrails.
 - P2 performance: Auth, forgot-password, and password request user lookups now try role/number Firestore queries before legacy full `users` scans.
 
 - FAZ 1: `docs/SUBMISSION_SMOKE_TEST.md` ile canonical teslim smoke senaryoları dokümante edildi; `flutter_mobile/test/app_helpers_test.dart` canonical teslim ID üretimini doğrular.
