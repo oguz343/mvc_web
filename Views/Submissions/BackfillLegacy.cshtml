@@ -1,0 +1,79 @@
+@{
+    Layout = "_AdminLayout";
+    var report = ViewBag.Report;
+}
+
+<div class="dashboard-card">
+    <div class="section-header">
+        <div>
+            <h2>Legacy Teslim Backfill</h2>
+            <p>
+                Bu işlem `homework_submissions` kayıtlarını canonical `submissions` koleksiyonuna merge eder.
+                Aynı kayıt tekrar çoğaltılmaz.
+            </p>
+        </div>
+    </div>
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger">@TempData["Error"]</div>
+    }
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success">@TempData["Success"]</div>
+    }
+
+    <form asp-controller="Submissions" asp-action="BackfillLegacy" method="post" class="form-grid">
+        @Html.AntiForgeryToken()
+
+        <div class="form-group">
+            <label for="confirmation">Onay</label>
+            <input id="confirmation"
+                   name="confirmation"
+                   class="form-control"
+                   autocomplete="off"
+                   placeholder="BACKFILL" />
+            <small>Çalıştırmak için kutuya tam olarak BACKFILL yazın.</small>
+        </div>
+
+        <button type="submit" class="btn btn-danger">
+            Backfill Çalıştır
+        </button>
+    </form>
+</div>
+
+@if (report != null)
+{
+    <div class="dashboard-card">
+        <h2>Backfill Raporu</h2>
+        <div class="stats-grid">
+            <div class="stat-card">
+                <span>Taranan</span>
+                <strong>@report.Scanned</strong>
+            </div>
+            <div class="stat-card">
+                <span>Merge</span>
+                <strong>@report.Merged</strong>
+            </div>
+            <div class="stat-card">
+                <span>Skip</span>
+                <strong>@report.Skipped</strong>
+            </div>
+            <div class="stat-card">
+                <span>Hata</span>
+                <strong>@report.Errors</strong>
+            </div>
+        </div>
+
+        @if (report.Messages.Count > 0)
+        {
+            <ul>
+                @foreach (var message in report.Messages)
+                {
+                    <li>@message</li>
+                }
+            </ul>
+        }
+    </div>
+}
