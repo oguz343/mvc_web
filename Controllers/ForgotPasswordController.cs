@@ -133,13 +133,20 @@ namespace mvc_web.Controllers
 
         private async Task<DocumentSnapshot?> FindMatchingUser(string role, string name, string number)
         {
-            var snapshot = await _firestore
-                .Collection("users")
-                .GetSnapshotAsync();
-
             var searchedRole = NormalizeKey(role);
             var searchedName = NormalizeKey(name);
             var searchedNumber = OnlyDigits(number);
+
+            var targeted = await FindMatchingUserByQuery(searchedRole, searchedName, searchedNumber);
+
+            if (targeted != null)
+            {
+                return targeted;
+            }
+
+            var snapshot = await _firestore
+                .Collection("users")
+                .GetSnapshotAsync();
 
             foreach (var doc in snapshot.Documents)
             {
@@ -172,6 +179,123 @@ namespace mvc_web.Controllers
             }
 
             return null;
+        }
+
+        private async Task<DocumentSnapshot?> FindMatchingUserByQuery(string searchedRole, string searchedName, string searchedNumber)
+        {
+            var roleFields = new[] { "role", "Role", "userRole", "UserRole" };
+            var numberFields = new[] { "number", "Number", "schoolNo", "SchoolNo", "studentNo", "StudentNo", "teacherNo", "TeacherNo" };
+            var roleValues = RoleQueryValues(searchedRole);
+
+            foreach (var roleField in roleFields)
+            {
+                foreach (var roleValue in roleValues)
+                {
+                    foreach (var numberField in numberFields)
+                    {
+                        try
+                        {
+                            var snapshot = await _firestore
+                                .Collection("users")
+                                .WhereEqualTo(roleField, roleValue)
+                                .WhereEqualTo(numberField, searchedNumber)
+                                .Limit(10)
+                                .GetSnapshotAsync();
+
+                            var match = FirstMatchingUser(snapshot, searchedRole, searchedName, searchedNumber);
+
+                            if (match != null)
+                            {
+                                return match;
+                            }
+                        }
+                        catch
+                        {
+                        }
+                    }
+                }
+            }
+
+            foreach (var numberField in numberFields)
+            {
+                try
+                {
+                    var snapshot = await _firestore
+                        .Collection("users")
+                        .WhereEqualTo(numberField, searchedNumber)
+                        .Limit(25)
+                        .GetSnapshotAsync();
+
+                    var match = FirstMatchingUser(snapshot, searchedRole, searchedName, searchedNumber);
+
+                    if (match != null)
+                    {
+                        return match;
+                    }
+                }
+                catch
+                {
+                }
+            }
+
+            return null;
+        }
+
+        private static DocumentSnapshot? FirstMatchingUser(QuerySnapshot snapshot, string searchedRole, string searchedName, string searchedNumber)
+        {
+            foreach (var doc in snapshot.Documents)
+            {
+                var data = doc.ToDictionary();
+
+                if (IsDeletedUser(data))
+                {
+                    continue;
+                }
+
+                var userRole = NormalizeKey(GetString(data, "role", "Role", "userRole", "UserRole"));
+                var userName = NormalizeKey(GetString(data, "name", "Name", "fullName", "FullName", "userName", "UserName"));
+                var userNumber = OnlyDigits(
+                    FirstNonEmpty(
+                        GetString(data, "schoolNo", "SchoolNo"),
+                        GetString(data, "number", "Number"),
+                        GetString(data, "studentNo", "StudentNo"),
+                        GetString(data, "teacherNo", "TeacherNo")
+                    )
+                );
+
+                if (userRole == searchedRole &&
+                    userName == searchedName &&
+                    userNumber == searchedNumber)
+                {
+                    return doc;
+                }
+            }
+
+            return null;
+        }
+
+        private static string[] RoleQueryValues(string searchedRole)
+        {
+            var values = new List<string> { searchedRole };
+
+            if (searchedRole == "ogrenci")
+            {
+                values.Add("Ã–ÄŸrenci");
+            }
+            else if (searchedRole == "ogretmen")
+            {
+                values.Add("Ã–ÄŸretmen");
+            }
+            else if (searchedRole == "veli")
+            {
+                values.Add("Veli");
+            }
+            else if (searchedRole == "admin")
+            {
+                values.Add("Admin");
+            }
+
+            return values.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         }
 
         private async Task<bool> HasPendingRequest(string role, string number, string userId)

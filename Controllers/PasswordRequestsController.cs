@@ -350,6 +350,13 @@ namespace mvc_web.Controllers
                 }
             }
 
+            var targeted = await FindUserByRoleAndNumberQuery(role, number);
+
+            if (targeted != null)
+            {
+                return targeted;
+            }
+
             var snapshot = await _firestore.Collection("users").GetSnapshotAsync();
 
             var roleKey = NormalizeKey(role);
@@ -375,6 +382,117 @@ namespace mvc_web.Controllers
             }
 
             return null;
+        }
+
+        private async Task<DocumentSnapshot?> FindUserByRoleAndNumberQuery(string role, string number)
+        {
+            var roleKey = NormalizeKey(role);
+            var numberKey = OnlyDigits(number);
+            var roleFields = new[] { "role", "Role", "userRole", "UserRole" };
+            var numberFields = new[] { "number", "Number", "schoolNo", "SchoolNo", "studentNo", "StudentNo", "teacherNo", "TeacherNo" };
+
+            foreach (var roleField in roleFields)
+            {
+                foreach (var roleValue in RoleQueryValues(roleKey))
+                {
+                    foreach (var numberField in numberFields)
+                    {
+                        try
+                        {
+                            var snapshot = await _firestore
+                                .Collection("users")
+                                .WhereEqualTo(roleField, roleValue)
+                                .WhereEqualTo(numberField, numberKey)
+                                .Limit(10)
+                                .GetSnapshotAsync();
+
+                            var match = FirstMatchingUser(snapshot, roleKey, numberKey);
+
+                            if (match != null)
+                            {
+                                return match;
+                            }
+                        }
+                        catch
+                        {
+                        }
+                    }
+                }
+            }
+
+            foreach (var numberField in numberFields)
+            {
+                try
+                {
+                    var snapshot = await _firestore
+                        .Collection("users")
+                        .WhereEqualTo(numberField, numberKey)
+                        .Limit(25)
+                        .GetSnapshotAsync();
+
+                    var match = FirstMatchingUser(snapshot, roleKey, numberKey);
+
+                    if (match != null)
+                    {
+                        return match;
+                    }
+                }
+                catch
+                {
+                }
+            }
+
+            return null;
+        }
+
+        private static DocumentSnapshot? FirstMatchingUser(QuerySnapshot snapshot, string roleKey, string numberKey)
+        {
+            foreach (var doc in snapshot.Documents)
+            {
+                var data = doc.ToDictionary();
+
+                var userRole = NormalizeKey(GetString(data, "role", "Role", "userRole", "UserRole"));
+
+                var userNumber = OnlyDigits(
+                    FirstNonEmpty(
+                        GetString(data, "schoolNo", "SchoolNo"),
+                        GetString(data, "number", "Number"),
+                        GetString(data, "studentNo", "StudentNo"),
+                        GetString(data, "teacherNo", "TeacherNo")
+                    )
+                );
+
+                if (userRole == roleKey && userNumber == numberKey)
+                {
+                    return doc;
+                }
+            }
+
+            return null;
+        }
+
+        private static string[] RoleQueryValues(string roleKey)
+        {
+            var values = new List<string> { roleKey };
+
+            if (roleKey == "ogrenci")
+            {
+                values.Add("Ã–ÄŸrenci");
+            }
+            else if (roleKey == "ogretmen")
+            {
+                values.Add("Ã–ÄŸretmen");
+            }
+            else if (roleKey == "veli")
+            {
+                values.Add("Veli");
+            }
+            else if (roleKey == "admin")
+            {
+                values.Add("Admin");
+            }
+
+            return values.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         }
 
         private async Task UpdateMatchingRequests(Dictionary<string, object> originalData, Dictionary<string, object> update)

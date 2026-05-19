@@ -589,6 +589,13 @@ public class AuthController : Controller
 
     private async Task<DocumentSnapshot?> FindUserAsync(string roleKey, string number)
     {
+        var targeted = await FindUserByRoleAndNumberQueryAsync(roleKey, number);
+
+        if (targeted != null)
+        {
+            return targeted;
+        }
+
         var snapshot = await _firestore.Collection("users").GetSnapshotAsync();
 
         foreach (var doc in snapshot.Documents)
@@ -621,6 +628,108 @@ public class AuthController : Controller
         }
 
         return null;
+    }
+
+    private async Task<DocumentSnapshot?> FindUserByRoleAndNumberQueryAsync(string roleKey, string number)
+    {
+        var roleFields = new[] { "role", "Role", "userRole", "UserRole" };
+        var numberFields = new[] { "number", "Number", "schoolNo", "SchoolNo", "studentNo", "StudentNo", "teacherNo", "TeacherNo", "parentNo", "ParentNo", "adminNo", "AdminNo" };
+        var roleValues = RoleQueryValues(roleKey);
+        var numberKey = OnlyDigits(number);
+
+        foreach (var roleField in roleFields)
+        {
+            foreach (var roleValue in roleValues)
+            {
+                foreach (var numberField in numberFields)
+                {
+                    try
+                    {
+                        var snapshot = await _firestore
+                            .Collection("users")
+                            .WhereEqualTo(roleField, roleValue)
+                            .WhereEqualTo(numberField, numberKey)
+                            .Limit(10)
+                            .GetSnapshotAsync();
+
+                        var match = FirstMatchingUser(snapshot, roleKey, numberKey);
+
+                        if (match != null)
+                        {
+                            return match;
+                        }
+                    }
+                    catch
+                    {
+                    }
+                }
+            }
+        }
+
+        foreach (var numberField in numberFields)
+        {
+            try
+            {
+                var snapshot = await _firestore
+                    .Collection("users")
+                    .WhereEqualTo(numberField, numberKey)
+                    .Limit(25)
+                    .GetSnapshotAsync();
+
+                var match = FirstMatchingUser(snapshot, roleKey, numberKey);
+
+                if (match != null)
+                {
+                    return match;
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        return null;
+    }
+
+    private static DocumentSnapshot? FirstMatchingUser(QuerySnapshot snapshot, string roleKey, string number)
+    {
+        foreach (var doc in snapshot.Documents)
+        {
+            var data = doc.ToDictionary();
+
+            if (IsDeleted(data))
+            {
+                continue;
+            }
+
+            var currentRole = NormalizeRole(FirstNonEmpty(
+                GetString(data, "role", "Role"),
+                GetString(data, "userRole", "UserRole")
+            ));
+
+            var currentNumber = OnlyDigits(FirstNonEmpty(
+                GetString(data, "number", "Number"),
+                GetString(data, "schoolNo", "SchoolNo"),
+                GetString(data, "studentNo", "StudentNo"),
+                GetString(data, "teacherNo", "TeacherNo"),
+                GetString(data, "parentNo", "ParentNo"),
+                GetString(data, "adminNo", "AdminNo")
+            ));
+
+            if (currentRole == roleKey && currentNumber == number)
+            {
+                return doc;
+            }
+        }
+
+        return null;
+    }
+
+    private static string[] RoleQueryValues(string roleKey)
+    {
+        var display = NormalizeRoleToDisplay(roleKey);
+
+        return new[] { roleKey, display }.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
     }
 
     private async Task<bool> VerifySystemAdminPasswordAsync(string password)
