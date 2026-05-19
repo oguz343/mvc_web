@@ -10,28 +10,20 @@ namespace mvc_web.Controllers
     public class AdminAccountController : Controller
     {
         private readonly FirestoreDb _firestore;
-        private readonly SessionService _session;
         private readonly IWebHostEnvironment _environment;
 
         public AdminAccountController(
             FirestoreDb firestore,
-            SessionService session,
             IWebHostEnvironment environment
         )
         {
             _firestore = firestore;
-            _session = session;
             _environment = environment;
         }
 
         [HttpGet]
         public IActionResult ChangePassword()
         {
-            if (!_session.IsAdmin(HttpContext))
-            {
-                return RedirectToAction("Login", "Auth");
-            }
-
             return View(new AdminPasswordViewModel());
         }
 
@@ -39,11 +31,6 @@ namespace mvc_web.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> ChangePassword(AdminPasswordViewModel model)
         {
-            if (!_session.IsAdmin(HttpContext))
-            {
-                return RedirectToAction("Login", "Auth");
-            }
-
             ModelState.Clear();
 
             model.CurrentPassword = model.CurrentPassword?.Trim() ?? "";

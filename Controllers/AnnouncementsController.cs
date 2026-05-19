@@ -22,11 +22,6 @@ public class AnnouncementsController : Controller
 
     public async Task<IActionResult> Index()
     {
-        if (!_session.IsAdmin(HttpContext))
-        {
-            return RedirectToAction("Login", "Auth");
-        }
-
         ViewData["Title"] = "Duyurular";
         ViewData["PageTitle"] = "Duyurular";
         ViewData["PageSubtitle"] = "Öğrenci, öğretmen ve velilere yayınlanan duyuruları yönetin.";
@@ -57,11 +52,6 @@ public class AnnouncementsController : Controller
     [HttpGet]
     public IActionResult Create()
     {
-        if (!_session.IsAdmin(HttpContext))
-        {
-            return RedirectToAction("Login", "Auth");
-        }
-
         ViewData["Title"] = "Duyuru Ekle";
         ViewData["PageTitle"] = "Yeni Duyuru";
         ViewData["PageSubtitle"] = "Okul geneline veya belirli rollere duyuru yayınlayın.";
@@ -79,11 +69,6 @@ public class AnnouncementsController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(AnnouncementViewModel model)
     {
-        if (!_session.IsAdmin(HttpContext))
-        {
-            return RedirectToAction("Login", "Auth");
-        }
-
         if (string.IsNullOrWhiteSpace(model.Author))
         {
             model.Author = _session.GetName(HttpContext) ?? "Admin";
@@ -114,11 +99,6 @@ public class AnnouncementsController : Controller
     [HttpGet]
     public async Task<IActionResult> Edit(string id)
     {
-        if (!_session.IsAdmin(HttpContext))
-        {
-            return RedirectToAction("Login", "Auth");
-        }
-
         if (string.IsNullOrWhiteSpace(id))
         {
             return RedirectToAction("Index");
@@ -154,11 +134,6 @@ public class AnnouncementsController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Edit(AnnouncementViewModel model)
     {
-        if (!_session.IsAdmin(HttpContext))
-        {
-            return RedirectToAction("Login", "Auth");
-        }
-
         if (!ModelState.IsValid)
         {
             ViewData["Title"] = "Duyuru Düzenle";
@@ -193,11 +168,6 @@ public class AnnouncementsController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Delete(string id)
     {
-        if (!_session.IsAdmin(HttpContext))
-        {
-            return RedirectToAction("Login", "Auth");
-        }
-
         if (string.IsNullOrWhiteSpace(id))
         {
             return RedirectToAction("Index");

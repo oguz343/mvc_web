@@ -1,32 +1,24 @@
 using Google.Cloud.Firestore;
 using Microsoft.AspNetCore.Mvc;
+using mvc_web.Filters;
 using mvc_web.Models;
 using mvc_web.Services;
 using System.Text.RegularExpressions;
 
 namespace mvc_web.Controllers
 {
+    [AdminOnly]
     public class DashboardController : Controller
     {
         private readonly FirestoreDb _firestore;
-        private readonly SessionService _session;
 
-        public DashboardController(
-            FirestoreDb firestore,
-            SessionService session
-        )
+        public DashboardController(FirestoreDb firestore)
         {
             _firestore = firestore;
-            _session = session;
         }
 
         public async Task<IActionResult> Index()
         {
-            if (!_session.IsAdmin(HttpContext))
-            {
-                return RedirectToAction("Login", "Auth");
-            }
-
             var users = await LoadUsers();
             var validClasses = await LoadValidClasses();
 

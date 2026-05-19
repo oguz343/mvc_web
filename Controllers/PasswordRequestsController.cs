@@ -10,25 +10,15 @@ namespace mvc_web.Controllers
     public class PasswordRequestsController : Controller
     {
         private readonly FirestoreDb _firestore;
-        private readonly SessionService _session;
 
-        public PasswordRequestsController(
-            FirestoreDb firestore,
-            SessionService session
-        )
+        public PasswordRequestsController(FirestoreDb firestore)
         {
             _firestore = firestore;
-            _session = session;
         }
 
         [HttpGet]
         public async Task<IActionResult> Index()
         {
-            if (!_session.IsAdmin(HttpContext))
-            {
-                return RedirectToAction("Login", "Auth");
-            }
-
             var requests = await LoadPasswordRequests();
 
             return View(requests);
@@ -38,11 +28,6 @@ namespace mvc_web.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Approve(string id, string collectionName)
         {
-            if (!_session.IsAdmin(HttpContext))
-            {
-                return RedirectToAction("Login", "Auth");
-            }
-
             if (string.IsNullOrWhiteSpace(id))
             {
                 TempData["Error"] = "Şifre talebi bulunamadı.";
@@ -139,11 +124,6 @@ namespace mvc_web.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Reject(string id, string collectionName)
         {
-            if (!_session.IsAdmin(HttpContext))
-            {
-                return RedirectToAction("Login", "Auth");
-            }
-
             if (string.IsNullOrWhiteSpace(id))
             {
                 TempData["Error"] = "Şifre talebi bulunamadı.";
@@ -198,11 +178,6 @@ namespace mvc_web.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Delete(string id, string collectionName)
         {
-            if (!_session.IsAdmin(HttpContext))
-            {
-                return RedirectToAction("Login", "Auth");
-            }
-
             if (string.IsNullOrWhiteSpace(id))
             {
                 TempData["Error"] = "Şifre talebi bulunamadı.";
