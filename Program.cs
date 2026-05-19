@@ -1,4 +1,7 @@
+using FirebaseAdmin;
+using FirebaseAdmin.Auth;
 using Google.Cloud.Firestore;
+using Google.Apis.Auth.OAuth2;
 using Microsoft.AspNetCore.DataProtection;
 using mvc_web.Services;
 
@@ -57,6 +60,27 @@ builder.Services.AddSingleton(provider =>
     return FirestoreDb.Create(projectId);
 });
 
+builder.Services.AddSingleton(provider =>
+{
+    var projectId = builder.Configuration["Firebase:ProjectId"];
+
+    if (string.IsNullOrWhiteSpace(projectId))
+    {
+        throw new Exception("Firebase ProjectId appsettings.json içinde bulunamadı.");
+    }
+
+    return FirebaseApp.DefaultInstance ?? FirebaseApp.Create(
+        new AppOptions
+        {
+            Credential = GoogleCredential.GetApplicationDefault(),
+            ProjectId = projectId,
+        }
+    );
+});
+
+builder.Services.AddSingleton(provider =>
+    FirebaseAuth.GetAuth(provider.GetRequiredService<FirebaseApp>()));
+
 builder.Services.AddScoped<FirestoreService>();
 builder.Services.AddScoped<SessionService>();
 builder.Services.AddScoped<AuthLoginService>();
@@ -77,6 +101,8 @@ app.UseRouting();
 app.UseSession();
 
 app.UseAuthorization();
+
+app.MapControllers();
 
 app.MapControllerRoute(
     name: "default",

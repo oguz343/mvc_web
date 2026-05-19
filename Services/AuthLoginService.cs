@@ -128,6 +128,7 @@ public class AuthLoginService
 
         return AuthLoginResult.Success(
             user.Id,
+            wantedRoleKey,
             cleanRole,
             cleanNumber,
             cleanName,
@@ -502,6 +503,7 @@ public sealed record AuthLoginResult(
     bool IsSuccess,
     AuthLoginFailure Failure,
     string UserId,
+    string RoleKey,
     string Role,
     string Number,
     string Name,
@@ -511,11 +513,12 @@ public sealed record AuthLoginResult(
 {
     public static AuthLoginResult Failed(AuthLoginFailure failure)
     {
-        return new AuthLoginResult(false, failure, "", "", "", "", "", "", false);
+        return new AuthLoginResult(false, failure, "", "", "", "", "", "", "", false);
     }
 
     public static AuthLoginResult Success(
         string userId,
+        string roleKey,
         string role,
         string number,
         string name,
@@ -523,6 +526,6 @@ public sealed record AuthLoginResult(
         string className,
         bool mustChangePassword)
     {
-        return new AuthLoginResult(true, AuthLoginFailure.None, userId, role, number, name, branch, className, mustChangePassword);
+        return new AuthLoginResult(true, AuthLoginFailure.None, userId, roleKey, role, number, name, branch, className, mustChangePassword);
     }
 }
