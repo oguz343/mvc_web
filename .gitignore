@@ -1,5 +1,6 @@
 ﻿bin/
 obj/
+artifacts/
 .vs/
 .vscode/
 *.user
@@ -7,6 +8,8 @@ obj/
 
 appsettings.Development.json
 firebase-service-account.json
+**/firebase-service-account.json
+wwwroot/uploads/
 App_Data/DataProtectionKeys/
 *.pfx
 *.key

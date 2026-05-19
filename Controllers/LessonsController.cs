@@ -19,8 +19,6 @@ public class LessonsController : Controller
     [HttpGet]
     public async Task<IActionResult> Index()
     {
-        await _integrity.CleanupOrphanActiveLinksAsync();
-
         var lessons = await _integrity.LoadVisibleLessonsAsync();
 
         return View(lessons);
@@ -29,8 +27,6 @@ public class LessonsController : Controller
     [HttpGet]
     public async Task<IActionResult> Create()
     {
-        await _integrity.CleanupOrphanActiveLinksAsync();
-
         ViewBag.Teachers = await _integrity.LoadActiveTeachersAsync();
         ViewBag.Classes = await _integrity.LoadActiveClassesAsync();
 
@@ -76,8 +72,6 @@ public class LessonsController : Controller
             TempData["Error"] = "Öğretmen seçmelisiniz.";
             return RedirectToAction(nameof(Create));
         }
-
-        await _integrity.CleanupOrphanActiveLinksAsync();
 
         var teachers = await _integrity.LoadActiveTeachersAsync();
         var classes = await _integrity.LoadActiveClassesAsync();
@@ -195,8 +189,6 @@ public class LessonsController : Controller
             return RedirectToAction(nameof(Index));
         }
 
-        await _integrity.CleanupOrphanActiveLinksAsync();
-
         var doc = await _firestore.Collection("lessons").Document(id).GetSnapshotAsync();
 
         if (!doc.Exists)
@@ -275,8 +267,6 @@ public class LessonsController : Controller
             TempData["Error"] = "Öğretmen seçmelisiniz.";
             return RedirectToAction(nameof(Edit), new { id });
         }
-
-        await _integrity.CleanupOrphanActiveLinksAsync();
 
         var teachers = await _integrity.LoadActiveTeachersAsync();
         var classes = await _integrity.LoadActiveClassesAsync();

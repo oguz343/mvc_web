@@ -124,6 +124,7 @@ namespace mvc_web.Controllers
                 return RedirectToAction(nameof(Index));
             }
 
+            var homeworkData = homeworkDoc.ToDictionary();
             string fileName = "";
             string fileUrl = "";
 
@@ -166,29 +167,75 @@ namespace mvc_web.Controllers
                 return RedirectToAction(nameof(Index));
             }
 
-            var submissionId = $"{homeworkCollection}_{homeworkId}_{studentNumber}";
+            var studentNo = OnlyDigits(studentNumber);
+            var canonicalSubmissionId = BuildSubmissionId(homeworkId, studentNo);
+            var legacySubmissionId = $"{homeworkCollection}_{homeworkId}_{studentNumber}";
             var now = Timestamp.GetCurrentTimestamp();
+            var title = GetString(homeworkData, new[] { "title", "Title", "name", "Name" }, "Ödev");
+            var lessonName = FirstNonEmpty(
+                GetString(homeworkData, "lessonName", "LessonName"),
+                GetString(homeworkData, "lesson", "Lesson"),
+                GetString(homeworkData, "courseName", "CourseName")
+            );
+            var className = FirstNonEmpty(
+                NormalizeClassName(GetString(homeworkData, "className", "ClassName")),
+                NormalizeClassName(GetString(homeworkData, "targetClass", "TargetClass"))
+            );
+            var teacherName = GetString(homeworkData, new[] { "teacherName", "TeacherName", "teacher", "Teacher" }, "");
+            var teacherNo = GetString(homeworkData, "teacherNo", "TeacherNo", "teacherNumber", "TeacherNumber");
+            var teacherId = GetString(homeworkData, "teacherId", "TeacherId", "teacherUid", "TeacherUid");
+            var cleanAnswer = answerText?.Trim() ?? "";
+
+            var submissionData = new Dictionary<string, object>
+            {
+                { "homeworkCollection", homeworkCollection },
+                { "homeworkId", homeworkId },
+                { "assignmentId", homeworkId },
+                { "assignmentTitle", title },
+                { "homeworkTitle", title },
+                { "title", title },
+                { "name", title },
+                { "lessonName", lessonName },
+                { "lesson", lessonName },
+                { "courseName", lessonName },
+                { "className", className },
+                { "class", className },
+                { "targetClass", className },
+                { "teacherId", teacherId },
+                { "teacherName", teacherName },
+                { "teacher", teacherName },
+                { "teacherNo", teacherNo },
+                { "studentId", userId },
+                { "studentName", studentName },
+                { "studentNo", studentNo },
+                { "studentNumber", studentNo },
+                { "schoolNo", studentNo },
+                { "answerText", cleanAnswer },
+                { "answer", cleanAnswer },
+                { "content", cleanAnswer },
+                { "text", cleanAnswer },
+                { "answerLink", "" },
+                { "link", "" },
+                { "url", "" },
+                { "fileName", fileName },
+                { "fileUrl", fileUrl },
+                { "status", "Teslim Edildi" },
+                { "submittedAt", now },
+                { "createdAt", now },
+                { "updatedAt", now },
+                { "isDeleted", false },
+                { "isActive", true }
+            };
+
+            await _firestore
+                .Collection("submissions")
+                .Document(canonicalSubmissionId)
+                .SetAsync(submissionData, SetOptions.MergeAll);
 
             await _firestore
                 .Collection("homework_submissions")
-                .Document(submissionId)
-                .SetAsync(
-                    new Dictionary<string, object>
-                    {
-                        { "homeworkCollection", homeworkCollection },
-                        { "homeworkId", homeworkId },
-                        { "studentId", userId },
-                        { "studentName", studentName },
-                        { "studentNo", studentNumber },
-                        { "answerText", answerText?.Trim() ?? "" },
-                        { "fileName", fileName },
-                        { "fileUrl", fileUrl },
-                        { "status", "Teslim Edildi" },
-                        { "submittedAt", now },
-                        { "updatedAt", now }
-                    },
-                    SetOptions.MergeAll
-                );
+                .Document(legacySubmissionId)
+                .SetAsync(submissionData, SetOptions.MergeAll);
 
             TempData["Success"] = "Ödev teslim edildi.";
             return RedirectToAction(nameof(Index));
@@ -267,7 +314,18 @@ namespace mvc_web.Controllers
                         continue;
                     }
 
-                    var key = $"{collectionName}_{doc.Id}";
+                    var title = GetString(data, new[] { "title", "Title" }, "Ödev");
+                    var lessonName = FirstNonEmpty(
+                        GetString(data, "lessonName", "LessonName"),
+                        GetString(data, "lesson", "Lesson"),
+                        GetString(data, "courseName", "CourseName")
+                    );
+                    var normalizedItemClass = FirstNonEmpty(
+                        NormalizeClassName(GetString(data, "className", "ClassName")),
+                        NormalizeClassName(GetString(data, "targetClass", "TargetClass")),
+                        className
+                    );
+                    var key = NormalizeKey($"{title}_{lessonName}_{normalizedItemClass}");
 
                     if (addedKeys.Contains(key))
                     {
@@ -276,24 +334,15 @@ namespace mvc_web.Controllers
 
                     addedKeys.Add(key);
 
-                    var submissionId = $"{collectionName}_{doc.Id}_{studentNumber}";
-
-                    var submissionDoc = await _firestore
-                        .Collection("homework_submissions")
-                        .Document(submissionId)
-                        .GetSnapshotAsync();
+                    var submissionDoc = await FindHomeworkSubmission(doc.Id, studentNumber);
 
                     var item = new PortalHomeworkItem
                     {
                         Id = doc.Id,
                         CollectionName = collectionName,
-                        Title = GetString(data, new[] { "title", "Title" }, "Ödev"),
+                        Title = title,
                         Description = GetString(data, "description", "Description", "content", "Content", "body", "Body"),
-                        ClassName = FirstNonEmpty(
-                            NormalizeClassName(GetString(data, "className", "ClassName")),
-                            NormalizeClassName(GetString(data, "targetClass", "TargetClass")),
-                            className
-                        ),
+                        ClassName = normalizedItemClass,
                         TeacherName = GetString(data, new[] { "teacherName", "TeacherName", "teacher", "Teacher" }, "Öğretmen"),
                         DueDate = GetDate(data, "dueDate", "DueDate", "deadline", "Deadline", "endDate", "EndDate"),
                         IsSubmitted = submissionDoc.Exists
@@ -318,6 +367,78 @@ namespace mvc_web.Controllers
             }
 
             return result;
+        }
+
+        private async Task<DocumentSnapshot> FindHomeworkSubmission(string homeworkId, string studentNumber)
+        {
+            var canonicalSubmissionId = BuildSubmissionId(homeworkId, OnlyDigits(studentNumber));
+            var canonicalDoc = await _firestore
+                .Collection("submissions")
+                .Document(canonicalSubmissionId)
+                .GetSnapshotAsync();
+
+            if (canonicalDoc.Exists)
+            {
+                return canonicalDoc;
+            }
+
+            foreach (var collectionName in new[] { "homeworks", "assignments" })
+            {
+                var submissionId = $"{collectionName}_{homeworkId}_{studentNumber}";
+                var submissionDoc = await _firestore
+                    .Collection("homework_submissions")
+                    .Document(submissionId)
+                    .GetSnapshotAsync();
+
+                if (submissionDoc.Exists)
+                {
+                    return submissionDoc;
+                }
+            }
+
+            var directKey = NormalizeKey($"{homeworkId}_{OnlyDigits(studentNumber)}");
+
+            foreach (var submissionCollection in new[] { "submissions", "homework_submissions" })
+            {
+                var snapshot = await _firestore.Collection(submissionCollection).GetSnapshotAsync();
+
+                foreach (var doc in snapshot.Documents)
+                {
+                    var data = doc.ToDictionary();
+                    var docHomeworkId = FirstNonEmpty(
+                        GetString(data, "assignmentId", "AssignmentId"),
+                        GetString(data, "homeworkId", "HomeworkId")
+                    );
+                    var docStudentNo = OnlyDigits(FirstNonEmpty(
+                        GetString(data, "studentNo", "StudentNo"),
+                        GetString(data, "studentNumber", "StudentNumber"),
+                        GetString(data, "schoolNo", "SchoolNo")
+                    ));
+
+                    if (NormalizeKey($"{docHomeworkId}_{docStudentNo}") == directKey)
+                    {
+                        return doc;
+                    }
+                }
+            }
+
+            return await _firestore
+                .Collection("homework_submissions")
+                .Document("missing")
+                .GetSnapshotAsync();
+        }
+
+        private static string BuildSubmissionId(string assignmentId, string studentNo)
+        {
+            var assignmentKey = NormalizeKey(assignmentId);
+            var studentKey = OnlyDigits(studentNo);
+
+            if (!string.IsNullOrWhiteSpace(assignmentKey) && !string.IsNullOrWhiteSpace(studentKey))
+            {
+                return $"{assignmentKey}_{studentKey}";
+            }
+
+            return NormalizeKey($"{assignmentId}_{studentNo}");
         }
 
         private async Task<HashSet<string>> FindClassIdsByName(string className)
@@ -736,6 +857,27 @@ namespace mvc_web.Controllers
             }
 
             return "";
+        }
+
+        private static string NormalizeKey(string value)
+        {
+            value = (value ?? "").Trim().ToLowerInvariant();
+
+            value = value
+                .Replace("ı", "i")
+                .Replace("ğ", "g")
+                .Replace("ü", "u")
+                .Replace("ş", "s")
+                .Replace("ö", "o")
+                .Replace("ç", "c")
+                .Replace("Ä±", "i")
+                .Replace("ÄŸ", "g")
+                .Replace("Ã¼", "u")
+                .Replace("ÅŸ", "s")
+                .Replace("Ã¶", "o")
+                .Replace("Ã§", "c");
+
+            return new string(value.Where(char.IsLetterOrDigit).ToArray());
         }
     }
 }
