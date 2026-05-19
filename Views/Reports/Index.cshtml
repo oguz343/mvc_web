@@ -1,0 +1,410 @@
+@model HomeworkReportsViewModel
+
+@{
+    Layout = "_AdminLayout";
+    ViewData["Title"] = "Raporlama";
+}
+
+<div class="reports-page">
+    <section class="report-hero no-print">
+        <div>
+            <p>Raporlama</p>
+            <h2>Ödev teslim durumları</h2>
+            <span>Teslim edenleri, etmeyenleri, tarih aralıklarını ve en yüksek notları tek ekranda filtreleyin.</span>
+        </div>
+
+        <button type="button" class="print-btn" onclick="window.print()">
+            Yazdır
+        </button>
+    </section>
+
+    <form method="get" class="report-filter no-print">
+        <div>
+            <label>Sınıf</label>
+            <select asp-for="Filter.ClassName" name="ClassName">
+                <option value="">Tüm sınıflar</option>
+                @foreach (var item in Model.Classes)
+                {
+                    <option value="@item.Value" selected="@(Model.Filter.ClassName == item.Value ? "selected" : null)">@item.Text</option>
+                }
+            </select>
+        </div>
+
+        <div>
+            <label>Ödev</label>
+            <select asp-for="Filter.AssignmentId" name="AssignmentId">
+                <option value="">Tüm ödevler</option>
+                @foreach (var item in Model.Assignments)
+                {
+                    <option value="@item.Value" selected="@(Model.Filter.AssignmentId == item.Value ? "selected" : null)">@item.Text</option>
+                }
+            </select>
+        </div>
+
+        <div>
+            <label>Durum</label>
+            <select asp-for="Filter.Status" name="Status">
+                <option value="all">Tüm kayıtlar</option>
+                <option value="submitted">Teslim edenler</option>
+                <option value="missing">Teslim etmeyenler</option>
+                <option value="graded">Not verilenler</option>
+                <option value="top">En yüksek notlar</option>
+            </select>
+        </div>
+
+        <div>
+            <label>Başlangıç</label>
+            <input type="date" name="FromDate" value="@Model.Filter.FromDate" />
+        </div>
+
+        <div>
+            <label>Bitiş</label>
+            <input type="date" name="ToDate" value="@Model.Filter.ToDate" />
+        </div>
+
+        <div>
+            <label>Sıralama</label>
+            <select asp-for="Filter.Sort" name="Sort">
+                <option value="date_desc">Tarih yeni-eski</option>
+                <option value="student">Öğrenci</option>
+                <option value="assignment">Ödev</option>
+                <option value="score_desc">Not yüksek-düşük</option>
+                <option value="score_asc">Not düşük-yüksek</option>
+            </select>
+        </div>
+
+        <button type="submit">Raporu Getir</button>
+    </form>
+
+    <section class="report-summary">
+        <div>
+            <span>Toplam satır</span>
+            <strong>@Model.Rows.Count</strong>
+        </div>
+        <div>
+            <span>Teslim eden</span>
+            <strong>@Model.SubmittedCount</strong>
+        </div>
+        <div>
+            <span>Teslim etmeyen</span>
+            <strong>@Model.MissingCount</strong>
+        </div>
+        <div>
+            <span>Not verilen</span>
+            <strong>@Model.GradedCount</strong>
+        </div>
+    </section>
+
+    <section class="print-title">
+        <h1>Ödev Raporu</h1>
+        <p>@DateTime.Now.ToString("dd.MM.yyyy HH:mm") tarihinde oluşturuldu.</p>
+    </section>
+
+    <section class="report-table-card">
+        @if (!Model.Rows.Any())
+        {
+            <div class="empty-report">
+                Seçilen filtrelere uygun kayıt bulunamadı.
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="report-table">
+                    <thead>
+                        <tr>
+                            <th>Öğrenci</th>
+                            <th>No</th>
+                            <th>Sınıf</th>
+                            <th>Ödev</th>
+                            <th>Ders</th>
+                            <th>Öğretmen</th>
+                            <th>Son tarih</th>
+                            <th>Teslim</th>
+                            <th>Durum</th>
+                            <th>Not</th>
+                            <th>Geri dönüş</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in Model.Rows)
+                        {
+                            <tr>
+                                <td>@row.StudentName</td>
+                                <td>@row.StudentNo</td>
+                                <td>@row.ClassName</td>
+                                <td>@row.AssignmentTitle</td>
+                                <td>@row.LessonName</td>
+                                <td>@row.TeacherName</td>
+                                <td>@(row.DueDate?.ToString("dd.MM.yyyy HH:mm") ?? "-")</td>
+                                <td>@(row.SubmittedAt?.ToString("dd.MM.yyyy HH:mm") ?? "-")</td>
+                                <td>
+                                    <span class="status-pill @(row.IsSubmitted ? "ok" : "warn")">
+                                        @(row.IsSubmitted ? "Teslim edildi" : "Teslim edilmedi")
+                                    </span>
+                                </td>
+                                <td>@(string.IsNullOrWhiteSpace(row.Score) ? "-" : row.Score)</td>
+                                <td>@(string.IsNullOrWhiteSpace(row.Feedback) ? "-" : row.Feedback)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+</div>
+
+<style>
+    .reports-page {
+        display: grid;
+        gap: 18px;
+    }
+
+    .report-hero {
+        border-radius: 28px;
+        padding: 24px;
+        background: linear-gradient(135deg, #0f172a, #2563eb 58%, #06b6d4);
+        color: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        box-shadow: 0 24px 56px rgba(15, 23, 42, .18);
+    }
+
+    .report-hero p,
+    .report-hero h2,
+    .report-hero span {
+        margin: 0;
+    }
+
+    .report-hero p {
+        opacity: .74;
+        font-weight: 900;
+        margin-bottom: 6px;
+    }
+
+    .report-hero h2 {
+        font-size: 31px;
+        font-weight: 950;
+        letter-spacing: 0;
+    }
+
+    .report-hero span {
+        display: block;
+        margin-top: 7px;
+        opacity: .82;
+        font-weight: 750;
+    }
+
+    .print-btn,
+    .report-filter button {
+        border: 0;
+        border-radius: 16px;
+        min-height: 48px;
+        padding: 0 18px;
+        font-weight: 950;
+        cursor: pointer;
+    }
+
+    .print-btn {
+        background: #fff;
+        color: #1d4ed8;
+    }
+
+    .report-filter {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(0, 1fr)) auto;
+        gap: 12px;
+        padding: 18px;
+        border: 1px solid #dbe3ef;
+        border-radius: 24px;
+        background: #fff;
+        box-shadow: 0 16px 42px rgba(15, 23, 42, .08);
+    }
+
+    .report-filter div {
+        display: grid;
+        gap: 7px;
+    }
+
+    .report-filter label {
+        color: #475569;
+        font-weight: 900;
+        font-size: 12px;
+    }
+
+    .report-filter select,
+    .report-filter input {
+        width: 100%;
+        border: 1px solid #dbe3ef;
+        border-radius: 14px;
+        min-height: 44px;
+        padding: 0 12px;
+        color: #0f172a;
+        font-weight: 800;
+        background: #f8fafc;
+    }
+
+    .report-filter button {
+        align-self: end;
+        background: #2563eb;
+        color: #fff;
+    }
+
+    .report-summary {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+    }
+
+    .report-summary div {
+        border-radius: 22px;
+        padding: 18px;
+        background: #fff;
+        border: 1px solid #dbe3ef;
+        box-shadow: 0 14px 34px rgba(15, 23, 42, .07);
+    }
+
+    .report-summary span {
+        display: block;
+        color: #64748b;
+        font-weight: 850;
+        margin-bottom: 6px;
+    }
+
+    .report-summary strong {
+        color: #0f172a;
+        font-size: 28px;
+        font-weight: 950;
+    }
+
+    .print-title {
+        display: none;
+    }
+
+    .report-table-card {
+        overflow: hidden;
+        border-radius: 24px;
+        background: #fff;
+        border: 1px solid #dbe3ef;
+        box-shadow: 0 18px 46px rgba(15, 23, 42, .08);
+    }
+
+    .table-responsive {
+        overflow-x: auto;
+    }
+
+    .report-table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 1040px;
+    }
+
+    .report-table th {
+        background: #eef2f7;
+        color: #334155;
+        font-size: 12px;
+        text-align: left;
+        padding: 13px;
+        font-weight: 950;
+        border-bottom: 1px solid #dbe3ef;
+    }
+
+    .report-table td {
+        padding: 13px;
+        border-bottom: 1px solid #edf2f7;
+        color: #0f172a;
+        font-weight: 750;
+        vertical-align: top;
+    }
+
+    .status-pill {
+        display: inline-flex;
+        border-radius: 999px;
+        padding: 7px 10px;
+        font-size: 12px;
+        font-weight: 950;
+        white-space: nowrap;
+    }
+
+    .status-pill.ok {
+        background: #dcfce7;
+        color: #166534;
+    }
+
+    .status-pill.warn {
+        background: #ffedd5;
+        color: #9a3412;
+    }
+
+    .empty-report {
+        padding: 34px;
+        text-align: center;
+        color: #64748b;
+        font-weight: 900;
+    }
+
+    @@media (max-width: 1100px) {
+        .report-filter {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @@media print {
+        body {
+            background: #fff !important;
+        }
+
+        .sidebar,
+        .topbar,
+        .no-print,
+        .delete-modal-backdrop {
+            display: none !important;
+        }
+
+        .app-shell,
+        .main-content,
+        .content-area {
+            display: block !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 100% !important;
+        }
+
+        .print-title {
+            display: block;
+            margin-bottom: 12px;
+        }
+
+        .print-title h1 {
+            margin: 0;
+            font-size: 22px;
+        }
+
+        .print-title p {
+            margin: 4px 0 0;
+            color: #475569;
+        }
+
+        .report-summary {
+            grid-template-columns: repeat(4, 1fr);
+        }
+
+        .report-summary div,
+        .report-table-card {
+            box-shadow: none !important;
+            border-color: #cbd5e1 !important;
+        }
+
+        .report-table {
+            min-width: 0;
+            font-size: 11px;
+        }
+
+        .report-table th,
+        .report-table td {
+            padding: 7px;
+        }
+    }
+</style>
