@@ -13,6 +13,28 @@ builder.Logging.AddDebug();
 
 builder.Services.AddControllersWithViews();
 
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(
+        "MobileAuthCors",
+        policy =>
+        {
+            policy
+                .SetIsOriginAllowed(origin =>
+                {
+                    if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri))
+                    {
+                        return false;
+                    }
+
+                    return uri.Host is "localhost" or "127.0.0.1";
+                })
+                .AllowAnyHeader()
+                .AllowAnyMethod();
+        }
+    );
+});
+
 var dataProtectionPath = Path.Combine(
     builder.Environment.ContentRootPath,
     "App_Data",
@@ -97,6 +119,8 @@ if (!app.Environment.IsDevelopment())
 app.UseStaticFiles();
 
 app.UseRouting();
+
+app.UseCors("MobileAuthCors");
 
 app.UseSession();
 
