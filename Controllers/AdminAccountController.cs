@@ -11,14 +11,17 @@ namespace mvc_web.Controllers
     {
         private readonly FirestoreDb _firestore;
         private readonly SessionService _session;
+        private readonly IWebHostEnvironment _environment;
 
         public AdminAccountController(
             FirestoreDb firestore,
-            SessionService session
+            SessionService session,
+            IWebHostEnvironment environment
         )
         {
             _firestore = firestore;
             _session = session;
+            _environment = environment;
         }
 
         [HttpGet]
@@ -173,17 +176,33 @@ namespace mvc_web.Controllers
 
             if (!doc.Exists)
             {
-                return "admin123";
+                return IsDevelopment() ? "admin123" : "";
             }
 
             var data = doc.ToDictionary();
-            return GetString(data, "password", "Password", "adminPassword", "AdminPassword", "sifre", "Sifre", "ÅŸifre", "Åifre");
+            return GetString(data, "passwordHash", "PasswordHash", "password", "Password", "adminPassword", "AdminPassword", "sifre", "Sifre", "ÅŸifre", "Åifre");
         }
 
         private async Task<bool> VerifySystemAdminPasswordAsync(string password)
         {
             var systemPassword = await GetSystemAdminPasswordAsync();
-            return !string.IsNullOrWhiteSpace(systemPassword) && systemPassword == password;
+
+            if (string.IsNullOrWhiteSpace(systemPassword))
+            {
+                return false;
+            }
+
+            if (PasswordHashService.IsHash(systemPassword))
+            {
+                return PasswordHashService.VerifyPassword(password, systemPassword);
+            }
+
+            return systemPassword == password;
+        }
+
+        private bool IsDevelopment()
+        {
+            return _environment.IsDevelopment();
         }
 
         private static string GetString(Dictionary<string, object> data, params string[] keys)

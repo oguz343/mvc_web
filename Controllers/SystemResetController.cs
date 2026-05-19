@@ -9,16 +9,19 @@ namespace mvc_web.Controllers;
 public class SystemResetController : Controller
 {
     private readonly FirestoreDb _firestore;
+    private readonly IWebHostEnvironment _environment;
 
-    public SystemResetController(FirestoreDb firestore)
+    public SystemResetController(FirestoreDb firestore, IWebHostEnvironment environment)
     {
         _firestore = firestore;
+        _environment = environment;
     }
 
     [HttpGet("")]
     [HttpGet("Index")]
     public IActionResult Index()
     {
+        ViewBag.IsDevelopment = IsDevelopment();
         return View("~/Views/SystemReset/Index.cshtml");
     }
 
@@ -171,7 +174,7 @@ public class SystemResetController : Controller
     private async Task EnsureDefaultAdminAsync()
     {
         var users = await _firestore.Collection("users").GetSnapshotAsync();
-        var adminHash = PasswordHashService.HashPassword("admin123");
+        var now = Timestamp.FromDateTime(DateTime.UtcNow);
 
         foreach (var doc in users.Documents)
         {
@@ -182,48 +185,67 @@ public class SystemResetController : Controller
 
             if (role == "admin" || number == "0000")
             {
+                var passwordHash = GetString(data, "passwordHash", "PasswordHash");
+                var update = new Dictionary<string, object?>
+                {
+                    ["name"] = "Admin",
+                    ["Name"] = "Admin",
+                    ["fullName"] = "Admin",
+                    ["FullName"] = "Admin",
+
+                    ["role"] = "admin",
+                    ["Role"] = "Admin",
+                    ["userRole"] = "admin",
+                    ["UserRole"] = "Admin",
+
+                    ["number"] = "0000",
+                    ["Number"] = "0000",
+                    ["schoolNo"] = "0000",
+                    ["SchoolNo"] = "0000",
+                    ["adminNo"] = "0000",
+                    ["AdminNo"] = "0000",
+
+                    ["isDeleted"] = false,
+                    ["IsDeleted"] = false,
+                    ["isActive"] = true,
+                    ["IsActive"] = true,
+
+                    ["mustChangePassword"] = false,
+                    ["MustChangePassword"] = false,
+
+                    ["updatedAt"] = now,
+                    ["UpdatedAt"] = now,
+                };
+
+                if (!PasswordHashService.IsHash(passwordHash) && IsDevelopment())
+                {
+                    passwordHash = PasswordHashService.HashPassword("admin123");
+                    update["passwordHash"] = passwordHash;
+                    update["PasswordHash"] = passwordHash;
+                    update["password"] = "";
+                    update["Password"] = "";
+                }
+
                 await doc.Reference.SetAsync(
-                    new Dictionary<string, object?>
-                    {
-                        ["name"] = "Admin",
-                        ["Name"] = "Admin",
-                        ["fullName"] = "Admin",
-                        ["FullName"] = "Admin",
-
-                        ["role"] = "admin",
-                        ["Role"] = "Admin",
-                        ["userRole"] = "admin",
-                        ["UserRole"] = "Admin",
-
-                        ["number"] = "0000",
-                        ["Number"] = "0000",
-                        ["schoolNo"] = "0000",
-                        ["SchoolNo"] = "0000",
-                        ["adminNo"] = "0000",
-                        ["AdminNo"] = "0000",
-
-                        ["passwordHash"] = adminHash,
-                        ["PasswordHash"] = adminHash,
-                        ["password"] = "",
-                        ["Password"] = "",
-
-                        ["isDeleted"] = false,
-                        ["IsDeleted"] = false,
-                        ["isActive"] = true,
-                        ["IsActive"] = true,
-
-                        ["mustChangePassword"] = false,
-                        ["MustChangePassword"] = false,
-
-                        ["updatedAt"] = Timestamp.FromDateTime(DateTime.UtcNow),
-                        ["UpdatedAt"] = Timestamp.FromDateTime(DateTime.UtcNow),
-                    },
+                    update,
                     SetOptions.MergeAll
                 );
+
+                if (PasswordHashService.IsHash(passwordHash))
+                {
+                    await ResetSystemAdminAccountAsync(passwordHash, now);
+                }
 
                 return;
             }
         }
+
+        if (!IsDevelopment())
+        {
+            return;
+        }
+
+        var adminHash = PasswordHashService.HashPassword("admin123");
 
         await _firestore.Collection("users").AddAsync(
             new Dictionary<string, object?>
@@ -258,12 +280,42 @@ public class SystemResetController : Controller
                 ["mustChangePassword"] = false,
                 ["MustChangePassword"] = false,
 
-                ["createdAt"] = Timestamp.FromDateTime(DateTime.UtcNow),
-                ["CreatedAt"] = Timestamp.FromDateTime(DateTime.UtcNow),
-                ["updatedAt"] = Timestamp.FromDateTime(DateTime.UtcNow),
-                ["UpdatedAt"] = Timestamp.FromDateTime(DateTime.UtcNow),
+                ["createdAt"] = now,
+                ["CreatedAt"] = now,
+                ["updatedAt"] = now,
+                ["UpdatedAt"] = now,
             }
         );
+
+        await ResetSystemAdminAccountAsync(adminHash, now);
+    }
+
+    private async Task ResetSystemAdminAccountAsync(string adminHash, Timestamp now)
+    {
+        await _firestore
+            .Collection("system")
+            .Document("admin_account")
+            .SetAsync(
+                new Dictionary<string, object?>
+                {
+                    ["number"] = "0000",
+                    ["Number"] = "0000",
+                    ["adminNo"] = "0000",
+                    ["AdminNo"] = "0000",
+                    ["passwordHash"] = adminHash,
+                    ["PasswordHash"] = adminHash,
+                    ["password"] = "",
+                    ["Password"] = "",
+                    ["updatedAt"] = now,
+                    ["UpdatedAt"] = now,
+                },
+                SetOptions.MergeAll
+            );
+    }
+
+    private bool IsDevelopment()
+    {
+        return _environment.IsDevelopment();
     }
 
     private static string GetString(Dictionary<string, object> data, params string[] keys)

@@ -8,10 +8,12 @@ namespace mvc_web.Controllers;
 public class AuthController : Controller
 {
     private readonly FirestoreDb _firestore;
+    private readonly IWebHostEnvironment _environment;
 
-    public AuthController(FirestoreDb firestore)
+    public AuthController(FirestoreDb firestore, IWebHostEnvironment environment)
     {
         _firestore = firestore;
+        _environment = environment;
     }
 
     [HttpGet]
@@ -199,8 +201,16 @@ public class AuthController : Controller
 
         if (!passwordOk && wantedRoleKey == "admin" && Number == "0000")
         {
+            var systemAdminConfigured = await SystemAdminAccountHasPasswordAsync();
             passwordOk = await VerifySystemAdminPasswordAsync(Password);
             shouldMigrateToHash = passwordOk;
+
+            if (!passwordOk && !IsDevelopment() && !systemAdminConfigured)
+            {
+                TempData["Error"] = "Admin hesabı production ortamında yapılandırılmamış. Lütfen system/admin_account kaydını güvenli bir şifreyle oluşturun.";
+                await FillLoginStatsAsync();
+                return View();
+            }
         }
 
         if (!passwordOk)
@@ -572,7 +582,7 @@ public class AuthController : Controller
 
         if (!doc.Exists)
         {
-            return false;
+            return IsDevelopment() && password == "admin123";
         }
 
         var data = doc.ToDictionary();
@@ -596,7 +606,44 @@ public class AuthController : Controller
             "Åifre"
         );
 
-        return !string.IsNullOrWhiteSpace(legacyPassword) && legacyPassword == password;
+        if (!string.IsNullOrWhiteSpace(legacyPassword))
+        {
+            return legacyPassword == password;
+        }
+
+        return IsDevelopment() && password == "admin123";
+    }
+
+    private async Task<bool> SystemAdminAccountHasPasswordAsync()
+    {
+        var doc = await _firestore
+            .Collection("system")
+            .Document("admin_account")
+            .GetSnapshotAsync();
+
+        if (!doc.Exists)
+        {
+            return false;
+        }
+
+        var data = doc.ToDictionary();
+        var passwordValue = GetString(
+            data,
+            "passwordHash",
+            "PasswordHash",
+            "hash",
+            "Hash",
+            "password",
+            "Password",
+            "adminPassword",
+            "AdminPassword",
+            "sifre",
+            "Sifre",
+            "Ã…Å¸ifre",
+            "Ã…Âifre"
+        );
+
+        return !string.IsNullOrWhiteSpace(passwordValue);
     }
 
     private async Task EnsureDefaultAdminAsync()
@@ -653,7 +700,7 @@ public class AuthController : Controller
                     ["UpdatedAt"] = Timestamp.FromDateTime(DateTime.UtcNow),
                 };
 
-                if (!PasswordHashService.IsHash(passwordHash))
+                if (!PasswordHashService.IsHash(passwordHash) && IsDevelopment())
                 {
                     var hash = PasswordHashService.HashPassword("admin123");
 
@@ -666,6 +713,11 @@ public class AuthController : Controller
                 await doc.Reference.SetAsync(update, SetOptions.MergeAll);
                 return;
             }
+        }
+
+        if (!IsDevelopment())
+        {
+            return;
         }
 
         var adminHash = PasswordHashService.HashPassword("admin123");
@@ -709,6 +761,11 @@ public class AuthController : Controller
                 ["UpdatedAt"] = Timestamp.FromDateTime(DateTime.UtcNow),
             }
         );
+    }
+
+    private bool IsDevelopment()
+    {
+        return _environment.IsDevelopment();
     }
 
     private static bool IsDeleted(Dictionary<string, object> data)

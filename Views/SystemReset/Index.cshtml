@@ -345,7 +345,14 @@
                 <div class="keep-box">
                     <strong>Admin hesabı korunacak</strong>
                     <span>No: 0000</span>
-                    <span>Şifre: admin123</span>
+                    @if (ViewBag.IsDevelopment == true)
+                    {
+                        <span>Geliştirme şifresi: admin123</span>
+                    }
+                    else
+                    {
+                        <span>Şifre: Mevcut güvenli admin şifresi korunur</span>
+                    }
                 </div>
 
                 <p>
