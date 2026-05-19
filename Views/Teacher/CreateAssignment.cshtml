@@ -99,8 +99,8 @@
 
                     <div class="field-group">
                         <label for="lessonIds">Ders / Sınıf Seç</label>
-                        <div class="select-wrap">
-                            <select id="lessonIds" name="lessonIds" multiple required>
+                        <div class="select-wrap lesson-picker-grid" id="lessonIds">
+                            <select class="legacy-lesson-select" name="lessonIds" multiple required>
                                 @foreach (var lesson in lessons)
                                 {
                                     <option value="@lesson.Id"
@@ -111,6 +111,7 @@
                                     </option>
                                 }
                             </select>
+                            <div class="lesson-card-picker" id="lessonCardPicker"></div>
                         </div>
                         <small>Birden fazla ders/sınıf seçerseniz her atama için ayrı ödev oluşturulur.</small>
                     </div>
@@ -475,7 +476,83 @@
     }
 
     #lessonIds {
-        min-height: 170px;
+        min-height: 0;
+    }
+
+    .legacy-lesson-select {
+        position: absolute;
+        width: 1px !important;
+        height: 1px !important;
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    .lesson-card-picker {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 8px;
+        max-height: 230px;
+        overflow-y: auto;
+        padding: 8px;
+        border: 1px solid #e2e8f0;
+        border-radius: 22px;
+        background: #fff;
+    }
+
+    .lesson-choice-card {
+        min-height: 62px;
+        border: 1px solid #e2e8f0;
+        border-radius: 18px;
+        background: #f8fafc;
+        padding: 10px;
+        display: grid;
+        grid-template-columns: 28px 1fr;
+        gap: 9px;
+        align-items: center;
+        cursor: pointer;
+        transition: .18s ease;
+    }
+
+    .lesson-choice-card.is-selected {
+        border-color: #4f46e5;
+        background: linear-gradient(135deg, #eef2ff, #ecfeff);
+        box-shadow: 0 14px 30px rgba(79, 70, 229, .12);
+    }
+
+    .lesson-choice-check {
+        width: 28px;
+        height: 28px;
+        border-radius: 11px;
+        background: white;
+        border: 1px solid #cbd5e1;
+        display: grid;
+        place-items: center;
+        color: transparent;
+        font-weight: 950;
+    }
+
+    .lesson-choice-card.is-selected .lesson-choice-check {
+        background: #4f46e5;
+        border-color: #4f46e5;
+        color: white;
+    }
+
+    .lesson-choice-card strong,
+    .lesson-choice-card span {
+        display: block;
+    }
+
+    .lesson-choice-card strong {
+        color: #0f172a;
+        font-weight: 950;
+        font-size: 13px;
+    }
+
+    .lesson-choice-card span {
+        color: #64748b;
+        font-size: 11px;
+        font-weight: 800;
+        margin-top: 2px;
     }
 
     .select-wrap {
@@ -593,12 +670,15 @@
 
     .lesson-list {
         display: grid;
-        gap: 11px;
+        gap: 9px;
+        max-height: 460px;
+        overflow-y: auto;
+        padding-right: 4px;
     }
 
     .lesson-mini-card {
-        padding: 14px;
-        border-radius: 24px;
+        padding: 11px;
+        border-radius: 18px;
         background: #f8fafc;
         border: 1px solid #e2e8f0;
         display: flex;
@@ -607,9 +687,9 @@
     }
 
     .lesson-mini-icon {
-        width: 46px;
-        height: 46px;
-        border-radius: 18px;
+        width: 36px;
+        height: 36px;
+        border-radius: 14px;
         background: linear-gradient(135deg, rgba(79, 70, 229, .14), rgba(6, 182, 212, .14));
         display: grid;
         place-items: center;
@@ -623,12 +703,13 @@
     .lesson-mini-card strong {
         color: #0f172a;
         font-weight: 950;
+        font-size: 13px;
     }
 
     .lesson-mini-card span {
         color: #64748b;
         font-weight: 800;
-        font-size: 12px;
+        font-size: 11px;
         margin-top: 3px;
     }
 
@@ -685,16 +766,43 @@
 <script>
     (function () {
         const select = document.getElementById('lessonIds');
+        const realSelect = select ? select.querySelector('select') : null;
+        const cardPicker = document.getElementById('lessonCardPicker');
         const lessonNameInput = document.getElementById('lessonName');
         const classNameInput = document.getElementById('className');
         const preview = document.getElementById('lessonPreview');
 
-        if (!select || !preview) {
+        if (!select || !realSelect || !preview || !cardPicker) {
             return;
         }
 
+        Array.from(realSelect.options).forEach(option => {
+            const card = document.createElement('button');
+            card.type = 'button';
+            card.className = 'lesson-choice-card';
+            card.innerHTML = `
+                <span class="lesson-choice-check">✓</span>
+                <span>
+                    <strong>${escapeHtml(option.dataset.name || option.textContent || 'Ders')}</strong>
+                    <span>${escapeHtml(option.dataset.class || '-')}${option.dataset.branch ? ' • ' + escapeHtml(option.dataset.branch) : ''}</span>
+                </span>
+            `;
+
+            card.addEventListener('click', () => {
+                option.selected = !option.selected;
+                updatePreview();
+            });
+
+            cardPicker.appendChild(card);
+        });
+
         function updatePreview() {
-            const selectedOptions = Array.from(select.selectedOptions || []);
+            const options = Array.from(realSelect.options || []);
+            const selectedOptions = options.filter(option => option.selected);
+
+            Array.from(cardPicker.children).forEach((card, index) => {
+                card.classList.toggle('is-selected', options[index] && options[index].selected);
+            });
 
             if (selectedOptions.length === 0) {
                 if (lessonNameInput) lessonNameInput.value = '';
@@ -744,7 +852,7 @@
                 .replaceAll("'", '&#039;');
         }
 
-        select.addEventListener('change', updatePreview);
+        realSelect.addEventListener('change', updatePreview);
         updatePreview();
     })();
 </script>
