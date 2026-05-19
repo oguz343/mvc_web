@@ -12,3 +12,4 @@
 - FAZ 10: Admin-only legacy teslim backfill ekranı eklendi; `homework_submissions` kayıtları canonical `submissions` dokümanlarına idempotent merge edilebilir.
 - P0/P3 hardening: SetPassword akışı yalnızca aktivasyon + `mustChangePassword` durumuna bağlandı; portal tesliminde koleksiyon whitelist ve sınıf sahipliği kontrolü eklendi; legacy backfill ikinci çalıştırmada değişmeyen kayıtları `Skip` sayacak şekilde düzeltildi.
 - P1/P4 hardening: Web session cookie ayarları sıkılaştırıldı; web/mobil şifre politikası en az 8 karaktere hizalandı; portal dosya teslimlerine 10 MB ve MIME kontrolü eklendi; geçici kod üretimi güvenli rastgele üretime taşındı; mobil `/change-password` oturum guard'ına alındı.
+- P2 performance: Portal teslim kontrolünde canonical ve legacy direkt ID aramasından sonra tam koleksiyon taraması yerine öğrenci numarasıyla sınırlı Firestore query fallback'i eklendi.

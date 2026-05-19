@@ -444,11 +444,58 @@ namespace mvc_web.Controllers
                 }
             }
 
-            var directKey = NormalizeKey($"{homeworkId}_{OnlyDigits(studentNumber)}");
+            var studentNo = OnlyDigits(studentNumber);
+            var directKey = NormalizeKey($"{homeworkId}_{studentNo}");
 
             foreach (var submissionCollection in new[] { "submissions", "homework_submissions" })
             {
-                var snapshot = await _firestore.Collection(submissionCollection).GetSnapshotAsync();
+                var doc = await FindSubmissionByStudentQuery(
+                    submissionCollection,
+                    homeworkId,
+                    studentNo,
+                    directKey
+                );
+
+                if (doc != null)
+                {
+                    return doc;
+                }
+            }
+
+            return await _firestore
+                .Collection("homework_submissions")
+                .Document("missing")
+                .GetSnapshotAsync();
+        }
+
+        private async Task<DocumentSnapshot?> FindSubmissionByStudentQuery(
+            string submissionCollection,
+            string homeworkId,
+            string studentNo,
+            string directKey
+        )
+        {
+            if (string.IsNullOrWhiteSpace(studentNo))
+            {
+                return null;
+            }
+
+            foreach (var studentField in new[] { "studentNo", "StudentNo", "studentNumber", "StudentNumber", "schoolNo", "SchoolNo" })
+            {
+                QuerySnapshot snapshot;
+
+                try
+                {
+                    snapshot = await _firestore
+                        .Collection(submissionCollection)
+                        .WhereEqualTo(studentField, studentNo)
+                        .Limit(20)
+                        .GetSnapshotAsync();
+                }
+                catch
+                {
+                    continue;
+                }
 
                 foreach (var doc in snapshot.Documents)
                 {
@@ -470,10 +517,7 @@ namespace mvc_web.Controllers
                 }
             }
 
-            return await _firestore
-                .Collection("homework_submissions")
-                .Document("missing")
-                .GetSnapshotAsync();
+            return null;
         }
 
         private static string BuildSubmissionId(string assignmentId, string studentNo)
