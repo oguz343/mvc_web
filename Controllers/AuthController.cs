@@ -33,18 +33,32 @@ public class AuthController : Controller
     }
 
     [HttpGet]
-    public IActionResult SetPassword()
+    public async Task<IActionResult> SetPassword()
     {
-        var userId = TempData["SetPasswordUserId"]?.ToString() ?? HttpContext.Session.GetString("UserId") ?? "";
-        var name = TempData["SetPasswordName"]?.ToString() ?? HttpContext.Session.GetString("UserName") ?? "";
-        var role = TempData["SetPasswordRole"]?.ToString() ?? HttpContext.Session.GetString("UserRole") ?? "";
-        var number = TempData["SetPasswordNumber"]?.ToString() ?? HttpContext.Session.GetString("UserNumber") ?? "";
+        var userId = TempData["SetPasswordUserId"]?.ToString() ?? "";
+        var name = TempData["SetPasswordName"]?.ToString() ?? "";
+        var role = TempData["SetPasswordRole"]?.ToString() ?? "";
+        var number = TempData["SetPasswordNumber"]?.ToString() ?? "";
 
         if (string.IsNullOrWhiteSpace(userId))
         {
             TempData["Error"] = "Yeni şifre oluşturmak için önce aktivasyon kodu ile giriş yapmalısınız.";
             return RedirectToAction(nameof(Login));
         }
+
+        var userDoc = await _firestore.Collection("users").Document(userId).GetSnapshotAsync();
+
+        if (!UserCanSetInitialPassword(userDoc))
+        {
+            ClearSetPasswordState();
+            TempData["Error"] = "Şifre değiştirme bağlantısı geçersiz veya süresi dolmuş.";
+            return RedirectToAction(nameof(Login));
+        }
+
+        var data = userDoc.ToDictionary();
+        name = FirstNonEmpty(name, GetString(data, "name", "Name"), role);
+        role = FirstNonEmpty(role, GetString(data, "role", "Role"));
+        number = FirstNonEmpty(number, OnlyDigits(GetString(data, "number", "Number", "schoolNo", "SchoolNo")));
 
         KeepSetPasswordState(userId, name, role, number);
         return View();
@@ -54,10 +68,10 @@ public class AuthController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> SetPassword(string password, string repeatPassword)
     {
-        var userId = TempData["SetPasswordUserId"]?.ToString() ?? HttpContext.Session.GetString("UserId") ?? "";
-        var name = TempData["SetPasswordName"]?.ToString() ?? HttpContext.Session.GetString("UserName") ?? "";
-        var role = TempData["SetPasswordRole"]?.ToString() ?? HttpContext.Session.GetString("UserRole") ?? "";
-        var number = TempData["SetPasswordNumber"]?.ToString() ?? HttpContext.Session.GetString("UserNumber") ?? "";
+        var userId = TempData["SetPasswordUserId"]?.ToString() ?? "";
+        var name = TempData["SetPasswordName"]?.ToString() ?? "";
+        var role = TempData["SetPasswordRole"]?.ToString() ?? "";
+        var number = TempData["SetPasswordNumber"]?.ToString() ?? "";
 
         if (string.IsNullOrWhiteSpace(userId))
         {
@@ -82,10 +96,24 @@ public class AuthController : Controller
             return View();
         }
 
+        var userDoc = await _firestore.Collection("users").Document(userId).GetSnapshotAsync();
+
+        if (!UserCanSetInitialPassword(userDoc))
+        {
+            ClearSetPasswordState();
+            TempData["Error"] = "Şifre değiştirme bağlantısı geçersiz veya süresi dolmuş.";
+            return RedirectToAction(nameof(Login));
+        }
+
+        var data = userDoc.ToDictionary();
+        name = FirstNonEmpty(name, GetString(data, "name", "Name"), role);
+        role = FirstNonEmpty(role, GetString(data, "role", "Role"));
+        number = FirstNonEmpty(number, OnlyDigits(GetString(data, "number", "Number", "schoolNo", "SchoolNo")));
+
         var hash = PasswordHashService.HashPassword(password);
         var now = Timestamp.FromDateTime(DateTime.UtcNow);
 
-        await _firestore.Collection("users").Document(userId).SetAsync(
+        await userDoc.Reference.SetAsync(
             new Dictionary<string, object?>
             {
                 ["passwordHash"] = hash,
@@ -104,6 +132,7 @@ public class AuthController : Controller
             SetOptions.MergeAll
         );
 
+        HttpContext.Session.Clear();
         HttpContext.Session.SetString("UserId", userId);
         HttpContext.Session.SetString("UserDocId", userId);
         HttpContext.Session.SetString("UserRole", role);
@@ -115,10 +144,7 @@ public class AuthController : Controller
         HttpContext.Session.SetString("UserName", string.IsNullOrWhiteSpace(name) ? role : name);
         HttpContext.Session.SetString("Name", string.IsNullOrWhiteSpace(name) ? role : name);
 
-        TempData.Remove("SetPasswordUserId");
-        TempData.Remove("SetPasswordName");
-        TempData.Remove("SetPasswordRole");
-        TempData.Remove("SetPasswordNumber");
+        ClearSetPasswordState();
 
         return RedirectByRole(role);
     }
@@ -268,6 +294,14 @@ public class AuthController : Controller
             );
         }
 
+        if (mustChangePassword)
+        {
+            HttpContext.Session.Clear();
+            KeepSetPasswordState(user.Id, cleanName, cleanRole, cleanNumber);
+            return RedirectToAction(nameof(SetPassword));
+        }
+
+        HttpContext.Session.Clear();
         HttpContext.Session.SetString("UserId", user.Id);
         HttpContext.Session.SetString("UserDocId", user.Id);
 
@@ -287,12 +321,6 @@ public class AuthController : Controller
 
         HttpContext.Session.SetString("UserClass", cleanClass);
         HttpContext.Session.SetString("ClassName", cleanClass);
-
-        if (mustChangePassword)
-        {
-            KeepSetPasswordState(user.Id, cleanName, cleanRole, cleanNumber);
-            return RedirectToAction(nameof(SetPassword));
-        }
 
         return RedirectByRole(cleanRole);
     }
@@ -320,6 +348,28 @@ public class AuthController : Controller
         ViewBag.Name = string.IsNullOrWhiteSpace(name) ? "Kullanici" : name;
         ViewBag.Role = role;
         ViewBag.Number = number;
+    }
+
+    private void ClearSetPasswordState()
+    {
+        TempData.Remove("SetPasswordUserId");
+        TempData.Remove("SetPasswordName");
+        TempData.Remove("SetPasswordRole");
+        TempData.Remove("SetPasswordNumber");
+    }
+
+    private static bool UserCanSetInitialPassword(DocumentSnapshot userDoc)
+    {
+        if (!userDoc.Exists)
+        {
+            return false;
+        }
+
+        var data = userDoc.ToDictionary();
+        var mustChangePassword = GetBool(data, "mustChangePassword", "MustChangePassword", "forcePasswordChange", "ForcePasswordChange");
+        var activationCode = GetString(data, "activationCode", "ActivationCode");
+
+        return mustChangePassword && !string.IsNullOrWhiteSpace(activationCode);
     }
 
     private async Task FillLoginStatsAsync()

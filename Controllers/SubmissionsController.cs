@@ -151,8 +151,11 @@ public class SubmissionsController : Controller
 
                 var canonicalRef = _firestore.Db.Collection("submissions").Document(canonicalId);
                 var canonicalDoc = await canonicalRef.GetSnapshotAsync();
+                var canonical = canonicalDoc.Exists
+                    ? canonicalDoc.ToDictionary()
+                    : new Dictionary<string, object>();
                 var merged = canonicalDoc.Exists
-                    ? MergeSubmissionData(canonicalDoc.ToDictionary(), legacy)
+                    ? MergeSubmissionData(canonical, legacy)
                     : new Dictionary<string, object>(legacy);
 
                 merged["id"] = canonicalId;
@@ -169,8 +172,18 @@ public class SubmissionsController : Controller
                 merged["LegacySubmissionId"] = legacyDoc.Id;
                 merged["backfilledFrom"] = "homework_submissions";
                 merged["BackfilledFrom"] = "homework_submissions";
-                merged["backfilledAt"] = Timestamp.GetCurrentTimestamp();
-                merged["BackfilledAt"] = Timestamp.GetCurrentTimestamp();
+
+                if (canonicalDoc.Exists &&
+                    HasBackfillMarker(canonical, legacyDoc.Id) &&
+                    !HasMeaningfulChanges(canonical, merged))
+                {
+                    report.Skipped++;
+                    continue;
+                }
+
+                var now = Timestamp.GetCurrentTimestamp();
+                merged["backfilledAt"] = now;
+                merged["BackfilledAt"] = now;
 
                 await canonicalRef.SetAsync(merged, SetOptions.MergeAll);
                 report.Merged++;
@@ -223,6 +236,69 @@ public class SubmissionsController : Controller
         SetLatestDate(merged, legacy, "evaluatedAt", "EvaluatedAt");
 
         return merged;
+    }
+
+    private static bool HasBackfillMarker(Dictionary<string, object> data, string legacySubmissionId)
+    {
+        var source = FirstValue(data, "backfilledFrom", "BackfilledFrom");
+        var id = FirstValue(data, "legacySubmissionId", "LegacySubmissionId");
+        var hasDate = GetDate(data, "backfilledAt", "BackfilledAt").HasValue;
+
+        return hasDate &&
+               source == "homework_submissions" &&
+               string.Equals(id, legacySubmissionId, StringComparison.Ordinal);
+    }
+
+    private static bool HasMeaningfulChanges(
+        Dictionary<string, object> current,
+        Dictionary<string, object> next
+    )
+    {
+        foreach (var item in next)
+        {
+            if (IsBackfillTimestampKey(item.Key))
+            {
+                continue;
+            }
+
+            if (!current.TryGetValue(item.Key, out var currentValue))
+            {
+                return true;
+            }
+
+            if (!ValuesEqual(currentValue, item.Value))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsBackfillTimestampKey(string key)
+    {
+        return string.Equals(key, "backfilledAt", StringComparison.Ordinal) ||
+               string.Equals(key, "BackfilledAt", StringComparison.Ordinal);
+    }
+
+    private static bool ValuesEqual(object? left, object? right)
+    {
+        if (left == null && right == null)
+        {
+            return true;
+        }
+
+        if (left == null || right == null)
+        {
+            return false;
+        }
+
+        if (left is Timestamp leftTimestamp && right is Timestamp rightTimestamp)
+        {
+            return leftTimestamp.ToDateTime() == rightTimestamp.ToDateTime();
+        }
+
+        return string.Equals(left.ToString(), right.ToString(), StringComparison.Ordinal);
     }
 
     private async Task DeleteSubmissionEverywhere(string id)

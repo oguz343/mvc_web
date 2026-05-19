@@ -10,3 +10,4 @@
 - FAZ 8: Mobil Firestore erişimi için Firebase Auth/rules riski ve production güvenlik planı `flutter_mobile/docs/SECURITY.md` altında dokümante edildi.
 - FAZ 9: Kullanılmayan web `CreatePassword` artifact'ları kaldırıldı; mobil route guard, proje README'si ve mobil/web parite notları eklendi.
 - FAZ 10: Admin-only legacy teslim backfill ekranı eklendi; `homework_submissions` kayıtları canonical `submissions` dokümanlarına idempotent merge edilebilir.
+- P0/P3 hardening: SetPassword akışı yalnızca aktivasyon + `mustChangePassword` durumuna bağlandı; portal tesliminde koleksiyon whitelist ve sınıf sahipliği kontrolü eklendi; legacy backfill ikinci çalıştırmada değişmeyen kayıtları `Skip` sayacak şekilde düzeltildi.

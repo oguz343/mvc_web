@@ -105,13 +105,29 @@ namespace mvc_web.Controllers
                 return RedirectToAction(nameof(Index));
             }
 
-            homeworkCollection = string.IsNullOrWhiteSpace(homeworkCollection)
-                ? "homeworks"
-                : homeworkCollection.Trim();
+            homeworkCollection = NormalizeHomeworkCollection(homeworkCollection);
+
+            if (string.IsNullOrWhiteSpace(homeworkCollection))
+            {
+                TempData["Error"] = "Geçersiz ödev kaynağı.";
+                return RedirectToAction(nameof(Index));
+            }
 
             var userId = _session.GetUserId(HttpContext) ?? "";
             var studentName = _session.GetName(HttpContext) ?? "Öğrenci";
             var studentNumber = _session.GetNumber(HttpContext) ?? "";
+            var studentDoc = await _firestore.Collection("users").Document(userId).GetSnapshotAsync();
+
+            if (!studentDoc.Exists)
+            {
+                _session.Logout(HttpContext);
+                return RedirectToAction("Login", "Auth");
+            }
+
+            var studentData = studentDoc.ToDictionary();
+            var studentClass = NormalizeClassName(
+                GetString(studentData, "className", "ClassName", "class", "Class")
+            );
 
             var homeworkDoc = await _firestore
                 .Collection(homeworkCollection)
@@ -125,6 +141,14 @@ namespace mvc_web.Controllers
             }
 
             var homeworkData = homeworkDoc.ToDictionary();
+            var classIds = await FindClassIdsByName(studentClass);
+
+            if (string.IsNullOrWhiteSpace(studentClass) || !HomeworkMatchesClass(homeworkData, studentClass, classIds))
+            {
+                TempData["Error"] = "Bu ödeve teslim yapma yetkiniz yok.";
+                return RedirectToAction(nameof(Index));
+            }
+
             string fileName = "";
             string fileUrl = "";
 
@@ -439,6 +463,19 @@ namespace mvc_web.Controllers
             }
 
             return NormalizeKey($"{assignmentId}_{studentNo}");
+        }
+
+        private static string NormalizeHomeworkCollection(string collection)
+        {
+            collection = (collection ?? "").Trim().ToLowerInvariant();
+
+            return collection switch
+            {
+                "" => "homeworks",
+                "homeworks" => "homeworks",
+                "assignments" => "assignments",
+                _ => ""
+            };
         }
 
         private async Task<HashSet<string>> FindClassIdsByName(string className)
