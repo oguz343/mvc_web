@@ -1481,7 +1481,7 @@ public class TeacherController : Controller
 
             var targetKey = NormalizeKey(target);
 
-            if (targetKey != "tumokul" && targetKey != "ogretmen")
+            if (!IsTeacherAnnouncementTarget(targetKey))
             {
                 continue;
             }
@@ -1518,6 +1518,22 @@ public class TeacherController : Controller
         return result
             .OrderByDescending(x => GetDate(x, "createdAt", "CreatedAt", "publishedAt", "PublishedAt") ?? DateTime.MinValue)
             .ToList();
+    }
+
+    private static bool IsTeacherAnnouncementTarget(string targetKey)
+    {
+        if (string.IsNullOrWhiteSpace(targetKey))
+        {
+            return true;
+        }
+
+        return targetKey.Contains("tum") ||
+               targetKey.Contains("herkes") ||
+               targetKey.Contains("genel") ||
+               targetKey.Contains("okul") ||
+               targetKey.Contains("all") ||
+               targetKey.Contains("ogretmen") ||
+               targetKey.Contains("teacher");
     }
 
     private async Task UpdateAssignmentEverywhere(string assignmentId, Dictionary<string, object?> update)

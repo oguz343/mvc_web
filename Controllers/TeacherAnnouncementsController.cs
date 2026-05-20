@@ -71,11 +71,6 @@ namespace mvc_web.Controllers
                     continue;
                 }
 
-                if (IsTestGarbage(title, content))
-                {
-                    continue;
-                }
-
                 var target = FirstNonEmpty(
                     GetString(data, "target", "Target"),
                     GetString(data, "targetRole", "TargetRole"),
@@ -222,22 +217,6 @@ namespace mvc_web.Controllers
                 status == "iptal" ||
                 status == "cancelled" ||
                 status == "canceled")
-            {
-                return true;
-            }
-
-            return false;
-        }
-
-        private static bool IsTestGarbage(string title, string content)
-        {
-            var titleKey = NormalizeKey(title);
-            var contentKey = NormalizeKey(content);
-
-            if (titleKey == "test" ||
-                titleKey == "testduyuru" ||
-                contentKey == "test" ||
-                contentKey == "testduyuru")
             {
                 return true;
             }
