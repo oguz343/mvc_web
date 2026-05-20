@@ -1,5 +1,7 @@
 # Changelog
 
+- Repo hygiene: Build artifacts, development appsettings, and uploaded submission files are no longer tracked by git.
+
 - UI polish: Admin and teacher pages now show a single page header card by hiding the duplicated layout topbar.
 
 - P2 performance: Teacher submission screens now load submissions through teacher/assignment scoped Firestore queries instead of broad collection scans.
