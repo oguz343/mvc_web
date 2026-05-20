@@ -1,5 +1,7 @@
 # Changelog
 
+- UI polish: Admin panel now uses a dark dashboard layout with working search navigation, notification shortcut, user menu, metric cards, progress cards, recent users, and quick actions.
+
 - P2 performance: Teacher submission screens now load submissions through teacher/assignment scoped Firestore queries instead of broad collection scans.
 
 - UI polish: Sidebar navigation now uses clean icon badges, and the teacher assignments header no longer repeats the user profile chip.

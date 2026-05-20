@@ -2,7 +2,6 @@
 
 @{
     var currentController = ViewContext.RouteData.Values["controller"]?.ToString() ?? "";
-    var currentAction = ViewContext.RouteData.Values["action"]?.ToString() ?? "";
 
     var adminName =
         Context.Session.GetString("UserName") ??
@@ -24,7 +23,7 @@
 
     if (string.IsNullOrWhiteSpace(pageSubtitle))
     {
-        pageSubtitle = "Yönetim işlemlerinizi buradan kontrol edin.";
+        pageSubtitle = "Kullanıcıları, sınıfları, ödevleri ve güvenlik taleplerini yönetin.";
     }
 
     string Active(string controller)
@@ -45,131 +44,108 @@
     <link rel="stylesheet" href="~/css/dashboard.css" asp-append-version="true" />
 </head>
 
-<body>
-    <div class="app-shell">
+<body class="admin-dark">
+    <div class="app-shell admin-shell">
         <aside class="sidebar admin-sidebar">
             <div class="brand">
-                <div class="brand-icon admin">
-                    🎓
-                </div>
+                <div class="brand-icon admin" aria-hidden="true"></div>
 
                 <div>
-                    <div class="brand-title">
-                        Ödev Sistemi
-                    </div>
-
-                    <div class="brand-subtitle">
-                        Admin Paneli
-                    </div>
+                    <div class="brand-title">Ödev Sistemi</div>
+                    <div class="brand-subtitle">Admin Paneli</div>
                 </div>
             </div>
 
-            <nav class="nav-menu">
-                <a class="nav-link @Active("Dashboard")"
-                   asp-controller="Dashboard"
-                   asp-action="Index">
-                    <span>📊</span>
+            <nav class="nav-menu" aria-label="Admin menüsü">
+                <a class="nav-link @Active("Dashboard")" asp-controller="Dashboard" asp-action="Index">
+                    <span aria-hidden="true"></span>
                     <strong>Kontrol Paneli</strong>
                 </a>
 
-                <a class="nav-link @Active("Users")"
-                   asp-controller="Users"
-                   asp-action="Index">
-                    <span>👥</span>
+                <a class="nav-link @Active("Users")" asp-controller="Users" asp-action="Index">
+                    <span aria-hidden="true"></span>
                     <strong>Kullanıcılar</strong>
                 </a>
 
-                <a class="nav-link @Active("Classes")"
-                   asp-controller="Classes"
-                   asp-action="Index">
-                    <span>🏫</span>
+                <a class="nav-link @Active("Classes")" asp-controller="Classes" asp-action="Index">
+                    <span aria-hidden="true"></span>
                     <strong>Sınıflar</strong>
                 </a>
 
-                <a class="nav-link @Active("Lessons")"
-                   asp-controller="Lessons"
-                   asp-action="Index">
-                    <span>📚</span>
+                <a class="nav-link @Active("Lessons")" asp-controller="Lessons" asp-action="Index">
+                    <span aria-hidden="true"></span>
                     <strong>Ders Atamaları</strong>
                 </a>
 
-                <a class="nav-link @Active("Submissions")"
-                   asp-controller="Submissions"
-                   asp-action="Index">
-                    <span>📥</span>
+                <a class="nav-link @Active("Submissions")" asp-controller="Submissions" asp-action="Index">
+                    <span aria-hidden="true"></span>
                     <strong>Teslimler</strong>
                 </a>
 
-                <a class="nav-link @Active("Reports")"
-                   asp-controller="Reports"
-                   asp-action="Index">
-                    <span>R</span>
-                    <strong>Raporlama</strong>
-                </a>
-
-                <a class="nav-link @Active("Announcements")"
-                   asp-controller="Announcements"
-                   asp-action="Index">
-                    <span>📣</span>
+                <a class="nav-link @Active("Announcements")" asp-controller="Announcements" asp-action="Index">
+                    <span aria-hidden="true"></span>
                     <strong>Duyurular</strong>
                 </a>
 
-                <a class="nav-link @Active("PasswordRequests")"
-                   asp-controller="PasswordRequests"
-                   asp-action="Index">
-                    <span>🔑</span>
+                <a class="nav-link @Active("PasswordRequests")" asp-controller="PasswordRequests" asp-action="Index">
+                    <span aria-hidden="true"></span>
                     <strong>Şifre Talepleri</strong>
                 </a>
 
-                <a class="nav-link @Active("AdminAccount")"
-                   asp-controller="AdminAccount"
-                   asp-action="ChangePassword">
-                    <span>🛡️</span>
-                    <strong>Admin Şifresi</strong>
+                <a class="nav-link @Active("Reports")" asp-controller="Reports" asp-action="Index">
+                    <span aria-hidden="true"></span>
+                    <strong>Raporlar</strong>
+                </a>
+
+                <a class="nav-link @Active("AdminAccount")" asp-controller="AdminAccount" asp-action="ChangePassword">
+                    <span aria-hidden="true"></span>
+                    <strong>Ayarlar</strong>
                 </a>
             </nav>
 
-            <a class="logout-link"
-               asp-controller="Auth"
-               asp-action="Logout">
-                <span>🚪</span>
+            <a class="logout-link" asp-controller="Auth" asp-action="Logout">
+                <span aria-hidden="true"></span>
                 <strong>Çıkış Yap</strong>
             </a>
         </aside>
 
         <main class="main-content">
-            <header class="topbar">
-                <div>
-                    <div class="topbar-subtitle">
-                        Yönetim Paneli
-                    </div>
-
-                    <div class="topbar-title">
-                        @pageTitle
-                    </div>
-
+            <header class="topbar admin-topbar">
+                <div class="topbar-copy">
+                    <div class="topbar-subtitle">Hoş geldin, @adminName</div>
+                    <div class="topbar-title">@pageTitle</div>
                     @if (!string.IsNullOrWhiteSpace(pageSubtitle))
                     {
-                        <div class="topbar-description">
-                            @pageSubtitle
-                        </div>
+                        <div class="topbar-description">@pageSubtitle</div>
                     }
                 </div>
 
-                <div class="user-chip">
-                    <div class="user-avatar admin">
-                        A
-                    </div>
+                <form class="admin-search" role="search" data-admin-search>
+                    <span aria-hidden="true"></span>
+                    <input type="search" name="q" placeholder="Aramak için yazın..." autocomplete="off" />
+                    <kbd>↵</kbd>
+                </form>
 
-                    <div>
-                        <div class="user-name">
-                            @adminName
-                        </div>
+                <div class="topbar-actions">
+                    <a class="notification-button" asp-controller="PasswordRequests" asp-action="Index" title="Şifre talepleri">
+                        <span aria-hidden="true"></span>
+                    </a>
 
-                        <div class="user-role">
-                            No: @adminNumber
+                    <details class="user-menu">
+                        <summary class="user-chip">
+                            <div class="user-avatar admin">@adminName.Substring(0, 1).ToUpperInvariant()</div>
+                            <div>
+                                <div class="user-name">@adminName</div>
+                                <div class="user-role">Yönetici</div>
+                            </div>
+                        </summary>
+
+                        <div class="user-menu-panel">
+                            <a asp-controller="AdminAccount" asp-action="ChangePassword">Admin şifresi</a>
+                            <a asp-controller="Dashboard" asp-action="Index">Kontrol paneli</a>
+                            <a asp-controller="Auth" asp-action="Logout">Çıkış yap</a>
                         </div>
-                    </div>
+                    </details>
                 </div>
             </header>
 
@@ -179,51 +155,41 @@
         </main>
     </div>
 
-    <style>
-        :where(.page-header-card, .form-card, .table-card, .entity-card, .stat-card, .portal-card, .create-card, .side-card, .dash-panel, .dash-stat-card, .lesson-info-card, .empty-state) {
-            background:
-                radial-gradient(circle at 10% 0%, rgba(79, 70, 229, .13), transparent 34%),
-                radial-gradient(circle at 96% 10%, rgba(6, 182, 212, .11), transparent 30%),
-                linear-gradient(135deg, rgba(255,255,255,.98), rgba(248,250,252,.92)) !important;
-            border-color: rgba(148, 163, 184, .44) !important;
-            box-shadow:
-                0 22px 58px rgba(15, 23, 42, .12),
-                inset 0 1px 0 rgba(255,255,255,.88) !important;
-        }
-
-        :where(.topbar) {
-            background:
-                radial-gradient(circle at 12% 0%, rgba(79, 70, 229, .12), transparent 34%),
-                linear-gradient(135deg, rgba(255,255,255,.98), rgba(241,245,249,.94)) !important;
-            border-color: rgba(148, 163, 184, .46) !important;
-            box-shadow: 0 24px 64px rgba(15, 23, 42, .13) !important;
-        }
-
-        :where(.entity-card, .dash-stat-card, .stat-card, .table-card, .form-card) {
-            transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
-        }
-
-        :where(.entity-card, .dash-stat-card, .stat-card):hover {
-            border-color: rgba(99, 102, 241, .42) !important;
-            box-shadow:
-                0 28px 70px rgba(15, 23, 42, .15),
-                0 0 0 1px rgba(99, 102, 241, .08) !important;
-        }
-
-        :where(.premium-table th, .dash-table th) {
-            background: #eef2f7 !important;
-            border-bottom-color: rgba(148, 163, 184, .38) !important;
-        }
-
-        :where(.premium-table td, .dash-table td) {
-            border-bottom-color: rgba(203, 213, 225, .7) !important;
-        }
-    </style>
-
     <script src="~/js/site.js" asp-append-version="true"></script>
+    <script>
+        (() => {
+            const form = document.querySelector("[data-admin-search]");
+            if (!form) return;
+
+            const routes = [
+                { keys: ["kontrol", "panel", "dashboard"], url: "@Url.Action("Index", "Dashboard")" },
+                { keys: ["kullanici", "kullanıcı", "ogrenci", "öğrenci", "ogretmen", "öğretmen", "veli", "admin"], url: "@Url.Action("Index", "Users")" },
+                { keys: ["sinif", "sınıf", "class"], url: "@Url.Action("Index", "Classes")" },
+                { keys: ["ders", "atama", "ödev", "odev"], url: "@Url.Action("Index", "Lessons")" },
+                { keys: ["teslim", "submission"], url: "@Url.Action("Index", "Submissions")" },
+                { keys: ["duyuru", "announcement"], url: "@Url.Action("Index", "Announcements")" },
+                { keys: ["sifre", "şifre", "talep", "password"], url: "@Url.Action("Index", "PasswordRequests")" },
+                { keys: ["rapor", "report"], url: "@Url.Action("Index", "Reports")" },
+                { keys: ["ayar", "şifrem", "sifrem"], url: "@Url.Action("ChangePassword", "AdminAccount")" }
+            ];
+
+            const normalize = value => value
+                .toLocaleLowerCase("tr-TR")
+                .normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, "");
+
+            form.addEventListener("submit", event => {
+                event.preventDefault();
+                const query = normalize(new FormData(form).get("q")?.toString() || "");
+                if (!query.trim()) return;
+
+                const match = routes.find(route => route.keys.some(key => query.includes(normalize(key))));
+                window.location.href = match ? match.url : "@Url.Action("Index", "Users")";
+            });
+        })();
+    </script>
 
     @await RenderSectionAsync("Scripts", required: false)
-
     @await Html.PartialAsync("_DeleteConfirmModal")
 </body>
 </html>
