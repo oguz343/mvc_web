@@ -1,5 +1,7 @@
 # Changelog
 
+- P1 security: Admin login no longer accepts the development `admin123` fallback when the admin user or system account already has a configured password.
+
 - UI polish: Admin and teacher internal sidebar icons now render as clean text badges instead of broken legacy glyphs; login page remains unchanged.
 
 - P1 auth: Mobile custom token CORS origins can now be configured with `MobileAuth:AllowedOrigins` before the production domain is known.

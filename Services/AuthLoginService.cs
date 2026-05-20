@@ -63,7 +63,10 @@ public class AuthLoginService
             }
         }
 
-        if (!passwordOk && wantedRoleKey == "admin" && numberKey == "0000")
+        if (!passwordOk &&
+            wantedRoleKey == "admin" &&
+            numberKey == "0000" &&
+            !HasAnyUserPasswordCredential(passwordHash, legacyPassword, activationCode))
         {
             var systemAdminConfigured = await SystemAdminAccountHasPasswordAsync();
             passwordOk = await VerifySystemAdminPasswordAsync(password);
@@ -291,10 +294,9 @@ public class AuthLoginService
         var data = doc.ToDictionary();
         var passwordHash = GetString(data, "passwordHash", "PasswordHash", "hash", "Hash");
 
-        if (PasswordHashService.IsHash(passwordHash) &&
-            PasswordHashService.VerifyPassword(password, passwordHash))
+        if (PasswordHashService.IsHash(passwordHash))
         {
-            return true;
+            return PasswordHashService.VerifyPassword(password, passwordHash);
         }
 
         var legacyPassword = GetString(
@@ -347,6 +349,16 @@ public class AuthLoginService
         );
 
         return !string.IsNullOrWhiteSpace(passwordValue);
+    }
+
+    private static bool HasAnyUserPasswordCredential(
+        string passwordHash,
+        string legacyPassword,
+        string activationCode)
+    {
+        return PasswordHashService.IsHash(passwordHash) ||
+               !string.IsNullOrWhiteSpace(legacyPassword) ||
+               !string.IsNullOrWhiteSpace(activationCode);
     }
 
     private bool IsDevelopment()

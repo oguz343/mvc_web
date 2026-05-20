@@ -117,14 +117,12 @@ namespace mvc_web.Controllers
 
             if (PasswordHashService.IsHash(passwordHash))
             {
-                return PasswordHashService.VerifyPassword(password, passwordHash)
-                    || await VerifySystemAdminPasswordAsync(password);
+                return PasswordHashService.VerifyPassword(password, passwordHash);
             }
 
             if (!string.IsNullOrWhiteSpace(legacyPassword))
             {
-                return legacyPassword == password
-                    || await VerifySystemAdminPasswordAsync(password);
+                return legacyPassword == password;
             }
 
             return await VerifySystemAdminPasswordAsync(password);
