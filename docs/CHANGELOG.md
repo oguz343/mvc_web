@@ -1,5 +1,7 @@
 # Changelog
 
+- P2 performance: Teacher submission screens now load submissions through teacher/assignment scoped Firestore queries instead of broad collection scans.
+
 - UI polish: Sidebar navigation now uses clean icon badges, and the teacher assignments header no longer repeats the user profile chip.
 
 - P4 reliability: Teacher announcements page now shows newly published test-titled announcements and shares the dashboard's broader teacher target matching.

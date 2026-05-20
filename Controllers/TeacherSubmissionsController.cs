@@ -183,20 +183,18 @@ namespace mvc_web.Controllers
         {
             var result = new List<TeacherSubmissionViewModel>();
 
-            QuerySnapshot snapshot;
+            var homeworkDocs = await LoadTeacherHomeworkDocs(teacherId, teacherName, teacherNo);
+            var homeworkById = homeworkDocs
+                .GroupBy(x => x.Id)
+                .ToDictionary(x => x.Key, x => x.First());
+            var submissionDocs = await LoadTeacherSubmissionDocs(
+                submissionCollection,
+                homeworkById.Keys.ToHashSet(),
+                teacherId,
+                teacherNo
+            );
 
-            try
-            {
-                snapshot = await _firestore
-                    .Collection(submissionCollection)
-                    .GetSnapshotAsync();
-            }
-            catch
-            {
-                return result;
-            }
-
-            foreach (var submissionDoc in snapshot.Documents)
+            foreach (var submissionDoc in submissionDocs)
             {
                 var submissionData = submissionDoc.ToDictionary();
 
@@ -216,7 +214,9 @@ namespace mvc_web.Controllers
                     "homeworks"
                 );
 
-                var homeworkDoc = await FindHomeworkDoc(homeworkCollection, homeworkId);
+                var homeworkDoc = homeworkById.TryGetValue(homeworkId, out var knownHomework)
+                    ? knownHomework
+                    : await FindHomeworkDoc(homeworkCollection, homeworkId);
 
                 if (homeworkDoc == null)
                 {
@@ -307,6 +307,122 @@ namespace mvc_web.Controllers
                 };
 
                 result.Add(item);
+            }
+
+            return result;
+        }
+
+        private async Task<List<DocumentSnapshot>> LoadTeacherHomeworkDocs(
+            string teacherId,
+            string teacherName,
+            string teacherNo
+        )
+        {
+            var result = new List<DocumentSnapshot>();
+            var seen = new HashSet<string>();
+            var teacherNoKey = OnlyDigits(teacherNo);
+
+            async Task AddQuery(Query query)
+            {
+                try
+                {
+                    var snapshot = await query.GetSnapshotAsync();
+
+                    foreach (var doc in snapshot.Documents)
+                    {
+                        if (seen.Add(doc.Id) &&
+                            HomeworkBelongsToTeacher(doc.ToDictionary(), teacherId, teacherName, teacherNo))
+                        {
+                            result.Add(doc);
+                        }
+                    }
+                }
+                catch
+                {
+                }
+            }
+
+            foreach (var collection in new[] { "homeworks", "assignments" })
+            {
+                var refCollection = _firestore.Collection(collection);
+
+                if (!string.IsNullOrWhiteSpace(teacherId))
+                {
+                    await AddQuery(refCollection.WhereEqualTo("teacherId", teacherId));
+                    await AddQuery(refCollection.WhereEqualTo("TeacherId", teacherId));
+                }
+
+                if (!string.IsNullOrWhiteSpace(teacherNoKey))
+                {
+                    foreach (var field in new[] { "teacherNo", "TeacherNo", "teacherNumber", "TeacherNumber" })
+                    {
+                        await AddQuery(refCollection.WhereEqualTo(field, teacherNoKey));
+                    }
+                }
+
+                if (!string.IsNullOrWhiteSpace(teacherName))
+                {
+                    await AddQuery(refCollection.WhereEqualTo("teacherName", teacherName));
+                    await AddQuery(refCollection.WhereEqualTo("TeacherName", teacherName));
+                    await AddQuery(refCollection.WhereEqualTo("teacher", teacherName));
+                    await AddQuery(refCollection.WhereEqualTo("Teacher", teacherName));
+                }
+            }
+
+            return result;
+        }
+
+        private async Task<List<DocumentSnapshot>> LoadTeacherSubmissionDocs(
+            string submissionCollection,
+            HashSet<string> homeworkIds,
+            string teacherId,
+            string teacherNo
+        )
+        {
+            var result = new List<DocumentSnapshot>();
+            var seen = new HashSet<string>();
+            var teacherNoKey = OnlyDigits(teacherNo);
+            var refCollection = _firestore.Collection(submissionCollection);
+
+            async Task AddQuery(Query query)
+            {
+                try
+                {
+                    var snapshot = await query.GetSnapshotAsync();
+
+                    foreach (var doc in snapshot.Documents)
+                    {
+                        if (seen.Add(doc.Id))
+                        {
+                            result.Add(doc);
+                        }
+                    }
+                }
+                catch
+                {
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(teacherId))
+            {
+                await AddQuery(refCollection.WhereEqualTo("teacherId", teacherId));
+                await AddQuery(refCollection.WhereEqualTo("TeacherId", teacherId));
+            }
+
+            if (!string.IsNullOrWhiteSpace(teacherNoKey))
+            {
+                foreach (var field in new[] { "teacherNo", "TeacherNo", "teacherNumber", "TeacherNumber" })
+                {
+                    await AddQuery(refCollection.WhereEqualTo(field, teacherNoKey));
+                }
+            }
+
+            foreach (var homeworkId in homeworkIds.Where(x => !string.IsNullOrWhiteSpace(x)))
+            {
+                foreach (var field in new[] { "homeworkId", "HomeworkId", "assignmentId", "AssignmentId" })
+                {
+                    await AddQuery(refCollection.WhereEqualTo(field, homeworkId));
+                }
             }
 
             return result;

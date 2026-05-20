@@ -1348,9 +1348,14 @@ public class TeacherController : Controller
 
         foreach (var collection in collections)
         {
-            var snapshot = await _firestore.Collection(collection).GetSnapshotAsync();
+            var docs = await LoadTeacherSubmissionDocs(
+                collection,
+                teacherId,
+                teacherNumber,
+                assignmentIds
+            );
 
-            foreach (var doc in snapshot.Documents)
+            foreach (var doc in docs)
             {
                 var data = doc.ToDictionary();
 
@@ -1455,6 +1460,62 @@ public class TeacherController : Controller
         return result
             .OrderByDescending(x => GetDate(x, "submittedAt", "SubmittedAt", "createdAt", "CreatedAt") ?? DateTime.MinValue)
             .ToList();
+    }
+
+    private async Task<List<DocumentSnapshot>> LoadTeacherSubmissionDocs(
+        string collection,
+        string teacherId,
+        string teacherNumber,
+        HashSet<string> assignmentIds
+    )
+    {
+        var result = new List<DocumentSnapshot>();
+        var seen = new HashSet<string>();
+        var teacherNo = OnlyDigits(teacherNumber);
+        var collectionRef = _firestore.Collection(collection);
+
+        async Task AddQuery(Query query)
+        {
+            try
+            {
+                var snapshot = await query.GetSnapshotAsync();
+
+                foreach (var doc in snapshot.Documents)
+                {
+                    if (seen.Add(doc.Id))
+                    {
+                        result.Add(doc);
+                    }
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(teacherId))
+        {
+            await AddQuery(collectionRef.WhereEqualTo("teacherId", teacherId));
+            await AddQuery(collectionRef.WhereEqualTo("TeacherId", teacherId));
+        }
+
+        if (!string.IsNullOrWhiteSpace(teacherNo))
+        {
+            foreach (var field in new[] { "teacherNo", "TeacherNo", "teacherNumber", "TeacherNumber" })
+            {
+                await AddQuery(collectionRef.WhereEqualTo(field, teacherNo));
+            }
+        }
+
+        foreach (var assignmentId in assignmentIds.Where(x => !string.IsNullOrWhiteSpace(x)))
+        {
+            foreach (var field in new[] { "assignmentId", "AssignmentId", "homeworkId", "HomeworkId" })
+            {
+                await AddQuery(collectionRef.WhereEqualTo(field, assignmentId));
+            }
+        }
+
+        return result;
     }
 
     private async Task<List<Dictionary<string, object>>> LoadTeacherAnnouncements()
