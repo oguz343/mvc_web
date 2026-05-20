@@ -1,5 +1,7 @@
 # Changelog
 
+- UI polish: Admin and teacher panel headers now include compact icon quick links beside the user chip for faster navigation.
+
 - P4 reliability: Teacher announcements page now shows newly published test-titled announcements and shares the dashboard's broader teacher target matching.
 
 - P1 security: Admin login no longer accepts the development `admin123` fallback when the admin user or system account already has a configured password.
