@@ -1,5 +1,7 @@
 # Changelog
 
+- P1 auth: Mobile custom token CORS origins can now be configured with `MobileAuth:AllowedOrigins` before the production domain is known.
+
 - P1 auth: Mobile custom token API endpoint'i eklendi; başarılı web login doğrulaması Firebase custom token, role ve number claim'leri döner.
 - P1 auth: Web login doğrulaması custom token endpoint'i tarafından yeniden kullanılabilecek `AuthLoginService` içine taşındı; mevcut MVC login davranışı korunur.
 - P1 security: Web-created activation and password reset codes are now stored as hashes while legacy plaintext activation fallback remains.

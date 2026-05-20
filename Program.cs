@@ -13,6 +13,10 @@ builder.Logging.AddDebug();
 
 builder.Services.AddControllersWithViews();
 
+var mobileAuthAllowedOrigins = builder.Configuration
+    .GetSection("MobileAuth:AllowedOrigins")
+    .Get<string[]>() ?? [];
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy(
@@ -27,7 +31,25 @@ builder.Services.AddCors(options =>
                         return false;
                     }
 
-                    return uri.Host is "localhost" or "127.0.0.1";
+                    if (uri.Host is "localhost" or "127.0.0.1")
+                    {
+                        return true;
+                    }
+
+                    return mobileAuthAllowedOrigins.Any(allowed =>
+                        Uri.TryCreate(allowed, UriKind.Absolute, out var allowedUri) &&
+                        string.Equals(
+                            allowedUri.Scheme,
+                            uri.Scheme,
+                            StringComparison.OrdinalIgnoreCase
+                        ) &&
+                        string.Equals(
+                            allowedUri.Host,
+                            uri.Host,
+                            StringComparison.OrdinalIgnoreCase
+                        ) &&
+                        allowedUri.Port == uri.Port
+                    );
                 })
                 .AllowAnyHeader()
                 .AllowAnyMethod();
