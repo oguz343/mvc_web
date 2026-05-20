@@ -1,5 +1,7 @@
 # Changelog
 
+- P1 auth: Mobile custom-token CORS origins now include the production domain and www domain.
+
 - Repo hygiene: Build artifacts, development appsettings, and uploaded submission files are no longer tracked by git.
 
 - UI polish: Admin and teacher pages now show a single page header card by hiding the duplicated layout topbar.
