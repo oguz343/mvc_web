@@ -13,14 +13,6 @@
             <h1>Verdiğim Ödevler</h1>
             <p>Kendi derslerinize yayınladığınız aktif ödevleri yönetin.</p>
         </div>
-
-        <div class="teacher-mini-profile">
-            <div class="teacher-mini-avatar">Ö</div>
-            <div>
-                <strong>@(string.IsNullOrWhiteSpace(teacherName) ? "Öğretmen" : teacherName)</strong>
-                <span>Ödev yönetimi</span>
-            </div>
-        </div>
     </section>
 
     <section class="teacher-assignment-hero">
@@ -160,49 +152,6 @@
         border-radius: 999px;
         background: rgba(79, 70, 229, .10);
         pointer-events: none;
-    }
-
-    .teacher-mini-profile {
-        position: relative;
-        z-index: 1;
-        padding: 10px 14px;
-        border-radius: 24px;
-        background: #ffffff;
-        border: 1px solid #e2e8f0;
-        box-shadow: 0 14px 32px rgba(15, 23, 42, .07);
-        display: flex;
-        align-items: center;
-        gap: 12px;
-    }
-
-    .teacher-mini-avatar {
-        width: 48px;
-        height: 48px;
-        border-radius: 18px;
-        background: linear-gradient(135deg, #4f46e5, #06b6d4);
-        display: grid;
-        place-items: center;
-        color: white;
-        font-weight: 950;
-        font-size: 20px;
-    }
-
-    .teacher-mini-profile strong,
-    .teacher-mini-profile span {
-        display: block;
-    }
-
-    .teacher-mini-profile strong {
-        color: #0f172a;
-        font-weight: 950;
-        font-size: 14px;
-    }
-
-    .teacher-mini-profile span {
-        color: #64748b;
-        font-weight: 800;
-        font-size: 12px;
-        margin-top: 2px;
     }
 
     .teacher-assignment-hero {
@@ -497,10 +446,6 @@
 
         .assignment-grid {
             grid-template-columns: 1fr;
-        }
-
-        .teacher-mini-profile {
-            display: none;
         }
     }
 </style>

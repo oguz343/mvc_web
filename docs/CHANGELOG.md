@@ -1,6 +1,6 @@
 # Changelog
 
-- UI polish: Admin and teacher panel headers now include compact icon quick links beside the user chip for faster navigation.
+- UI polish: Sidebar navigation now uses clean icon badges, and the teacher assignments header no longer repeats the user profile chip.
 
 - P4 reliability: Teacher announcements page now shows newly published test-titled announcements and shares the dashboard's broader teacher target matching.
 
