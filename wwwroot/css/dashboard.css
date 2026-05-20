@@ -62,6 +62,10 @@ body {
     padding: 20px;
 }
 
+.app-shell > .main-content > .topbar {
+    display: none !important;
+}
+
 .sidebar {
     position: sticky;
     top: 20px;
