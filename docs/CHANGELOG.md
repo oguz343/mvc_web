@@ -1,5 +1,7 @@
 # Changelog
 
+- UI polish: Admin and teacher internal sidebar icons now render as clean text badges instead of broken legacy glyphs; login page remains unchanged.
+
 - P1 auth: Mobile custom token CORS origins can now be configured with `MobileAuth:AllowedOrigins` before the production domain is known.
 
 - P1 auth: Mobile custom token API endpoint'i eklendi; başarılı web login doğrulaması Firebase custom token, role ve number claim'leri döner.

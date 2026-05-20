@@ -218,6 +218,48 @@ body {
     font-size: 17px;
 }
 
+.brand-icon,
+.nav-link > span:first-child,
+.logout-link > span:first-child,
+.teacher-logout > span:first-child {
+    font-size: 0;
+}
+
+.brand-icon::before,
+.nav-link > span:first-child::before,
+.logout-link > span:first-child::before,
+.teacher-logout > span:first-child::before {
+    font-size: 12px;
+    font-weight: 950;
+    letter-spacing: 0;
+    line-height: 1;
+}
+
+.brand-icon::before {
+    content: "OS";
+    font-size: 17px;
+}
+
+.admin-sidebar .nav-menu .nav-link:nth-child(1) > span:first-child::before { content: "KP"; }
+.admin-sidebar .nav-menu .nav-link:nth-child(2) > span:first-child::before { content: "KU"; }
+.admin-sidebar .nav-menu .nav-link:nth-child(3) > span:first-child::before { content: "SN"; }
+.admin-sidebar .nav-menu .nav-link:nth-child(4) > span:first-child::before { content: "DR"; }
+.admin-sidebar .nav-menu .nav-link:nth-child(5) > span:first-child::before { content: "TS"; }
+.admin-sidebar .nav-menu .nav-link:nth-child(6) > span:first-child::before { content: "RP"; }
+.admin-sidebar .nav-menu .nav-link:nth-child(7) > span:first-child::before { content: "DY"; }
+.admin-sidebar .nav-menu .nav-link:nth-child(8) > span:first-child::before { content: "SF"; }
+.admin-sidebar .nav-menu .nav-link:nth-child(9) > span:first-child::before { content: "AD"; }
+
+.teacher-sidebar .nav-menu .nav-link:nth-child(1) > span:first-child::before { content: "KP"; }
+.teacher-sidebar .nav-menu .nav-link:nth-child(2) > span:first-child::before { content: "OD"; }
+.teacher-sidebar .nav-menu .nav-link:nth-child(3) > span:first-child::before { content: "TS"; }
+.teacher-sidebar .nav-menu .nav-link:nth-child(4) > span:first-child::before { content: "DY"; }
+
+.logout-link > span:first-child::before,
+.teacher-logout > span:first-child::before {
+    content: "CK";
+}
+
 .nav-link strong,
 .logout-link strong,
 .teacher-logout strong {
