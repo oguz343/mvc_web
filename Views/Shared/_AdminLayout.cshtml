@@ -24,12 +24,43 @@
 
     if (string.IsNullOrWhiteSpace(pageSubtitle))
     {
-        pageSubtitle = "Yönetim işlemlerinizi buradan kontrol edin.";
+        pageSubtitle = currentController switch
+        {
+            "Dashboard" => "Okul yönetimini tek ekrandan takip edin.",
+            "Users" => "Öğrenci, öğretmen, veli ve yönetici hesaplarını düzenleyin.",
+            "Classes" => "Sınıfları, kontenjanları ve sınıf öğretmenlerini yönetin.",
+            "Lessons" => "Dersleri öğretmenler ve sınıflarla eşleştirin.",
+            "Submissions" => "Ödev teslimlerini ve değerlendirme durumlarını inceleyin.",
+            "Reports" => "Teslim, sınıf ve ödev raporlarını kontrol edin.",
+            "Announcements" => "Duyuruları oluşturun, düzenleyin ve yayınlayın.",
+            "PasswordRequests" => "Şifre taleplerini onaylayın veya reddedin.",
+            "AdminAccount" => "Admin hesabınızın güvenlik ayarlarını yönetin.",
+            _ => "Yönetim işlemlerinizi buradan kontrol edin."
+        };
     }
 
     string Active(string controller)
     {
-        return currentController == controller ? "active" : "";
+        return string.Equals(currentController, controller, StringComparison.OrdinalIgnoreCase) ? "active" : "";
+    }
+
+    string Initials(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "A";
+        }
+
+        var parts = value
+            .Trim()
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        if (parts.Length >= 2)
+        {
+            return $"{parts[0][0]}{parts[1][0]}".ToUpperInvariant();
+        }
+
+        return parts[0][0].ToString().ToUpperInvariant();
     }
 }
 
@@ -45,15 +76,21 @@
     <link rel="stylesheet" href="~/css/dashboard.css" asp-append-version="true" />
 </head>
 
-<body>
-    <div class="app-shell">
-        <aside class="sidebar admin-sidebar">
+<body class="midnight-body">
+    <div class="midnight-background">
+        <div class="midnight-orb orb-a"></div>
+        <div class="midnight-orb orb-b"></div>
+        <div class="midnight-orb orb-c"></div>
+    </div>
+
+    <div class="app-shell midnight-shell">
+        <aside class="sidebar midnight-sidebar">
             <div class="brand">
                 <div class="brand-icon admin">
                     🎓
                 </div>
 
-                <div>
+                <div class="brand-text">
                     <div class="brand-title">
                         Ödev Sistemi
                     </div>
@@ -62,6 +99,10 @@
                         Admin Paneli
                     </div>
                 </div>
+            </div>
+
+            <div class="sidebar-label">
+                Yönetim
             </div>
 
             <nav class="nav-menu">
@@ -103,7 +144,7 @@
                 <a class="nav-link @Active("Reports")"
                    asp-controller="Reports"
                    asp-action="Index">
-                    <span>R</span>
+                    <span>📈</span>
                     <strong>Raporlama</strong>
                 </a>
 
@@ -129,6 +170,17 @@
                 </a>
             </nav>
 
+            <div class="sidebar-user">
+                <div class="sidebar-user-avatar">
+                    @Initials(adminName)
+                </div>
+
+                <div class="sidebar-user-info">
+                    <strong>@adminName</strong>
+                    <span>No: @adminNumber</span>
+                </div>
+            </div>
+
             <a class="logout-link"
                asp-controller="Auth"
                asp-action="Logout">
@@ -137,9 +189,9 @@
             </a>
         </aside>
 
-        <main class="main-content">
-            <header class="topbar">
-                <div>
+        <main class="main-content midnight-main">
+            <header class="topbar midnight-topbar">
+                <div class="topbar-left">
                     <div class="topbar-subtitle">
                         Yönetim Paneli
                     </div>
@@ -156,18 +208,25 @@
                     }
                 </div>
 
-                <div class="user-chip">
-                    <div class="user-avatar admin">
-                        A
+                <div class="topbar-right">
+                    <div class="system-pill">
+                        <span></span>
+                        Sistem Aktif
                     </div>
 
-                    <div>
-                        <div class="user-name">
-                            @adminName
+                    <div class="user-chip">
+                        <div class="user-avatar admin">
+                            @Initials(adminName)
                         </div>
 
-                        <div class="user-role">
-                            No: @adminNumber
+                        <div>
+                            <div class="user-name">
+                                @adminName
+                            </div>
+
+                            <div class="user-role">
+                                Admin · No: @adminNumber
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -178,47 +237,6 @@
             </section>
         </main>
     </div>
-
-    <style>
-        :where(.page-header-card, .form-card, .table-card, .entity-card, .stat-card, .portal-card, .create-card, .side-card, .dash-panel, .dash-stat-card, .lesson-info-card, .empty-state) {
-            background:
-                radial-gradient(circle at 10% 0%, rgba(79, 70, 229, .13), transparent 34%),
-                radial-gradient(circle at 96% 10%, rgba(6, 182, 212, .11), transparent 30%),
-                linear-gradient(135deg, rgba(255,255,255,.98), rgba(248,250,252,.92)) !important;
-            border-color: rgba(148, 163, 184, .44) !important;
-            box-shadow:
-                0 22px 58px rgba(15, 23, 42, .12),
-                inset 0 1px 0 rgba(255,255,255,.88) !important;
-        }
-
-        :where(.topbar) {
-            background:
-                radial-gradient(circle at 12% 0%, rgba(79, 70, 229, .12), transparent 34%),
-                linear-gradient(135deg, rgba(255,255,255,.98), rgba(241,245,249,.94)) !important;
-            border-color: rgba(148, 163, 184, .46) !important;
-            box-shadow: 0 24px 64px rgba(15, 23, 42, .13) !important;
-        }
-
-        :where(.entity-card, .dash-stat-card, .stat-card, .table-card, .form-card) {
-            transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
-        }
-
-        :where(.entity-card, .dash-stat-card, .stat-card):hover {
-            border-color: rgba(99, 102, 241, .42) !important;
-            box-shadow:
-                0 28px 70px rgba(15, 23, 42, .15),
-                0 0 0 1px rgba(99, 102, 241, .08) !important;
-        }
-
-        :where(.premium-table th, .dash-table th) {
-            background: #eef2f7 !important;
-            border-bottom-color: rgba(148, 163, 184, .38) !important;
-        }
-
-        :where(.premium-table td, .dash-table td) {
-            border-bottom-color: rgba(203, 213, 225, .7) !important;
-        }
-    </style>
 
     <script src="~/js/site.js" asp-append-version="true"></script>
 

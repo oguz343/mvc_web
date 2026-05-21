@@ -1869,6 +1869,21 @@
             }
         }
 
+        .aurora span,
+        .beam,
+        .brand-logo::before,
+        .status-dot,
+        .hero-title .gradient,
+        .orbit,
+        .planet-icon,
+        .cap-3d,
+        .cap-tassel,
+        .shield,
+        .login-symbol::before {
+            backface-visibility: hidden;
+            will-change: transform, opacity;
+        }
+
         @@media (prefers-reduced-motion: reduce) {
             *,
             *::before,

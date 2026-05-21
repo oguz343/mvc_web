@@ -1,5 +1,6 @@
 using Google.Cloud.Firestore;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Memory;
 using mvc_web.Models;
 using mvc_web.Services;
 using System.Text.RegularExpressions;
@@ -10,14 +11,17 @@ namespace mvc_web.Controllers
     {
         private readonly FirestoreDb _firestore;
         private readonly SessionService _session;
+        private readonly IMemoryCache _cache;
 
         public PortalController(
             FirestoreDb firestore,
-            SessionService session
+            SessionService session,
+            IMemoryCache cache
         )
         {
             _firestore = firestore;
             _session = session;
+            _cache = cache;
         }
 
         public async Task<IActionResult> Index()
@@ -78,8 +82,13 @@ namespace mvc_web.Controllers
                 }
             }
 
-            model.Announcements = await LoadAnnouncements(role);
-            model.Homeworks = await LoadHomeworks(studentNumberForHomework, studentClassForHomework);
+            var announcementsTask = LoadAnnouncements(role);
+            var homeworksTask = LoadHomeworks(studentNumberForHomework, studentClassForHomework);
+
+            await Task.WhenAll(announcementsTask, homeworksTask);
+
+            model.Announcements = announcementsTask.Result;
+            model.Homeworks = homeworksTask.Result;
 
             return View(model);
         }
@@ -291,6 +300,14 @@ namespace mvc_web.Controllers
 
         private async Task<List<PortalAnnouncementItem>> LoadAnnouncements(string role)
         {
+            var cacheKey = $"portal_announcements_{NormalizeKey(role)}";
+
+            if (_cache.TryGetValue(cacheKey, out List<PortalAnnouncementItem>? cachedAnnouncements) &&
+                cachedAnnouncements is not null)
+            {
+                return cachedAnnouncements.ToList();
+            }
+
             var result = new List<PortalAnnouncementItem>();
 
             var snapshot = await _firestore
@@ -319,6 +336,8 @@ namespace mvc_web.Controllers
                 });
             }
 
+            _cache.Set(cacheKey, result, TimeSpan.FromMinutes(1));
+
             return result;
         }
 
@@ -333,27 +352,22 @@ namespace mvc_web.Controllers
                 return result;
             }
 
-            var classIds = await FindClassIdsByName(className);
+            var classIdsTask = FindClassIdsByName(className);
+            var submissionDocsTask = LoadStudentSubmissionDocs(studentNumber);
             var collections = new[] { "homeworks", "assignments" };
             var addedKeys = new HashSet<string>();
+            var classIds = await classIdsTask;
+            var submissionDocs = await submissionDocsTask;
 
-            foreach (var collectionName in collections)
+            var homeworkGroups = await Task.WhenAll(collections.Select(async collectionName => new
             {
-                QuerySnapshot snapshot;
+                CollectionName = collectionName,
+                Docs = await LoadHomeworkDocsForClass(collectionName, className, classIds)
+            }));
 
-                try
-                {
-                    snapshot = await _firestore
-                        .Collection(collectionName)
-                        .OrderByDescending("createdAt")
-                        .GetSnapshotAsync();
-                }
-                catch
-                {
-                    continue;
-                }
-
-                foreach (var doc in snapshot.Documents)
+            foreach (var group in homeworkGroups)
+            {
+                foreach (var doc in group.Docs)
                 {
                     var data = doc.ToDictionary();
 
@@ -382,21 +396,31 @@ namespace mvc_web.Controllers
 
                     addedKeys.Add(key);
 
-                    var submissionDoc = await FindHomeworkSubmission(doc.Id, studentNumber);
+                    var submissionDoc = FindLoadedHomeworkSubmission(doc.Id, studentNumber, submissionDocs);
 
                     var item = new PortalHomeworkItem
                     {
                         Id = doc.Id,
-                        CollectionName = collectionName,
+                        CollectionName = group.CollectionName,
                         Title = title,
                         Description = GetString(data, "description", "Description", "content", "Content", "body", "Body"),
+                        LessonName = lessonName,
                         ClassName = normalizedItemClass,
                         TeacherName = GetString(data, new[] { "teacherName", "TeacherName", "teacher", "Teacher" }, "Öğretmen"),
                         DueDate = GetDate(data, "dueDate", "DueDate", "deadline", "Deadline", "endDate", "EndDate"),
-                        IsSubmitted = submissionDoc.Exists
+                        AttachmentFileName = GetString(data, "attachmentFileName", "AttachmentFileName", "materialFileName", "MaterialFileName", "fileName", "FileName"),
+                        AttachmentFileUrl = FirstNonEmpty(
+                            GetString(data, "attachmentFileUrl", "AttachmentFileUrl"),
+                            GetString(data, "materialFileUrl", "MaterialFileUrl"),
+                            GetString(data, "documentUrl", "DocumentUrl"),
+                            GetString(data, "fileUrl", "FileUrl"),
+                            GetString(data, "link", "Link"),
+                            GetString(data, "url", "Url")
+                        ),
+                        IsSubmitted = submissionDoc != null && submissionDoc.Exists
                     };
 
-                    if (submissionDoc.Exists)
+                    if (submissionDoc != null && submissionDoc.Exists)
                     {
                         var sub = submissionDoc.ToDictionary();
 
@@ -415,6 +439,171 @@ namespace mvc_web.Controllers
             }
 
             return result;
+        }
+
+        private async Task<List<DocumentSnapshot>> LoadHomeworkDocsForClass(
+            string collectionName,
+            string className,
+            HashSet<string> classIds
+        )
+        {
+            var result = new List<DocumentSnapshot>();
+            var seen = new HashSet<string>();
+            var collection = _firestore.Collection(collectionName);
+
+            async Task<QuerySnapshot?> ReadQuery(Query query)
+            {
+                try
+                {
+                    return await query.GetSnapshotAsync();
+                }
+                catch
+                {
+                    return null;
+                }
+            }
+
+            void AddSnapshot(QuerySnapshot? snapshot)
+            {
+                if (snapshot == null)
+                {
+                    return;
+                }
+
+                foreach (var doc in snapshot.Documents)
+                {
+                    if (seen.Add(doc.Id))
+                    {
+                        result.Add(doc);
+                    }
+                }
+            }
+
+            var queries = new List<Query>();
+
+            foreach (var field in new[] { "className", "ClassName", "targetClass", "TargetClass", "class", "Class" })
+            {
+                queries.Add(collection.WhereEqualTo(field, className));
+            }
+
+            foreach (var chunk in ChunkValues(classIds.Where(x => !string.IsNullOrWhiteSpace(x)).ToList(), 10))
+            {
+                foreach (var field in new[] { "classId", "ClassId", "targetClassId", "TargetClassId" })
+                {
+                    queries.Add(collection.WhereIn(field, chunk.Cast<object>().ToArray()));
+                }
+            }
+
+            foreach (var snapshot in await Task.WhenAll(queries.Select(ReadQuery)))
+            {
+                AddSnapshot(snapshot);
+            }
+
+            if (result.Count == 0)
+            {
+                AddSnapshot(await ReadQuery(collection.OrderByDescending("createdAt").Limit(250)));
+            }
+
+            return result
+                .OrderByDescending(x => GetDate(x.ToDictionary(), "createdAt", "CreatedAt") ?? DateTime.MinValue)
+                .ToList();
+        }
+
+        private async Task<List<DocumentSnapshot>> LoadStudentSubmissionDocs(string studentNumber)
+        {
+            var result = new List<DocumentSnapshot>();
+            var seen = new HashSet<string>();
+            var studentNo = OnlyDigits(studentNumber);
+
+            if (string.IsNullOrWhiteSpace(studentNo))
+            {
+                return result;
+            }
+
+            async Task<(string CollectionName, QuerySnapshot? Snapshot)> ReadQuery(
+                string collectionName,
+                Query query
+            )
+            {
+                try
+                {
+                    return (collectionName, await query.GetSnapshotAsync());
+                }
+                catch
+                {
+                    return (collectionName, null);
+                }
+            }
+
+            var queries = new List<Task<(string CollectionName, QuerySnapshot? Snapshot)>>();
+
+            foreach (var collectionName in new[] { "submissions", "homework_submissions" })
+            {
+                var collection = _firestore.Collection(collectionName);
+
+                foreach (var field in new[] { "studentNo", "StudentNo", "studentNumber", "StudentNumber", "schoolNo", "SchoolNo", "number", "Number" })
+                {
+                    queries.Add(ReadQuery(collectionName, collection.WhereEqualTo(field, studentNo)));
+                }
+            }
+
+            foreach (var (collectionName, snapshot) in await Task.WhenAll(queries))
+            {
+                if (snapshot == null)
+                {
+                    continue;
+                }
+
+                foreach (var doc in snapshot.Documents)
+                {
+                    if (seen.Add($"{collectionName}_{doc.Id}"))
+                    {
+                        result.Add(doc);
+                    }
+                }
+            }
+
+            return result;
+        }
+
+        private DocumentSnapshot? FindLoadedHomeworkSubmission(
+            string homeworkId,
+            string studentNumber,
+            List<DocumentSnapshot> submissionDocs
+        )
+        {
+            var studentNo = OnlyDigits(studentNumber);
+            var canonicalSubmissionId = BuildSubmissionId(homeworkId, studentNo);
+            var directKey = NormalizeKey($"{homeworkId}_{studentNo}");
+
+            foreach (var doc in submissionDocs)
+            {
+                if (doc.Id == canonicalSubmissionId ||
+                    doc.Id == $"homeworks_{homeworkId}_{studentNo}" ||
+                    doc.Id == $"assignments_{homeworkId}_{studentNo}")
+                {
+                    return doc;
+                }
+
+                var data = doc.ToDictionary();
+                var docHomeworkId = FirstNonEmpty(
+                    GetString(data, "assignmentId", "AssignmentId"),
+                    GetString(data, "homeworkId", "HomeworkId")
+                );
+                var docStudentNo = OnlyDigits(FirstNonEmpty(
+                    GetString(data, "studentNo", "StudentNo"),
+                    GetString(data, "studentNumber", "StudentNumber"),
+                    GetString(data, "schoolNo", "SchoolNo"),
+                    GetString(data, "number", "Number")
+                ));
+
+                if (NormalizeKey($"{docHomeworkId}_{docStudentNo}") == directKey)
+                {
+                    return doc;
+                }
+            }
+
+            return null;
         }
 
         private async Task<DocumentSnapshot> FindHomeworkSubmission(string homeworkId, string studentNumber)
@@ -550,6 +739,13 @@ namespace mvc_web.Controllers
         {
             var result = new HashSet<string>();
             var normalizedTarget = NormalizeClassName(className);
+            var cacheKey = $"portal_class_ids_{NormalizeKey(normalizedTarget)}";
+
+            if (_cache.TryGetValue(cacheKey, out HashSet<string>? cachedClassIds) &&
+                cachedClassIds is not null)
+            {
+                return new HashSet<string>(cachedClassIds);
+            }
 
             try
             {
@@ -577,6 +773,8 @@ namespace mvc_web.Controllers
             catch
             {
             }
+
+            _cache.Set(cacheKey, result, TimeSpan.FromMinutes(5));
 
             return result;
         }
@@ -847,6 +1045,33 @@ namespace mvc_web.Controllers
 
         private async Task<DocumentSnapshot?> FindUser(string role, string number)
         {
+            foreach (var numberField in new[] { "schoolNo", "SchoolNo", "number", "Number", "studentNo", "StudentNo" })
+            {
+                try
+                {
+                    var targetedSnapshot = await _firestore
+                        .Collection("users")
+                        .WhereEqualTo(numberField, number)
+                        .Limit(10)
+                        .GetSnapshotAsync();
+
+                    foreach (var doc in targetedSnapshot.Documents)
+                    {
+                        var data = doc.ToDictionary();
+                        var currentRole = NormalizeKey(GetString(data, "role", "Role", "userRole", "UserRole"));
+                        var currentNo = OnlyDigits(GetString(data, "schoolNo", "SchoolNo", "number", "Number", "studentNo", "StudentNo"));
+
+                        if (currentRole == NormalizeKey(role) && currentNo == number)
+                        {
+                            return doc;
+                        }
+                    }
+                }
+                catch
+                {
+                }
+            }
+
             var snapshot = await _firestore
                 .Collection("users")
                 .WhereEqualTo("role", role)
@@ -962,6 +1187,17 @@ namespace mvc_web.Controllers
             }
 
             return "";
+        }
+
+        private static IEnumerable<List<string>> ChunkValues(List<string> values, int size)
+        {
+            for (var i = 0; i < values.Count; i += size)
+            {
+                yield return values
+                    .Skip(i)
+                    .Take(size)
+                    .ToList();
+            }
         }
 
         private static string NormalizeKey(string value)

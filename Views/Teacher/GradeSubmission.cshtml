@@ -1,91 +1,450 @@
-@model GradeSubmissionViewModel
+@using System.Collections
+@using System.Reflection
+@model object
 
 @{
     Layout = "_TeacherLayout";
     ViewData["Title"] = "Teslim Değerlendir";
+    ViewData["PageTitle"] = "Teslim Değerlendir";
+    ViewData["PageSubtitle"] = "Öğrencinin teslimini inceleyin, 0-100 aralığında notlandırın.";
+
+    var id = First(Get(Model, "Id", "id"), ViewContext.RouteData.Values["id"]?.ToString() ?? "");
+    var title = First(Get(Model, "AssignmentTitle", "assignmentTitle"), Get(Model, "HomeworkTitle", "homeworkTitle"), Get(Model, "Title", "title"), "Ödev Teslimi");
+    var studentName = First(Get(Model, "StudentName", "studentName"), Get(Model, "Name", "name"), "Öğrenci");
+    var studentNo = First(Get(Model, "StudentNo", "studentNo"), Get(Model, "SchoolNo", "schoolNo"), Get(Model, "Number", "number"), "-");
+    var className = First(Get(Model, "ClassName", "className"), Get(Model, "Class", "class"), "-");
+    var lessonName = First(Get(Model, "LessonName", "lessonName"), Get(Model, "Lesson", "lesson"), "-");
+    var answer = First(Get(Model, "AnswerText", "answerText"), Get(Model, "Answer", "answer"), Get(Model, "SubmissionText", "submissionText"), "Öğrenci açıklama yazmamış.");
+    var fileUrl = First(Get(Model, "SubmissionFileUrl", "submissionFileUrl"), Get(Model, "FileUrl", "fileUrl"), Get(Model, "Link", "link"));
+    var grade = First(Get(Model, "Grade", "grade"), Get(Model, "Score", "score"), Get(Model, "Point", "point"));
+    var feedback = First(Get(Model, "Feedback", "feedback"), Get(Model, "Comment", "comment"));
+    var submittedAt = DateText(First(Get(Model, "SubmittedAt", "submittedAt"), Get(Model, "CreatedAt", "createdAt")));
 }
 
-<div class="grade-layout">
-    <div class="table-card">
-        <div class="section-header">
-            <div>
-                <div class="section-title">@Model.AssignmentTitle</div>
-                <div class="section-subtitle">Öğrenci No: @Model.StudentNo</div>
-            </div>
-        </div>
-
-        <div class="submission-detail-box">
-            <div class="submission-detail-title">Öğrenci Cevabı</div>
-
-            @if (string.IsNullOrWhiteSpace(Model.Answer))
-            {
-                <div class="muted-text">Metin cevabı yok.</div>
-            }
-            else
-            {
-                <div class="submission-detail-text">@Model.Answer</div>
-            }
-        </div>
-
-        <div class="submission-detail-box">
-            <div class="submission-detail-title">Dosya / Link</div>
-
-            @if (string.IsNullOrWhiteSpace(Model.Link))
-            {
-                <div class="muted-text">Link yok.</div>
-            }
-            else
-            {
-                <a class="table-link" href="@Model.Link" target="_blank">@Model.Link</a>
-            }
-        </div>
-    </div>
-
-    <div class="form-card">
-        @if (!ViewData.ModelState.IsValid)
+@functions {
+    private string Get(object? item, params string[] keys)
+    {
+        if (item == null)
         {
-            <div class="alert alert-danger">
-                @foreach (var error in ViewData.ModelState.Values.SelectMany(v => v.Errors))
-                {
-                    <div>@error.ErrorMessage</div>
-                }
-            </div>
+            return "";
         }
 
-        <form asp-controller="Teacher" asp-action="GradeSubmission" method="post">
-            @Html.AntiForgeryToken()
+        if (item is IDictionary<string, object> dict)
+        {
+            foreach (var key in keys)
+            {
+                if (dict.TryGetValue(key, out var value) && value != null)
+                {
+                    return value.ToString() ?? "";
+                }
+            }
+        }
 
-            <input type="hidden" asp-for="Id" />
-            <input type="hidden" asp-for="AssignmentTitle" />
-            <input type="hidden" asp-for="StudentNo" />
-            <input type="hidden" asp-for="Answer" />
-            <input type="hidden" asp-for="Link" />
+        var type = item.GetType();
 
-            <div class="form-grid">
-                <div class="form-group full">
-                    <label class="form-label" asp-for="Grade">Not / Puan</label>
-                    <input class="form-control" asp-for="Grade" placeholder="Örn: 85" />
-                    <span asp-validation-for="Grade" class="text-danger"></span>
-                </div>
+        foreach (var key in keys)
+        {
+            var prop = type.GetProperty(key, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
 
-                <div class="form-group full">
-                    <label class="form-label" asp-for="Feedback">Geri Dönüş Açıklaması</label>
-                    <textarea class="form-control" asp-for="Feedback" placeholder="Öğrenciye geri bildirim yaz"></textarea>
-                    <span asp-validation-for="Feedback" class="text-danger"></span>
-                </div>
+            if (prop != null)
+            {
+                var value = prop.GetValue(item);
+
+                if (value != null)
+                {
+                    return value.ToString() ?? "";
+                }
+            }
+        }
+
+        return "";
+    }
+
+    private string First(params string[] values)
+    {
+        foreach (var value in values)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return value;
+            }
+        }
+
+        return "";
+    }
+
+    private string Safe(string value, string fallback = "-")
+    {
+        return string.IsNullOrWhiteSpace(value) ? fallback : value;
+    }
+
+    private string DateText(string value)
+    {
+        if (DateTime.TryParse(value, out var parsed))
+        {
+            return parsed.ToString("dd.MM.yyyy HH:mm");
+        }
+
+        return Safe(value);
+    }
+}
+
+<style>
+    .grade-v2 {
+        display: grid;
+        gap: 16px;
+    }
+
+    .grade-v2-hero,
+    .grade-v2-card,
+    .grade-v2-side {
+        border: 1px solid rgba(148, 163, 184, .18);
+        background:
+            radial-gradient(circle at 0% 0%, rgba(20, 184, 166, .12), transparent 34%),
+            linear-gradient(135deg, rgba(17, 25, 46, .94), rgba(15, 23, 42, .86));
+        box-shadow: 0 18px 46px rgba(0, 0, 0, .22);
+        backdrop-filter: blur(16px);
+    }
+
+    .grade-v2-hero {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 18px;
+        padding: 22px;
+        border-radius: 26px;
+    }
+
+    .grade-v2-kicker {
+        color: #5eead4;
+        font-size: 12px;
+        font-weight: 950;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+    }
+
+    .grade-v2-hero h1 {
+        margin: 8px 0 0;
+        color: #ffffff;
+        font-size: clamp(28px, 3vw, 44px);
+        font-weight: 950;
+        line-height: 1.05;
+    }
+
+    .grade-v2-hero p {
+        max-width: 720px;
+        margin: 10px 0 0;
+        color: #aab8cf;
+        font-size: 14px;
+        font-weight: 700;
+        line-height: 1.55;
+    }
+
+    .grade-v2-limit {
+        min-width: 160px;
+        padding: 14px;
+        border-radius: 18px;
+        color: #d1fae5;
+        background: rgba(20, 184, 166, .12);
+        border: 1px solid rgba(94, 234, 212, .22);
+        text-align: center;
+        font-weight: 950;
+    }
+
+    .grade-v2-limit strong {
+        display: block;
+        color: #ffffff;
+        font-size: 30px;
+        line-height: 1;
+    }
+
+    .grade-v2-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 330px;
+        gap: 16px;
+        align-items: start;
+    }
+
+    .grade-v2-card,
+    .grade-v2-side {
+        padding: 18px;
+        border-radius: 24px;
+    }
+
+    .grade-v2-block {
+        display: grid;
+        gap: 10px;
+        padding: 14px;
+        margin-bottom: 14px;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, .045);
+        border: 1px solid rgba(148, 163, 184, .12);
+    }
+
+    .grade-v2-block strong,
+    .grade-v2-field label,
+    .grade-v2-side h3 {
+        color: #ffffff;
+        font-weight: 950;
+    }
+
+    .grade-v2-block p {
+        margin: 0;
+        color: #cbd5e1;
+        font-size: 14px;
+        font-weight: 750;
+        line-height: 1.6;
+        overflow-wrap: anywhere;
+    }
+
+    .grade-v2-link {
+        width: fit-content;
+        min-height: 38px;
+        display: inline-flex;
+        align-items: center;
+        padding: 0 12px;
+        border-radius: 12px;
+        color: #67e8f9;
+        background: rgba(56, 189, 248, .10);
+        border: 1px solid rgba(103, 232, 249, .20);
+        text-decoration: none;
+        font-size: 12px;
+        font-weight: 950;
+    }
+
+    .grade-v2-form-grid {
+        display: grid;
+        grid-template-columns: 210px minmax(0, 1fr);
+        gap: 14px;
+    }
+
+    .grade-v2-field {
+        display: grid;
+        gap: 8px;
+    }
+
+    .grade-v2-field input,
+    .grade-v2-field textarea {
+        width: 100%;
+        border-radius: 14px;
+        border: 1px solid rgba(148, 163, 184, .18);
+        outline: none;
+        color: #ffffff;
+        background: rgba(7, 17, 31, .58);
+        font-size: 14px;
+        font-weight: 750;
+    }
+
+    .grade-v2-field input {
+        min-height: 54px;
+        padding: 0 13px;
+        font-size: 20px;
+        font-weight: 950;
+    }
+
+    .grade-v2-field textarea {
+        min-height: 138px;
+        padding: 13px;
+        resize: vertical;
+        line-height: 1.55;
+    }
+
+    .grade-v2-hint {
+        color: #94a3b8;
+        font-size: 12px;
+        font-weight: 800;
+    }
+
+    .grade-v2-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 14px;
+    }
+
+    .grade-v2-save,
+    .grade-v2-back {
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 16px;
+        border-radius: 14px;
+        border: 1px solid transparent;
+        text-decoration: none;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 950;
+    }
+
+    .grade-v2-save {
+        color: #ffffff;
+        background: linear-gradient(135deg, #0f766e, #2563eb);
+        border-color: rgba(125, 211, 252, .22);
+        box-shadow: 0 14px 30px rgba(15, 118, 110, .22);
+    }
+
+    .grade-v2-back {
+        color: #dbeafe;
+        background: rgba(255, 255, 255, .060);
+        border-color: rgba(148, 163, 184, .18);
+    }
+
+    .grade-v2-side h3 {
+        margin: 0;
+        font-size: 19px;
+    }
+
+    .grade-v2-side p {
+        margin: 8px 0 0;
+        color: #94a3b8;
+        font-size: 13px;
+        font-weight: 750;
+        line-height: 1.55;
+    }
+
+    .grade-v2-info-list {
+        display: grid;
+        gap: 9px;
+        margin-top: 14px;
+    }
+
+    .grade-v2-info {
+        padding: 11px;
+        border-radius: 14px;
+        color: #dbeafe;
+        background: rgba(255, 255, 255, .045);
+        border: 1px solid rgba(148, 163, 184, .12);
+        font-size: 13px;
+        font-weight: 850;
+        line-height: 1.45;
+        overflow-wrap: anywhere;
+    }
+
+    @@media (max-width: 1100px) {
+        .grade-v2-hero,
+        .grade-v2-layout,
+        .grade-v2-form-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .grade-v2-hero {
+            display: grid;
+        }
+    }
+
+    @@media (max-width: 700px) {
+        .grade-v2-hero,
+        .grade-v2-card,
+        .grade-v2-side {
+            border-radius: 20px;
+            padding: 15px;
+        }
+
+        .grade-v2-actions {
+            flex-direction: column;
+        }
+
+        .grade-v2-save,
+        .grade-v2-back {
+            width: 100%;
+        }
+    }
+</style>
+
+<div class="grade-v2">
+    <section class="grade-v2-hero">
+        <div>
+            <div class="grade-v2-kicker">Teslim Değerlendirme</div>
+            <h1>@title</h1>
+            <p>@studentName adlı öğrencinin teslimini inceleyin. Notu 0 ile 100 arasında girip öğrencinin göreceği kısa geri dönüşü ekleyin.</p>
+        </div>
+
+        <div class="grade-v2-limit">
+            <strong>100</strong>
+            maksimum not
+        </div>
+    </section>
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success">@TempData["Success"]</div>
+    }
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger">@TempData["Error"]</div>
+    }
+
+    <section class="grade-v2-layout">
+        <div class="grade-v2-card">
+            <div class="grade-v2-block">
+                <strong>Öğrenci Cevabı</strong>
+                <p>@answer</p>
+
+                @if (!string.IsNullOrWhiteSpace(fileUrl))
+                {
+                    <a class="grade-v2-link" href="@fileUrl" target="_blank" rel="noopener noreferrer">
+                        Dosya / Link Aç
+                    </a>
+                }
             </div>
 
-            <div style="height: 22px;"></div>
+            <form asp-controller="Teacher"
+                  asp-action="GradeSubmission"
+                  asp-route-id="@id"
+                  method="post">
 
-            <div class="page-actions">
-                <button class="btn btn-teacher" type="submit">
-                    💾 Notu Kaydet
-                </button>
+                @Html.AntiForgeryToken()
 
-                <a class="btn btn-light" asp-controller="Teacher" asp-action="Submissions">
-                    ← Geri Dön
-                </a>
+                <input type="hidden" name="id" value="@id" />
+
+                <div class="grade-v2-form-grid">
+                    <div class="grade-v2-field">
+                        <label>Not / Puan</label>
+                        <input type="number"
+                               name="grade"
+                               value="@grade"
+                               min="0"
+                               max="100"
+                               step="0.01"
+                               inputmode="decimal"
+                               placeholder="0-100" />
+                        <span class="grade-v2-hint">Minimum 0, maksimum 100 girilebilir.</span>
+                    </div>
+
+                    <div class="grade-v2-field">
+                        <label>Öğretmen Geri Dönüşü</label>
+                        <textarea name="feedback"
+                                  placeholder="Öğrenciye gösterilecek geri dönüşünüzü yazın...">@feedback</textarea>
+                    </div>
+                </div>
+
+                <div class="grade-v2-actions">
+                    <a asp-controller="Teacher"
+                       asp-action="Submissions"
+                       class="grade-v2-back">
+                        Vazgeç
+                    </a>
+
+                    <button type="submit" class="grade-v2-save">
+                        Değerlendirmeyi Kaydet
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <aside class="grade-v2-side">
+            <h3>Teslim Bilgileri</h3>
+            <p>Öğrenci, sınıf, ders ve teslim zamanı burada hızlı kontrol için tutulur.</p>
+
+            <div class="grade-v2-info-list">
+                <div class="grade-v2-info">Öğrenci: @studentName</div>
+                <div class="grade-v2-info">No: @studentNo</div>
+                <div class="grade-v2-info">Sınıf: @className</div>
+                <div class="grade-v2-info">Ders: @lessonName</div>
+                <div class="grade-v2-info">Teslim: @submittedAt</div>
             </div>
-        </form>
-    </div>
+        </aside>
+    </section>
 </div>

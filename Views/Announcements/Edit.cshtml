@@ -1,67 +1,324 @@
-@model AnnouncementViewModel
+@model mvc_web.Models.AnnouncementViewModel
 
 @{
     Layout = "_AdminLayout";
     ViewData["Title"] = "Duyuru Düzenle";
+    ViewData["PageTitle"] = "Duyuru Düzenle";
+    ViewData["PageSubtitle"] = "Yayınlanmış duyurunun başlığını, hedef kitlesini ve içeriğini güncelleyin.";
+    var announcementId = Model?.Id ?? "";
+    var announcementTitle = Model?.Title ?? "";
+    var announcementTarget = Model?.Target ?? "";
+    var announcementAuthor = Model?.Author ?? "";
 }
 
-<div class="form-card">
-    @if (!ViewData.ModelState.IsValid)
-    {
-        <div class="alert alert-danger">
-            @foreach (var error in ViewData.ModelState.Values.SelectMany(v => v.Errors))
-            {
-                <div>@error.ErrorMessage</div>
-            }
-        </div>
+<style>
+    .final-form-page {
+        width: 100%;
+        display: grid;
+        gap: 18px;
     }
 
-    <form asp-controller="Announcements" asp-action="Edit" method="post">
-        @Html.AntiForgeryToken()
+    .final-form-hero,
+    .final-form-card,
+    .final-form-side {
+        border: 1px solid rgba(148, 163, 184, .18);
+        background:
+            radial-gradient(circle at 0% 0%, rgba(56, 189, 248, .10), transparent 34%),
+            linear-gradient(135deg, rgba(17, 25, 46, .94), rgba(15, 23, 42, .86));
+        box-shadow: 0 18px 48px rgba(0, 0, 0, .24);
+        backdrop-filter: blur(16px);
+    }
 
-        <input type="hidden" asp-for="Id" />
+    .final-form-hero {
+        padding: 24px;
+        border-radius: 32px;
+    }
 
-        <div class="form-grid">
-            <div class="form-group full">
-                <label class="form-label" asp-for="Title">Başlık</label>
-                <input class="form-control" asp-for="Title" />
-                <span asp-validation-for="Title" class="text-danger"></span>
+    .final-form-kicker {
+        width: fit-content;
+        min-height: 30px;
+        display: inline-flex;
+        align-items: center;
+        padding: 0 12px;
+        border-radius: 999px;
+        color: #67e8f9;
+        background: rgba(56, 189, 248, .10);
+        border: 1px solid rgba(103, 232, 249, .20);
+        font-size: 11px;
+        font-weight: 950;
+        letter-spacing: .16em;
+        text-transform: uppercase;
+    }
+
+    .final-form-hero h1 {
+        margin: 14px 0 0;
+        color: #ffffff;
+        font-size: clamp(34px, 3.8vw, 58px);
+        font-weight: 950;
+        line-height: 1;
+        letter-spacing: -.06em;
+    }
+
+    .final-form-hero p {
+        max-width: 820px;
+        margin: 14px 0 0;
+        color: #aab8cf;
+        font-size: 15px;
+        font-weight: 700;
+        line-height: 1.65;
+    }
+
+    .final-form-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 360px;
+        gap: 18px;
+        align-items: start;
+    }
+
+    .final-form-card,
+    .final-form-side {
+        padding: 22px;
+        border-radius: 30px;
+    }
+
+    .final-form-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+    }
+
+    .final-form-field {
+        display: grid;
+        gap: 8px;
+    }
+
+    .final-form-field.full {
+        grid-column: 1 / -1;
+    }
+
+    .final-form-field label {
+        color: #dbeafe;
+        font-size: 13px;
+        font-weight: 950;
+    }
+
+    .final-form-field input,
+    .final-form-field select,
+    .final-form-field textarea {
+        width: 100%;
+        min-height: 48px;
+        padding: 0 13px;
+        border-radius: 15px;
+        border: 1px solid rgba(148, 163, 184, .18);
+        outline: none;
+        color: #ffffff;
+        background: rgba(7, 17, 31, .58);
+        font-size: 14px;
+        font-weight: 750;
+    }
+
+    .final-form-field textarea {
+        min-height: 190px;
+        padding-top: 13px;
+        resize: vertical;
+        line-height: 1.55;
+    }
+
+    .final-form-field input:focus,
+    .final-form-field select:focus,
+    .final-form-field textarea:focus {
+        border-color: rgba(103, 232, 249, .45);
+        box-shadow: 0 0 0 4px rgba(56, 189, 248, .09);
+    }
+
+    .final-form-field option {
+        color: #0f172a;
+        background: #ffffff;
+    }
+
+    .final-form-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 16px;
+    }
+
+    .final-form-save,
+    .final-form-back {
+        min-height: 46px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 16px;
+        border-radius: 15px;
+        border: 1px solid transparent;
+        text-decoration: none;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 950;
+    }
+
+    .final-form-save {
+        color: #ffffff;
+        background: linear-gradient(135deg, #2563eb, #7c3aed);
+        border-color: rgba(125, 211, 252, .22);
+        box-shadow: 0 14px 30px rgba(37, 99, 235, .24);
+    }
+
+    .final-form-back {
+        color: #dbeafe;
+        background: rgba(255, 255, 255, .060);
+        border-color: rgba(148, 163, 184, .18);
+    }
+
+    .final-form-side h3 {
+        margin: 0;
+        color: #ffffff;
+        font-size: 20px;
+        font-weight: 950;
+    }
+
+    .final-form-side p {
+        margin: 8px 0 0;
+        color: #94a3b8;
+        font-size: 13px;
+        font-weight: 750;
+        line-height: 1.55;
+    }
+
+    .final-note-list {
+        display: grid;
+        gap: 10px;
+        margin-top: 16px;
+    }
+
+    .final-note {
+        padding: 12px;
+        border-radius: 16px;
+        color: #dbeafe;
+        background: rgba(255, 255, 255, .045);
+        border: 1px solid rgba(148, 163, 184, .12);
+        font-size: 13px;
+        font-weight: 800;
+        line-height: 1.45;
+        overflow-wrap: anywhere;
+    }
+
+    @@media (max-width: 1100px) {
+        .final-form-layout {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @@media (max-width: 700px) {
+        .final-form-hero,
+        .final-form-card,
+        .final-form-side {
+            border-radius: 22px;
+            padding: 16px;
+        }
+
+        .final-form-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .final-form-actions {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .final-form-save,
+        .final-form-back {
+            width: 100%;
+        }
+    }
+</style>
+
+<div class="final-form-page">
+    <section class="final-form-hero">
+        <div class="final-form-kicker">Duyuru Düzenle</div>
+
+        <h1>@(string.IsNullOrWhiteSpace(announcementTitle) ? "Duyuru Düzenle" : announcementTitle)</h1>
+
+        <p>
+            Duyuru metnini ve hedef kitlesini güncelleyin. Kaydedilen değişiklikler ilgili panellerde görünür.
+        </p>
+    </section>
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success">@TempData["Success"]</div>
+    }
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger">@TempData["Error"]</div>
+    }
+
+    <section class="final-form-layout">
+        <form asp-controller="Announcements"
+              asp-action="Edit"
+              asp-route-id="@announcementId"
+              method="post"
+              class="final-form-card">
+
+            @Html.AntiForgeryToken()
+
+            <input type="hidden" asp-for="Id" name="Id" />
+
+            <div class="final-form-grid">
+                <div class="final-form-field full">
+                    <label>Duyuru Başlığı</label>
+                    <input asp-for="Title"
+                           name="Title"
+                           maxlength="120"
+                           required />
+                </div>
+
+                <div class="final-form-field full">
+                    <label>Hedef Kitle</label>
+                    <select asp-for="Target" name="Target" required>
+                        <option value="Tüm Okul">Tüm Okul</option>
+                        <option value="Öğrenci">Öğrenci</option>
+                        <option value="Öğretmen">Öğretmen</option>
+                        <option value="Veli">Veli</option>
+                    </select>
+                </div>
+
+                <div class="final-form-field full">
+                    <label>Duyuru İçeriği</label>
+                    <textarea asp-for="Content"
+                              name="Content"
+                              required></textarea>
+                </div>
             </div>
 
-            <div class="form-group">
-                <label class="form-label" asp-for="Author">Yayınlayan</label>
-                <input class="form-control" asp-for="Author" />
-                <span asp-validation-for="Author" class="text-danger"></span>
+            <div class="final-form-actions">
+                <a asp-controller="Announcements"
+                   asp-action="Index"
+                   class="final-form-back">
+                    Vazgeç
+                </a>
+
+                <button type="submit" class="final-form-save">
+                    💾 Değişiklikleri Kaydet
+                </button>
             </div>
+        </form>
 
-            <div class="form-group">
-                <label class="form-label" asp-for="Target">Hedef Kitle</label>
-                <select class="form-control" asp-for="Target">
-                    <option value="Tüm Okul">Tüm Okul</option>
-                    <option value="Öğrenciler">Öğrenciler</option>
-                    <option value="Öğretmenler">Öğretmenler</option>
-                    <option value="Veliler">Veliler</option>
-                </select>
-                <span asp-validation-for="Target" class="text-danger"></span>
+        <aside class="final-form-side">
+            <h3>Duyuru Özeti</h3>
+
+            <p>
+                Mevcut duyurunun hızlı özeti.
+            </p>
+
+            <div class="final-note-list">
+                <div class="final-note">📣 Başlık: @(string.IsNullOrWhiteSpace(announcementTitle) ? "-" : announcementTitle)</div>
+                <div class="final-note">🎯 Hedef: @(string.IsNullOrWhiteSpace(announcementTarget) ? "-" : announcementTarget)</div>
+                <div class="final-note">✍️ Yayınlayan: @(string.IsNullOrWhiteSpace(announcementAuthor) ? "Admin" : announcementAuthor)</div>
             </div>
-
-            <div class="form-group full">
-                <label class="form-label" asp-for="Content">Duyuru İçeriği</label>
-                <textarea class="form-control" asp-for="Content"></textarea>
-                <span asp-validation-for="Content" class="text-danger"></span>
-            </div>
-        </div>
-
-        <div style="height: 22px;"></div>
-
-        <div class="page-actions">
-            <button class="btn btn-primary" type="submit">
-                💾 Değişiklikleri Kaydet
-            </button>
-
-            <a class="btn btn-light" asp-controller="Announcements" asp-action="Index">
-                ← Geri Dön
-            </a>
-        </div>
-    </form>
+        </aside>
+    </section>
 </div>

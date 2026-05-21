@@ -3,143 +3,330 @@
 @{
     Layout = "_AdminLayout";
     ViewData["Title"] = "Ders Ataması Düzenle";
+    ViewData["PageTitle"] = "Ders Ataması Düzenle";
+    ViewData["PageSubtitle"] = "Ders adı, sınıf ve öğretmen eşleşmesini güncelleyin.";
 
-    var classes = Model.Classes ?? new List<mvc_web.Services.ClassOption>();
-    var teachers = Model.Teachers ?? new List<mvc_web.Services.TeacherOption>();
-
-    var defaultLessons = new List<string>
-    {
-        "Matematik",
-        "Fizik",
-        "Kimya",
-        "Biyoloji",
-        "Edebiyat",
-        "Tarih",
-        "Coğrafya",
-        "İngilizce",
-        "Din Kültürü",
-        "Beden Eğitimi"
-    };
-
-    var isCustomLesson = !defaultLessons.Contains(Model.Name);
+    var pageModel = Model ?? new mvc_web.Controllers.LessonEditPageModel();
+    var classes = pageModel.Classes ?? new List<mvc_web.Services.ClassOption>();
+    var teachers = pageModel.Teachers ?? new List<mvc_web.Services.TeacherOption>();
+    var lessonId = pageModel.Id;
+    var lessonName = pageModel.Name;
+    var selectedClassName = pageModel.ClassName;
+    var selectedTeacherNo = pageModel.TeacherNo;
+    var selectedTeacherName = pageModel.TeacherName;
+    var selectedTeacherBranch = pageModel.TeacherBranch;
 }
 
-<div class="form-card">
-    @if (!ViewData.ModelState.IsValid)
-    {
-        <div class="alert alert-danger">
-            @foreach (var error in ViewData.ModelState.Values.SelectMany(v => v.Errors))
-            {
-                <div>@error.ErrorMessage</div>
-            }
-        </div>
+<style>
+    .final-form-page {
+        width: 100%;
+        display: grid;
+        gap: 18px;
     }
 
-    @if (classes.Count == 0)
-    {
-        <div class="alert alert-warning">
-            Ders düzenlemek için önce <strong>Sınıflar</strong> ekranından sınıf oluşturmalısınız.
-        </div>
+    .final-form-hero,
+    .final-form-card,
+    .final-form-side {
+        border: 1px solid rgba(148, 163, 184, .18);
+        background:
+            radial-gradient(circle at 0% 0%, rgba(56, 189, 248, .10), transparent 34%),
+            linear-gradient(135deg, rgba(17, 25, 46, .94), rgba(15, 23, 42, .86));
+        box-shadow: 0 18px 48px rgba(0, 0, 0, .24);
+        backdrop-filter: blur(16px);
     }
 
-    @if (teachers.Count == 0)
-    {
-        <div class="alert alert-warning">
-            Ders düzenlemek için önce <strong>Kullanıcılar</strong> ekranından öğretmen oluşturmalısınız.
-        </div>
+    .final-form-hero {
+        padding: 24px;
+        border-radius: 32px;
     }
 
-    <form asp-controller="Lessons" asp-action="Edit" method="post">
-        @Html.AntiForgeryToken()
+    .final-form-kicker {
+        width: fit-content;
+        min-height: 30px;
+        display: inline-flex;
+        align-items: center;
+        padding: 0 12px;
+        border-radius: 999px;
+        color: #67e8f9;
+        background: rgba(56, 189, 248, .10);
+        border: 1px solid rgba(103, 232, 249, .20);
+        font-size: 11px;
+        font-weight: 950;
+        letter-spacing: .16em;
+        text-transform: uppercase;
+    }
 
-        <input type="hidden" name="id" value="@Model.Id" />
+    .final-form-hero h1 {
+        margin: 14px 0 0;
+        color: #ffffff;
+        font-size: clamp(34px, 3.8vw, 58px);
+        font-weight: 950;
+        line-height: 1;
+        letter-spacing: -.06em;
+    }
 
-        <div class="form-grid">
-            <div class="form-group">
-                <label class="form-label" for="lessonSelect">Ders Adı</label>
-                <select class="form-control" id="lessonSelect" name="@(isCustomLesson ? "" : "name")">
-                    @foreach (var lessonName in defaultLessons)
-                    {
-                        <option value="@lessonName" selected="@(Model.Name == lessonName)">
-                            @lessonName
-                        </option>
-                    }
-                    <option value="Diğer" selected="@isCustomLesson">Diğer</option>
-                </select>
-            </div>
+    .final-form-hero p {
+        max-width: 820px;
+        margin: 14px 0 0;
+        color: #aab8cf;
+        font-size: 15px;
+        font-weight: 700;
+        line-height: 1.65;
+    }
 
-            <div class="form-group" id="customLessonGroup" style="display:none;">
-                <label class="form-label" for="customLessonInput">Özel Ders Adı</label>
-                <input class="form-control"
-                       id="customLessonInput"
-                       value="@(isCustomLesson ? Model.Name : "")"
-                       placeholder="Ders adını yaz" />
-            </div>
+    .final-form-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 360px;
+        gap: 18px;
+        align-items: start;
+    }
 
-            <div class="form-group full">
-                <label class="form-label" for="className">Sınıf</label>
-                <select class="form-control" id="className" name="className">
-                    <option value="">Sınıf seç</option>
-                    @foreach (var classItem in classes)
-                    {
-                        <option value="@classItem.Name" selected="@(Model.ClassName == classItem.Name)">
-                            @classItem.Name
-                        </option>
-                    }
-                </select>
-            </div>
+    .final-form-card,
+    .final-form-side {
+        padding: 22px;
+        border-radius: 30px;
+    }
 
-            <div class="form-group full">
-                <label class="form-label" for="teacherNo">Öğretmen</label>
-                <select class="form-control" id="teacherNo" name="teacherNo">
-                    <option value="">Öğretmen seç</option>
-                    @foreach (var teacher in teachers)
-                    {
-                        <option value="@teacher.Number" selected="@(Model.TeacherNo == teacher.Number)">
-                            @teacher.Name - @teacher.Branch - No: @teacher.Number
-                        </option>
-                    }
-                </select>
-            </div>
-        </div>
+    .final-form-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+    }
 
-        <div style="height: 22px;"></div>
+    .final-form-field {
+        display: grid;
+        gap: 8px;
+    }
 
-        <div class="alert alert-warning">
-            Güncel öğretmen no: <strong>@Model.TeacherNo</strong>
-        </div>
+    .final-form-field.full {
+        grid-column: 1 / -1;
+    }
 
-        <div class="page-actions">
-            <button class="btn btn-primary" type="submit" @(classes.Count == 0 || teachers.Count == 0 ? "disabled" : "")>
-                Değişiklikleri Kaydet
-            </button>
+    .final-form-field label {
+        color: #dbeafe;
+        font-size: 13px;
+        font-weight: 950;
+    }
 
-            <a class="btn btn-light" asp-controller="Lessons" asp-action="Index">
-                Geri Dön
-            </a>
-        </div>
-    </form>
-</div>
+    .final-form-field input,
+    .final-form-field select {
+        width: 100%;
+        min-height: 48px;
+        padding: 0 13px;
+        border-radius: 15px;
+        border: 1px solid rgba(148, 163, 184, .18);
+        outline: none;
+        color: #ffffff;
+        background: rgba(7, 17, 31, .58);
+        font-size: 14px;
+        font-weight: 750;
+    }
 
-@section Scripts {
-    <script>
-        const lessonSelect = document.getElementById("lessonSelect");
-        const customGroup = document.getElementById("customLessonGroup");
-        const customInput = document.getElementById("customLessonInput");
+    .final-form-field input:focus,
+    .final-form-field select:focus {
+        border-color: rgba(103, 232, 249, .45);
+        box-shadow: 0 0 0 4px rgba(56, 189, 248, .09);
+    }
 
-        function updateLessonInput() {
-            if (lessonSelect.value === "Diğer") {
-                customGroup.style.display = "flex";
-                customInput.setAttribute("name", "name");
-                lessonSelect.removeAttribute("name");
-            } else {
-                customGroup.style.display = "none";
-                customInput.removeAttribute("name");
-                lessonSelect.setAttribute("name", "name");
-            }
+    .final-form-field option {
+        color: #0f172a;
+        background: #ffffff;
+    }
+
+    .final-form-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 16px;
+    }
+
+    .final-form-save,
+    .final-form-back {
+        min-height: 46px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 16px;
+        border-radius: 15px;
+        border: 1px solid transparent;
+        text-decoration: none;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 950;
+    }
+
+    .final-form-save {
+        color: #ffffff;
+        background: linear-gradient(135deg, #2563eb, #7c3aed);
+        border-color: rgba(125, 211, 252, .22);
+        box-shadow: 0 14px 30px rgba(37, 99, 235, .24);
+    }
+
+    .final-form-back {
+        color: #dbeafe;
+        background: rgba(255, 255, 255, .060);
+        border-color: rgba(148, 163, 184, .18);
+    }
+
+    .final-form-side h3 {
+        margin: 0;
+        color: #ffffff;
+        font-size: 20px;
+        font-weight: 950;
+    }
+
+    .final-form-side p {
+        margin: 8px 0 0;
+        color: #94a3b8;
+        font-size: 13px;
+        font-weight: 750;
+        line-height: 1.55;
+    }
+
+    .final-note-list {
+        display: grid;
+        gap: 10px;
+        margin-top: 16px;
+    }
+
+    .final-note {
+        padding: 12px;
+        border-radius: 16px;
+        color: #dbeafe;
+        background: rgba(255, 255, 255, .045);
+        border: 1px solid rgba(148, 163, 184, .12);
+        font-size: 13px;
+        font-weight: 800;
+        line-height: 1.45;
+    }
+
+    @@media (max-width: 1100px) {
+        .final-form-layout {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @@media (max-width: 700px) {
+        .final-form-hero,
+        .final-form-card,
+        .final-form-side {
+            border-radius: 22px;
+            padding: 16px;
         }
 
-        lessonSelect.addEventListener("change", updateLessonInput);
-        updateLessonInput();
-    </script>
-}
+        .final-form-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .final-form-actions {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .final-form-save,
+        .final-form-back {
+            width: 100%;
+        }
+    }
+</style>
+
+<div class="final-form-page">
+    <section class="final-form-hero">
+        <div class="final-form-kicker">Ders Düzenle</div>
+
+        <h1>@(string.IsNullOrWhiteSpace(lessonName) ? "Ders Ataması" : lessonName)</h1>
+
+        <p>
+            Ders atamasını güncelleyin. Bu değişiklik öğretmen panelinde görünen ders ve ödev akışına yansır.
+        </p>
+    </section>
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success">@TempData["Success"]</div>
+    }
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger">@TempData["Error"]</div>
+    }
+
+    <section class="final-form-layout">
+        <form asp-controller="Lessons"
+              asp-action="Edit"
+              asp-route-id="@lessonId"
+              method="post"
+              class="final-form-card">
+
+            @Html.AntiForgeryToken()
+
+            <input type="hidden" asp-for="Id" name="Id" />
+
+            <div class="final-form-grid">
+                <div class="final-form-field full">
+                    <label>Ders Adı</label>
+                    <input asp-for="Name"
+                           name="name"
+                           maxlength="80"
+                           required />
+                </div>
+
+                <div class="final-form-field">
+                    <label>Sınıf</label>
+                    <select name="className" required>
+                        <option value="">Sınıf seçin</option>
+
+                        @foreach (var item in classes)
+                        {
+                            <option value="@item.Name" selected="@(selectedClassName == item.Name)">
+                                @item.Name
+                            </option>
+                        }
+                    </select>
+                </div>
+
+                <div class="final-form-field">
+                    <label>Öğretmen</label>
+                    <select name="teacherNo" required>
+                        <option value="">Öğretmen seçin</option>
+
+                        @foreach (var teacher in teachers)
+                        {
+                            <option value="@teacher.Number" selected="@(selectedTeacherNo == teacher.Number)">
+                                @teacher.Name - @teacher.Branch
+                            </option>
+                        }
+                    </select>
+                </div>
+            </div>
+
+            <div class="final-form-actions">
+                <a asp-controller="Lessons"
+                   asp-action="Index"
+                   class="final-form-back">
+                    Vazgeç
+                </a>
+
+                <button type="submit" class="final-form-save">
+                    💾 Değişiklikleri Kaydet
+                </button>
+            </div>
+        </form>
+
+        <aside class="final-form-side">
+            <h3>Atama Özeti</h3>
+
+            <p>
+                Mevcut ders atamasının hızlı özeti.
+            </p>
+
+            <div class="final-note-list">
+                <div class="final-note">📚 Ders: @(string.IsNullOrWhiteSpace(lessonName) ? "-" : lessonName)</div>
+                <div class="final-note">🏫 Sınıf: @(string.IsNullOrWhiteSpace(selectedClassName) ? "-" : selectedClassName)</div>
+                <div class="final-note">👨‍🏫 Öğretmen: @(string.IsNullOrWhiteSpace(selectedTeacherName) ? "-" : selectedTeacherName)</div>
+                <div class="final-note">📘 Branş: @(string.IsNullOrWhiteSpace(selectedTeacherBranch) ? "-" : selectedTeacherBranch)</div>
+            </div>
+        </aside>
+    </section>
+</div>

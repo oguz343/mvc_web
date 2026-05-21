@@ -3,6 +3,7 @@ using FirebaseAdmin.Auth;
 using Google.Cloud.Firestore;
 using Google.Apis.Auth.OAuth2;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.ResponseCompression;
 using mvc_web.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -12,6 +13,20 @@ builder.Logging.AddConsole();
 builder.Logging.AddDebug();
 
 builder.Services.AddControllersWithViews();
+builder.Services.AddMemoryCache();
+
+builder.Services.AddResponseCompression(options =>
+{
+    options.EnableForHttps = true;
+    options.MimeTypes = ResponseCompressionDefaults.MimeTypes.Concat(
+        new[]
+        {
+            "text/css",
+            "application/javascript",
+            "image/svg+xml"
+        }
+    );
+});
 
 var mobileAuthAllowedOrigins = builder.Configuration
     .GetSection("MobileAuth:AllowedOrigins")
@@ -137,6 +152,8 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
     app.UseHttpsRedirection();
 }
+
+app.UseResponseCompression();
 
 app.UseStaticFiles();
 

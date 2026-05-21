@@ -1,894 +1,679 @@
 @using System.Collections
 @using System.Reflection
-@using Microsoft.AspNetCore.Http
-@model dynamic
 
 @{
     Layout = "_TeacherLayout";
-    ViewData["Title"] = "Öğretmen Kontrol Paneli";
-    ViewData["PageTitle"] = "Öğretmen Kontrol Paneli";
-    ViewData["PageSubtitle"] = "Dersleriniz, ödevleriniz ve teslim durumları.";
+    ViewData["Title"] = "Öğretmen Paneli";
+    ViewData["PageTitle"] = "Öğretmen Paneli";
+    ViewData["PageSubtitle"] = "Derslerinizi, ödevlerinizi ve öğrenci teslimlerini tek ekranda takip edin.";
 
-    var teacherName =
-        Context.Session.GetString("UserName") ??
-        Context.Session.GetString("Name") ??
-        GetText(Model, "TeacherName", "Name") ??
-        "Öğretmen";
+    var teacherName = Text(ViewData["TeacherName"], "Öğretmen");
+    var teacherNo = Text(ViewData["TeacherNo"], "-");
+    var teacherBranch = Text(ViewData["TeacherBranch"], "-");
 
-    var teacherNo =
-        Context.Session.GetString("UserNumber") ??
-        Context.Session.GetString("Number") ??
-        GetText(Model, "TeacherNo", "Number") ??
-        "-";
+    var lessons = ListFrom(ViewData["Lessons"] ?? ViewData["TeacherLessons"] ?? ViewData["MyLessons"]);
+    var assignments = ListFrom(ViewData["Assignments"] ?? ViewData["Homeworks"] ?? ViewData["TeacherAssignments"] ?? ViewData["MyAssignments"]);
+    var submissions = ListFrom(ViewData["Submissions"] ?? ViewData["RecentSubmissions"] ?? ViewData["LastSubmissions"]);
 
-    var teacherBranch =
-        GetText(Model, "Branch", "TeacherBranch") ??
-        ViewData["TeacherBranch"]?.ToString() ??
-        "-";
-
-    var lessonsRaw = GetList("Lessons", "TeacherLessons", "MyLessons");
-    var assignmentsRaw = GetList("Assignments", "Homeworks", "TeacherAssignments", "MyAssignments");
-    var submissionsRaw = GetList("Submissions", "RecentSubmissions", "LastSubmissions");
-    var announcementsRaw = GetList("Announcements", "TeacherAnnouncements", "RecentAnnouncements");
-
-    var lessons = lessonsRaw
-        .GroupBy(x => NormalizeKey($"{GetAnyText(x, "Name", "LessonName", "Title")}_{GetAnyText(x, "ClassName", "Class", "TargetClass")}"))
-        .Select(x => x.First())
-        .ToList();
-
-    var assignments = assignmentsRaw
-        .GroupBy(x => NormalizeKey($"{GetAnyText(x, "Title", "Name", "HomeworkTitle", "AssignmentTitle")}_{GetAnyText(x, "LessonName", "Lesson", "CourseName", "Course")}_{GetAnyText(x, "ClassName", "Class", "TargetClass")}"))
-        .Select(x => x.First())
-        .ToList();
-
-    /*
-        KRİTİK DÜZELTME:
-        Aynı teslim hem eski koleksiyondan hem yeni koleksiyondan gelirse burada TEK gösterilir.
-        Teslimler sayfasındaki gibi öğrenci + ödev + ders + sınıf bazlı tek kayıt kalır.
-    */
-    var submissions = submissionsRaw
-        .GroupBy(x => BuildSubmissionKey(x))
-        .Select(x => x.First())
-        .OrderByDescending(x => GetDate(x, "CreatedAt", "createdAt", "SubmittedAt", "submittedAt") ?? DateTime.MinValue)
-        .Take(5)
-        .ToList();
-
-    var lessonCount = lessons.Count;
-    var assignmentCount = assignments.Count;
-    var submissionCount = submissions.Count;
-    var evaluatedCount = submissions.Count(x => IsEvaluatedByStatusOnly(x));
-    var pendingSubmissionCount = Math.Max(0, submissionCount - evaluatedCount);
-    var latestAssignments = assignments.Take(3).ToList();
-    var latestAnnouncements = announcementsRaw.Take(3).ToList();
-    var focusText = pendingSubmissionCount > 0
-        ? $"{pendingSubmissionCount} teslim değerlendirme bekliyor."
-        : "Bekleyen teslim görünmüyor.";
+    var lessonCount = IntValue(ViewData["LessonCount"], lessons.Count);
+    var assignmentCount = IntValue(ViewData["AssignmentCount"], assignments.Count);
+    var submissionCount = IntValue(ViewData["SubmissionCount"], submissions.Count);
+    var evaluatedCount = IntValue(ViewData["EvaluatedCount"], submissions.Count(IsEvaluated));
+    var waitingCount = Math.Max(0, submissionCount - evaluatedCount);
 }
 
 @functions {
-    private object? GetPropertyValue(object? item, string key)
+    private List<object> ListFrom(object? raw)
+    {
+        if (raw == null || raw is string)
+        {
+            return new List<object>();
+        }
+
+        if (raw is IEnumerable enumerable)
+        {
+            return enumerable.Cast<object>().ToList();
+        }
+
+        return new List<object>();
+    }
+
+    private string Text(object? value, string fallback = "-")
+    {
+        var result = value?.ToString() ?? "";
+        return string.IsNullOrWhiteSpace(result) ? fallback : result;
+    }
+
+    private int IntValue(object? value, int fallback = 0)
+    {
+        return int.TryParse(value?.ToString(), out var parsed) ? parsed : fallback;
+    }
+
+    private string Get(object? item, params string[] keys)
     {
         if (item == null)
         {
-            return null;
+            return "";
         }
 
         if (item is IDictionary<string, object> dict)
         {
-            foreach (var pair in dict)
+            foreach (var key in keys)
             {
-                if (string.Equals(pair.Key, key, StringComparison.OrdinalIgnoreCase))
+                if (dict.TryGetValue(key, out var value) && value != null)
                 {
-                    return pair.Value;
+                    return value.ToString() ?? "";
                 }
             }
         }
 
         var type = item.GetType();
 
-        var prop = type.GetProperty(
-            key,
-            BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase
-        );
-
-        return prop?.GetValue(item);
-    }
-
-    private string GetText(object? item, params string[] keys)
-    {
         foreach (var key in keys)
         {
-            var value = GetPropertyValue(item, key);
+            var prop = type.GetProperty(key, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
 
-            if (value != null && !string.IsNullOrWhiteSpace(value.ToString()))
+            if (prop != null)
             {
-                return value.ToString() ?? "";
+                var value = prop.GetValue(item);
+                if (value != null)
+                {
+                    return value.ToString() ?? "";
+                }
             }
         }
 
         return "";
     }
 
-    private string GetAnyText(object? item, params string[] keys)
+    private string First(params string[] values)
     {
-        var value = GetText(item, keys);
-        return string.IsNullOrWhiteSpace(value) ? "-" : value;
-    }
-
-    private List<object> GetList(params string[] keys)
-    {
-        foreach (var key in keys)
+        foreach (var value in values)
         {
-            object? raw = null;
-
-            if (ViewData.ContainsKey(key))
+            if (!string.IsNullOrWhiteSpace(value))
             {
-                raw = ViewData[key];
-            }
-
-            raw ??= GetPropertyValue(Model, key);
-
-            if (raw is IEnumerable enumerable && raw is not string)
-            {
-                return enumerable.Cast<object>().ToList();
+                return value;
             }
         }
 
-        if (Model is IEnumerable modelEnumerable && Model is not string)
+        return "";
+    }
+
+    private bool IsEvaluated(object item)
+    {
+        var status = Get(item, "status", "Status");
+        var grade = First(Get(item, "grade", "Grade"), Get(item, "score", "Score"), Get(item, "point", "Point"), Get(item, "not", "Not"));
+        var feedback = First(Get(item, "feedback", "Feedback"), Get(item, "comment", "Comment"), Get(item, "geriDonus", "GeriDonus"));
+
+        return status.Contains("Değerlendir", StringComparison.OrdinalIgnoreCase)
+            || status.Contains("Degerlendir", StringComparison.OrdinalIgnoreCase)
+            || !string.IsNullOrWhiteSpace(grade)
+            || !string.IsNullOrWhiteSpace(feedback);
+    }
+
+    private string DateText(object? value)
+    {
+        if (value == null)
         {
-            return modelEnumerable.Cast<object>().ToList();
+            return "-";
         }
 
-        return new List<object>();
-    }
-
-    private string Safe(string value)
-    {
-        return string.IsNullOrWhiteSpace(value) ? "-" : value;
-    }
-
-    private string BuildSubmissionKey(object item)
-    {
-        var title = GetAnyText(
-            item,
-            "AssignmentTitle",
-            "HomeworkTitle",
-            "Title",
-            "Name",
-            "HomeworkName",
-            "AssignmentName"
-        );
-
-        var studentNo = OnlyDigits(GetAnyText(
-            item,
-            "StudentNo",
-            "StudentNumber",
-            "SchoolNo",
-            "Number",
-            "studentNo",
-            "studentNumber",
-            "schoolNo",
-            "number"
-        ));
-
-        var lessonName = GetAnyText(
-            item,
-            "LessonName",
-            "Lesson",
-            "CourseName",
-            "Course",
-            "lessonName",
-            "lesson",
-            "courseName",
-            "course"
-        );
-
-        var className = GetAnyText(
-            item,
-            "ClassName",
-            "Class",
-            "TargetClass",
-            "className",
-            "class",
-            "targetClass"
-        );
-
-        /*
-            Bilerek homeworkId kullanmıyorum.
-            Çünkü aynı teslim eski/yeni koleksiyonda farklı id ile durabiliyor.
-            Teslimler sayfasındaki mantık gibi öğrenci + ödev + ders + sınıf tek kayıt olsun.
-        */
-        return NormalizeKey($"{title}_{studentNo}_{lessonName}_{className}");
-    }
-
-    private string GetDisplayTitle(object item)
-    {
-        var title = GetText(
-            item,
-            "AssignmentTitle",
-            "HomeworkTitle",
-            "Title",
-            "Name",
-            "HomeworkName",
-            "AssignmentName"
-        );
-
-        return string.IsNullOrWhiteSpace(title) ? "Ödev" : title;
-    }
-
-    private string GetDisplayStudentNo(object item)
-    {
-        var no = OnlyDigits(GetText(
-            item,
-            "StudentNo",
-            "StudentNumber",
-            "SchoolNo",
-            "Number",
-            "studentNo",
-            "studentNumber",
-            "schoolNo",
-            "number"
-        ));
-
-        return string.IsNullOrWhiteSpace(no) ? "-" : no;
-    }
-
-    private string GetDisplayStatus(object item)
-    {
-        var status = GetText(item, "Status", "status");
-
-        /*
-            Teslimler sayfasıyla aynı olsun:
-            Eğer status Bekliyor ise, not/geri dönüş olsa bile dashboard kafasına göre Değerlendirildi yazmasın.
-        */
-        if (!string.IsNullOrWhiteSpace(status))
+        if (value is DateTime date)
         {
-            return status;
+            return date.ToString("dd.MM.yyyy HH:mm");
         }
 
-        return "Bekliyor";
-    }
-
-    private bool IsEvaluatedByStatusOnly(object item)
-    {
-        var status = NormalizeKey(GetDisplayStatus(item));
-
-        return status.Contains("degerlendirildi") ||
-               status.Contains("deger") ||
-               status.Contains("evaluated");
-    }
-
-    private DateTime? GetDate(object item, params string[] keys)
-    {
-        foreach (var key in keys)
-        {
-            var value = GetPropertyValue(item, key);
-
-            if (value == null)
-            {
-                continue;
-            }
-
-            if (value is DateTime dt)
-            {
-                return dt;
-            }
-
-            if (DateTime.TryParse(value.ToString(), out DateTime parsedDate))
-            {
-                return parsedDate;
-            }
-        }
-
-        return null;
-    }
-
-    private string OnlyDigits(string value)
-    {
-        return new string((value ?? "").Where(char.IsDigit).ToArray());
-    }
-
-    private string NormalizeKey(string value)
-    {
-        return (value ?? "")
-            .Trim()
-            .ToLowerInvariant()
-            .Replace("ı", "i")
-            .Replace("ğ", "g")
-            .Replace("ü", "u")
-            .Replace("ş", "s")
-            .Replace("ö", "o")
-            .Replace("ç", "c")
-            .Replace(" ", "")
-            .Replace("-", "")
-            .Replace("_", "")
-            .Replace("/", "")
-            .Replace("\\", "")
-            .Replace(".", "")
-            .Replace(":", "")
-            .Replace(";", "")
-            .Replace(",", "");
+        return DateTime.TryParse(value.ToString(), out var parsed)
+            ? parsed.ToString("dd.MM.yyyy HH:mm")
+            : "-";
     }
 }
 
-<div class="teacher-premium-page">
-    <section class="teacher-hero">
-        <div class="hero-left">
-            <div class="hero-icon">👨‍🏫</div>
+<style>
+    .teacher-v2 {
+        display: grid;
+        gap: 18px;
+        width: 100%;
+    }
 
-            <div>
-                <div class="hero-kicker">Öğretmen Paneli</div>
-                <h1>Hoş geldiniz, @teacherName</h1>
-                <p>Derslerinizi, ödevlerinizi ve öğrencilerden gelen teslimleri buradan takip edebilirsiniz.</p>
+    .teacher-v2-hero,
+    .teacher-v2-panel,
+    .teacher-v2-card,
+    .teacher-v2-stat {
+        border: 1px solid rgba(148, 163, 184, .18);
+        background:
+            radial-gradient(circle at 0% 0%, rgba(56, 189, 248, .10), transparent 34%),
+            linear-gradient(135deg, rgba(17, 25, 46, .94), rgba(15, 23, 42, .86));
+        box-shadow: 0 18px 48px rgba(0, 0, 0, .24);
+        backdrop-filter: blur(16px);
+    }
 
-                <div class="hero-meta">
-                    <span>📚 Branş: <b>@Safe(teacherBranch)</b></span>
-                    <span># No: <b>@Safe(teacherNo)</b></span>
+    .teacher-v2-hero {
+        position: relative;
+        overflow: hidden;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 360px;
+        gap: 18px;
+        padding: 24px;
+        border-radius: 32px;
+    }
+
+    .teacher-v2-hero::after {
+        content: "";
+        position: absolute;
+        width: 390px;
+        height: 390px;
+        right: -190px;
+        top: -190px;
+        border-radius: 999px;
+        background: rgba(99, 102, 241, .22);
+        pointer-events: none;
+    }
+
+    .teacher-v2-kicker {
+        width: fit-content;
+        min-height: 30px;
+        display: inline-flex;
+        align-items: center;
+        padding: 0 12px;
+        border-radius: 999px;
+        color: #67e8f9;
+        background: rgba(56, 189, 248, .10);
+        border: 1px solid rgba(103, 232, 249, .20);
+        font-size: 11px;
+        font-weight: 950;
+        letter-spacing: .16em;
+        text-transform: uppercase;
+    }
+
+    .teacher-v2-hero h1 {
+        max-width: 820px;
+        margin: 14px 0 0;
+        color: #ffffff;
+        font-size: clamp(34px, 3.8vw, 58px);
+        font-weight: 950;
+        line-height: 1;
+        letter-spacing: -.06em;
+    }
+
+    .teacher-v2-hero p {
+        max-width: 760px;
+        margin: 14px 0 0;
+        color: #aab8cf;
+        font-size: 15px;
+        font-weight: 700;
+        line-height: 1.65;
+    }
+
+    .teacher-v2-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 20px;
+    }
+
+    .teacher-v2-primary,
+    .teacher-v2-soft {
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 15px;
+        border-radius: 15px;
+        text-decoration: none;
+        font-size: 13px;
+        font-weight: 950;
+        transition: .16s ease;
+    }
+
+    .teacher-v2-primary {
+        color: #ffffff;
+        background: linear-gradient(135deg, #2563eb, #7c3aed);
+        border: 1px solid rgba(125, 211, 252, .22);
+        box-shadow: 0 14px 30px rgba(37, 99, 235, .24);
+    }
+
+    .teacher-v2-soft {
+        color: #dbeafe;
+        background: rgba(255, 255, 255, .060);
+        border: 1px solid rgba(148, 163, 184, .18);
+    }
+
+    .teacher-v2-primary:hover,
+    .teacher-v2-soft:hover {
+        transform: translateY(-1px);
+    }
+
+    .teacher-v2-profile {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        gap: 12px;
+    }
+
+    .teacher-v2-profile-card {
+        padding: 18px;
+        border-radius: 24px;
+        background: rgba(255, 255, 255, .055);
+        border: 1px solid rgba(148, 163, 184, .16);
+    }
+
+    .teacher-v2-profile-card strong {
+        display: block;
+        color: #ffffff;
+        font-size: 28px;
+        font-weight: 950;
+        letter-spacing: -.04em;
+    }
+
+    .teacher-v2-profile-card span {
+        display: block;
+        margin-top: 7px;
+        color: #94a3b8;
+        font-size: 13px;
+        font-weight: 850;
+    }
+
+    .teacher-v2-mini-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    .teacher-v2-mini {
+        min-height: 86px;
+        padding: 14px;
+        border-radius: 20px;
+        background: rgba(255, 255, 255, .050);
+        border: 1px solid rgba(148, 163, 184, .14);
+    }
+
+    .teacher-v2-mini strong {
+        display: block;
+        color: #ffffff;
+        font-size: 24px;
+        font-weight: 950;
+    }
+
+    .teacher-v2-mini span {
+        color: #94a3b8;
+        font-size: 12px;
+        font-weight: 850;
+    }
+
+    .teacher-v2-stats {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(170px, 1fr));
+        gap: 14px;
+    }
+
+    .teacher-v2-stat {
+        min-height: 122px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 18px;
+        border-radius: 25px;
+    }
+
+    .teacher-v2-stat-icon {
+        width: 54px;
+        height: 54px;
+        flex: 0 0 54px;
+        display: grid;
+        place-items: center;
+        border-radius: 19px;
+        color: #ffffff;
+        background: linear-gradient(135deg, #2563eb, #7c3aed);
+        font-size: 24px;
+    }
+
+    .teacher-v2-stat strong {
+        display: block;
+        color: #ffffff;
+        font-size: 32px;
+        font-weight: 950;
+        line-height: 1;
+    }
+
+    .teacher-v2-stat span {
+        display: block;
+        margin-top: 6px;
+        color: #aab8cf;
+        font-size: 13px;
+        font-weight: 850;
+    }
+
+    .teacher-v2-main-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(340px, .65fr);
+        gap: 18px;
+        align-items: start;
+    }
+
+    .teacher-v2-panel {
+        padding: 20px;
+        border-radius: 28px;
+    }
+
+    .teacher-v2-panel-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        margin-bottom: 14px;
+        padding-bottom: 14px;
+        border-bottom: 1px solid rgba(148, 163, 184, .14);
+    }
+
+    .teacher-v2-panel-head h2 {
+        margin: 0;
+        color: #ffffff;
+        font-size: 20px;
+        font-weight: 950;
+        letter-spacing: -.025em;
+    }
+
+    .teacher-v2-panel-head p {
+        margin: 5px 0 0;
+        color: #94a3b8;
+        font-size: 13px;
+        font-weight: 750;
+    }
+
+    .teacher-v2-list {
+        display: grid;
+        gap: 10px;
+    }
+
+    .teacher-v2-row {
+        display: grid;
+        grid-template-columns: 46px minmax(0, 1fr) auto;
+        gap: 12px;
+        align-items: center;
+        padding: 12px;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, .045);
+        border: 1px solid rgba(148, 163, 184, .12);
+    }
+
+    .teacher-v2-row-icon {
+        width: 46px;
+        height: 46px;
+        display: grid;
+        place-items: center;
+        border-radius: 16px;
+        color: #ffffff;
+        background: linear-gradient(135deg, #2563eb, #7c3aed);
+        font-size: 21px;
+    }
+
+    .teacher-v2-row-title {
+        color: #ffffff;
+        font-size: 14px;
+        font-weight: 950;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .teacher-v2-row-text {
+        margin-top: 4px;
+        color: #94a3b8;
+        font-size: 12px;
+        font-weight: 800;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .teacher-v2-pill {
+        min-height: 30px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 10px;
+        border-radius: 999px;
+        color: #bfdbfe;
+        background: rgba(37, 99, 235, .14);
+        border: 1px solid rgba(96, 165, 250, .20);
+        font-size: 12px;
+        font-weight: 950;
+        white-space: nowrap;
+    }
+
+    .teacher-v2-empty {
+        min-height: 170px;
+        display: grid;
+        place-items: center;
+        text-align: center;
+        padding: 24px;
+        border-radius: 20px;
+        color: #94a3b8;
+        background: rgba(255, 255, 255, .040);
+        border: 1px dashed rgba(148, 163, 184, .20);
+        font-weight: 850;
+        line-height: 1.55;
+    }
+
+    @@media (max-width: 1180px) {
+        .teacher-v2-hero,
+        .teacher-v2-main-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .teacher-v2-stats {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @@media (max-width: 680px) {
+        .teacher-v2-hero,
+        .teacher-v2-panel {
+            border-radius: 22px;
+            padding: 16px;
+        }
+
+        .teacher-v2-stats,
+        .teacher-v2-mini-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .teacher-v2-actions {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .teacher-v2-primary,
+        .teacher-v2-soft {
+            width: 100%;
+        }
+
+        .teacher-v2-row {
+            grid-template-columns: 44px minmax(0, 1fr);
+        }
+
+        .teacher-v2-pill {
+            grid-column: 1 / -1;
+            justify-self: start;
+        }
+    }
+</style>
+
+<div class="teacher-v2">
+    <section class="teacher-v2-hero">
+        <div>
+            <div class="teacher-v2-kicker">Öğretmen Merkezi</div>
+
+            <h1>Merhaba, @teacherName</h1>
+
+            <p>
+                Size atanmış dersleri, oluşturduğunuz ödevleri ve gelen öğrenci teslimlerini
+                koyu tema ile daha düzenli şekilde takip edin.
+            </p>
+
+            <div class="teacher-v2-actions">
+                <a asp-controller="Teacher" asp-action="CreateAssignment" class="teacher-v2-primary">
+                    📝 Yeni Ödev Oluştur
+                </a>
+
+                <a asp-controller="Teacher" asp-action="Assignments" class="teacher-v2-soft">
+                    📚 Ödevlerim
+                </a>
+
+                <a asp-controller="Teacher" asp-action="Submissions" class="teacher-v2-soft">
+                    📥 Teslimler
+                </a>
+            </div>
+        </div>
+
+        <div class="teacher-v2-profile">
+            <div class="teacher-v2-profile-card">
+                <strong>@teacherBranch</strong>
+                <span>Branş / Alan</span>
+            </div>
+
+            <div class="teacher-v2-mini-grid">
+                <div class="teacher-v2-mini">
+                    <strong>@teacherNo</strong>
+                    <span>Öğretmen No</span>
+                </div>
+
+                <div class="teacher-v2-mini">
+                    <strong>@lessonCount</strong>
+                    <span>Atanmış Ders</span>
                 </div>
             </div>
         </div>
-
-        <a asp-controller="Teacher" asp-action="CreateAssignment" class="hero-action">
-            📝 Yeni Ödev Oluştur
-        </a>
     </section>
 
-    <section class="teacher-stats-grid">
-        <div class="teacher-stat-card">
-            <div class="stat-icon blue">📚</div>
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success">@TempData["Success"]</div>
+    }
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger">@TempData["Error"]</div>
+    }
+
+    <section class="teacher-v2-stats">
+        <div class="teacher-v2-stat">
+            <div class="teacher-v2-stat-icon">📚</div>
             <div>
                 <strong>@lessonCount</strong>
-                <span>Dersim</span>
+                <span>Ders Ataması</span>
             </div>
         </div>
 
-        <div class="teacher-stat-card">
-            <div class="stat-icon purple">📝</div>
+        <div class="teacher-v2-stat">
+            <div class="teacher-v2-stat-icon">📝</div>
             <div>
                 <strong>@assignmentCount</strong>
-                <span>Ödevim</span>
+                <span>Ödev</span>
             </div>
         </div>
 
-        <div class="teacher-stat-card">
-            <div class="stat-icon cyan">📥</div>
+        <div class="teacher-v2-stat">
+            <div class="teacher-v2-stat-icon">📥</div>
             <div>
                 <strong>@submissionCount</strong>
                 <span>Teslim</span>
             </div>
         </div>
 
-        <div class="teacher-stat-card">
-            <div class="stat-icon green">✅</div>
+        <div class="teacher-v2-stat">
+            <div class="teacher-v2-stat-icon">✅</div>
             <div>
                 <strong>@evaluatedCount</strong>
-                <span>Değerlendirildi</span>
+                <span>Değerlendirilen</span>
             </div>
         </div>
     </section>
 
-    <section class="premium-insight-grid">
-        <div class="premium-insight-card" style="--card-accent: rgba(14,165,233,.14); --icon-bg: #e0f2fe; --icon-color: #0369a1;">
-            <div class="premium-insight-top">
-                <div class="premium-insight-icon">🎯</div>
-                <div>
-                    <strong>@pendingSubmissionCount</strong>
-                    <span>Bugünkü odak</span>
-                </div>
-            </div>
-            <p>@focusText</p>
-        </div>
-
-        <div class="premium-insight-card" style="--card-accent: rgba(79,70,229,.13); --icon-bg: #eef2ff; --icon-color: #4338ca;">
-            <div class="premium-insight-top">
-                <div class="premium-insight-icon">📝</div>
-                <div>
-                    <strong>@assignmentCount</strong>
-                    <span>Ödev havuzu</span>
-                </div>
-            </div>
-            <p>@lessonCount ders için hazırlanan ödevleri ve teslimleri buradan izleyebilirsiniz.</p>
-        </div>
-
-        <div class="premium-insight-card" style="--card-accent: rgba(245,158,11,.16); --icon-bg: #fef3c7; --icon-color: #b45309;">
-            <div class="premium-insight-top">
-                <div class="premium-insight-icon">📣</div>
-                <div>
-                    <strong>@latestAnnouncements.Count</strong>
-                    <span>Güncel duyuru</span>
-                </div>
-            </div>
-            <p>Duyurular ve sınıf hareketleri öğretmen ekranında ayrı ayrı okunabilir.</p>
-        </div>
-    </section>
-
-    <section class="teacher-dashboard-grid">
-        <div class="teacher-panel">
-            <div class="panel-head">
-                <div>
-                    <h2>Derslerim</h2>
-                    <p>Admin tarafından size atanmış dersler.</p>
-                </div>
-            </div>
-
-            @if (!lessons.Any())
-            {
-                <div class="empty-state-mini">
-                    Henüz size atanmış ders görünmüyor.
-                </div>
-            }
-            else
-            {
-                <div class="lesson-list">
-                    @foreach (var lesson in lessons)
-                    {
-                        var lessonName = GetAnyText(lesson, "Name", "LessonName", "Title");
-                        var className = GetAnyText(lesson, "ClassName", "Class", "TargetClass");
-                        var branch = GetAnyText(lesson, "TeacherBranch", "Branch");
-
-                        <div class="lesson-row">
-                            <div class="lesson-icon">📘</div>
-
-                            <div>
-                                <strong>@lessonName</strong>
-                                <span>@className • @branch</span>
-                            </div>
-                        </div>
-                    }
-                </div>
-            }
-        </div>
-
-        <div class="teacher-panel">
-            <div class="panel-head">
+    <section class="teacher-v2-main-grid">
+        <div class="teacher-v2-panel">
+            <div class="teacher-v2-panel-head">
                 <div>
                     <h2>Son Teslimler</h2>
-                    <p>Öğrencilerden gelen son teslimler.</p>
+                    <p>Öğrencilerden gelen en son teslimler.</p>
                 </div>
 
-                <a asp-controller="Teacher" asp-action="Submissions">Tümünü Gör</a>
+                <a asp-controller="Teacher" asp-action="Submissions" class="teacher-v2-soft">
+                    Tümü
+                </a>
             </div>
 
             @if (!submissions.Any())
             {
-                <div class="empty-state-mini">
-                    Henüz teslim bulunmuyor.
+                <div class="teacher-v2-empty">
+                    Henüz öğrenci teslimi yok.
                 </div>
             }
             else
             {
-                <div class="submission-list">
-                    @foreach (var item in submissions)
+                <div class="teacher-v2-list">
+                    @foreach (var item in submissions.Take(5))
                     {
-                        var title = GetDisplayTitle(item);
-                        var studentNo = GetDisplayStudentNo(item);
-                        var status = GetDisplayStatus(item);
-                        var isEvaluated = IsEvaluatedByStatusOnly(item);
+                        var title = First(Get(item, "assignmentTitle", "AssignmentTitle"), Get(item, "homeworkTitle", "HomeworkTitle"), Get(item, "title", "Title"), "Ödev");
+                        var studentNo = First(Get(item, "studentNo", "StudentNo"), Get(item, "number", "Number"), "-");
+                        var className = First(Get(item, "className", "ClassName"), Get(item, "class", "Class"), "-");
+                        var evaluated = IsEvaluated(item);
 
-                        <div class="submission-row">
+                        <div class="teacher-v2-row">
+                            <div class="teacher-v2-row-icon">📥</div>
+
                             <div>
-                                <strong>@title</strong>
-                                <span>Öğrenci No: @studentNo</span>
+                                <div class="teacher-v2-row-title">@title</div>
+                                <div class="teacher-v2-row-text">Öğrenci No: @studentNo · Sınıf: @className</div>
                             </div>
 
-                            @if (isEvaluated)
-                            {
-                                <span class="status-pill success">@status</span>
-                            }
-                            else
-                            {
-                                <span class="status-pill warning">@status</span>
-                            }
+                            <span class="teacher-v2-pill">
+                                @(evaluated ? "Değerlendirildi" : "Bekliyor")
+                            </span>
                         </div>
                     }
                 </div>
             }
         </div>
 
-        <div class="teacher-panel">
-            <div class="panel-head">
+        <div class="teacher-v2-panel">
+            <div class="teacher-v2-panel-head">
                 <div>
-                    <h2>Ödev ve Duyuru Akışı</h2>
-                    <p>Son hazırlanan içerikler tek bakışta.</p>
+                    <h2>Hızlı İşlemler</h2>
+                    <p>Sık kullanılan öğretmen işlemleri.</p>
                 </div>
-
-                <a asp-controller="Teacher" asp-action="Assignments">Ödevler</a>
             </div>
 
-            <div class="premium-detail-feed">
-                @if (latestAssignments.Any())
-                {
-                    @foreach (var assignment in latestAssignments)
-                    {
-                        var title = GetDisplayTitle(assignment);
-                        var lessonName = GetAnyText(assignment, "LessonName", "Lesson", "CourseName", "Course");
-                        var className = GetAnyText(assignment, "ClassName", "Class", "TargetClass");
-
-                        <div class="premium-feed-item" style="--feed-accent: rgba(79,70,229,.10); --feed-icon-bg: #eef2ff; --feed-icon-color: #4338ca;">
-                            <div class="premium-feed-icon">📝</div>
-                            <div class="premium-feed-body">
-                                <strong>@title</strong>
-                                <span>@lessonName • @className</span>
-                            </div>
-                            <div class="premium-feed-tag">Ödev</div>
-                        </div>
-                    }
-                }
-                else
-                {
-                    <div class="premium-empty-note">
-                        Henüz ödev görünmüyor. Yeni ödev oluşturunca öğrencilerin teslim akışı bu paneli dolduracak.
+            <div class="teacher-v2-list">
+                <a asp-controller="Teacher" asp-action="CreateAssignment" class="teacher-v2-row" style="text-decoration:none;">
+                    <div class="teacher-v2-row-icon">📝</div>
+                    <div>
+                        <div class="teacher-v2-row-title">Yeni Ödev Oluştur</div>
+                        <div class="teacher-v2-row-text">Ders ve sınıf seçerek yeni ödev yayınla.</div>
                     </div>
-                }
+                    <span class="teacher-v2-pill">Git</span>
+                </a>
 
-                @if (latestAnnouncements.Any())
-                {
-                    @foreach (var announcement in latestAnnouncements)
-                    {
-                        var title = GetAnyText(announcement, "Title", "Name");
-                        var target = GetAnyText(announcement, "Target", "Role", "Audience");
+                <a asp-controller="Teacher" asp-action="Assignments" class="teacher-v2-row" style="text-decoration:none;">
+                    <div class="teacher-v2-row-icon">📚</div>
+                    <div>
+                        <div class="teacher-v2-row-title">Ödevlerimi Gör</div>
+                        <div class="teacher-v2-row-text">Aktif ödevleri düzenle veya sil.</div>
+                    </div>
+                    <span class="teacher-v2-pill">Git</span>
+                </a>
 
-                        <div class="premium-feed-item" style="--feed-accent: rgba(245,158,11,.12); --feed-icon-bg: #fef3c7; --feed-icon-color: #b45309;">
-                            <div class="premium-feed-icon">📣</div>
-                            <div class="premium-feed-body">
-                                <strong>@title</strong>
-                                <span>Hedef: @target</span>
-                            </div>
-                            <div class="premium-feed-tag">Duyuru</div>
-                        </div>
-                    }
-                }
+                <a asp-controller="Teacher" asp-action="Submissions" class="teacher-v2-row" style="text-decoration:none;">
+                    <div class="teacher-v2-row-icon">✅</div>
+                    <div>
+                        <div class="teacher-v2-row-title">Teslimleri Değerlendir</div>
+                        <div class="teacher-v2-row-text">@waitingCount teslim değerlendirme bekliyor.</div>
+                    </div>
+                    <span class="teacher-v2-pill">Git</span>
+                </a>
             </div>
         </div>
     </section>
 </div>
-
-<style>
-    .teacher-premium-page {
-        display: grid;
-        gap: 20px;
-    }
-
-    .teacher-hero {
-        position: relative;
-        overflow: hidden;
-        background:
-            radial-gradient(circle at 10% 8%, rgba(6, 182, 212, .22), transparent 34%),
-            radial-gradient(circle at 88% 16%, rgba(79, 70, 229, .15), transparent 30%),
-            linear-gradient(135deg, #ffffff, #f1f5fb);
-        border: 1px solid rgba(203,213,225,.95);
-        box-shadow: 0 26px 70px rgba(15, 23, 42, .12);
-        border-radius: 32px;
-        padding: 28px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 22px;
-    }
-
-    .teacher-hero::after {
-        content: "";
-        position: absolute;
-        right: -90px;
-        bottom: -120px;
-        width: 280px;
-        height: 280px;
-        border-radius: 999px;
-        background: rgba(6, 182, 212, .09);
-        pointer-events: none;
-    }
-
-    .hero-left {
-        position: relative;
-        z-index: 1;
-        display: flex;
-        align-items: center;
-        gap: 18px;
-    }
-
-    .hero-icon {
-        width: 74px;
-        height: 74px;
-        border-radius: 26px;
-        background: linear-gradient(135deg, #06b6d4, #4f46e5);
-        color: #fff;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 34px;
-        box-shadow: 0 18px 38px rgba(6, 182, 212, .22);
-        flex: 0 0 auto;
-    }
-
-    .hero-kicker {
-        display: inline-flex;
-        color: #0e7490;
-        background: #ecfeff;
-        border: 1px solid #a5f3fc;
-        border-radius: 999px;
-        padding: 7px 11px;
-        font-size: 13px;
-        font-weight: 950;
-        margin-bottom: 8px;
-    }
-
-    .teacher-hero h1 {
-        margin: 0;
-        color: #0f172a;
-        font-size: 34px;
-        font-weight: 950;
-        letter-spacing: -.8px;
-    }
-
-    .teacher-hero p {
-        margin: 8px 0 0;
-        color: #64748b;
-        font-weight: 800;
-        line-height: 1.5;
-    }
-
-    .hero-meta {
-        display: flex;
-        gap: 10px;
-        flex-wrap: wrap;
-        margin-top: 14px;
-    }
-
-    .hero-meta span {
-        background: #eef2ff;
-        color: #3730a3;
-        border-radius: 999px;
-        padding: 8px 12px;
-        font-size: 13px;
-        font-weight: 900;
-    }
-
-    .hero-action {
-        position: relative;
-        z-index: 1;
-        min-height: 54px;
-        padding: 0 18px;
-        border-radius: 18px;
-        background: linear-gradient(135deg, #06b6d4, #0891b2);
-        color: #fff;
-        text-decoration: none;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: 950;
-        box-shadow: 0 18px 34px rgba(6, 182, 212, .24);
-        white-space: nowrap;
-    }
-
-    .teacher-stats-grid {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 16px;
-    }
-
-    .teacher-stat-card {
-        position: relative;
-        overflow: hidden;
-        background:
-            linear-gradient(135deg, rgba(255,255,255,.98), rgba(248,250,252,.94));
-        border-radius: 28px;
-        padding: 22px;
-        display: flex;
-        align-items: center;
-        gap: 16px;
-        border: 1px solid #cbd5e1;
-        box-shadow: 0 20px 48px rgba(15, 23, 42, .10);
-    }
-
-    .teacher-stat-card::before {
-        content: "";
-        position: absolute;
-        inset: 0 auto 0 0;
-        width: 7px;
-        background: linear-gradient(180deg, #06b6d4, #4f46e5);
-    }
-
-    .stat-icon {
-        width: 58px;
-        height: 58px;
-        border-radius: 20px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 26px;
-        flex: 0 0 auto;
-        position: relative;
-        z-index: 1;
-    }
-
-    .stat-icon.blue {
-        background: #dbeafe;
-    }
-
-    .stat-icon.purple {
-        background: #eef2ff;
-    }
-
-    .stat-icon.cyan {
-        background: #cffafe;
-    }
-
-    .stat-icon.green {
-        background: #dcfce7;
-    }
-
-    .teacher-stat-card strong {
-        display: block;
-        color: #0f172a;
-        font-size: 31px;
-        font-weight: 950;
-        line-height: 1;
-        position: relative;
-        z-index: 1;
-    }
-
-    .teacher-stat-card span {
-        display: block;
-        margin-top: 6px;
-        color: #64748b;
-        font-weight: 900;
-        position: relative;
-        z-index: 1;
-    }
-
-    .teacher-dashboard-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 18px;
-    }
-
-    .teacher-panel {
-        background:
-            linear-gradient(135deg, rgba(255,255,255,.98), rgba(248,250,252,.94));
-        border-radius: 30px;
-        padding: 22px;
-        border: 1px solid #cbd5e1;
-        box-shadow: 0 20px 50px rgba(15, 23, 42, .10);
-    }
-
-    .panel-head {
-        display: flex;
-        justify-content: space-between;
-        gap: 14px;
-        align-items: flex-start;
-        margin-bottom: 16px;
-    }
-
-    .panel-head h2 {
-        margin: 0;
-        color: #0f172a;
-        font-size: 23px;
-        font-weight: 950;
-    }
-
-    .panel-head p {
-        margin: 5px 0 0;
-        color: #64748b;
-        font-weight: 800;
-    }
-
-    .panel-head a {
-        background: #eef2ff;
-        color: #4338ca;
-        text-decoration: none;
-        border-radius: 16px;
-        padding: 11px 14px;
-        font-weight: 950;
-        white-space: nowrap;
-    }
-
-    .lesson-list,
-    .submission-list {
-        display: grid;
-        gap: 12px;
-    }
-
-    .lesson-row,
-    .submission-row {
-        background: #ffffff;
-        border: 1px solid #dbe4f0;
-        border-radius: 20px;
-        padding: 14px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 14px;
-    }
-
-    .lesson-row:hover,
-    .submission-row:hover {
-        border-color: #a5f3fc;
-        box-shadow: 0 14px 28px rgba(6, 182, 212, .10);
-        transform: translateY(-1px);
-    }
-
-    .lesson-row {
-        justify-content: flex-start;
-    }
-
-    .lesson-icon {
-        width: 46px;
-        height: 46px;
-        border-radius: 16px;
-        background: #cffafe;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 22px;
-        flex: 0 0 auto;
-    }
-
-    .lesson-row strong,
-    .submission-row strong {
-        display: block;
-        color: #0f172a;
-        font-weight: 950;
-    }
-
-    .lesson-row span,
-    .submission-row span {
-        display: block;
-        color: #64748b;
-        font-weight: 800;
-        margin-top: 3px;
-    }
-
-    .status-pill {
-        border-radius: 999px;
-        padding: 8px 11px;
-        font-size: 12px;
-        font-weight: 950;
-        white-space: nowrap;
-    }
-
-    .status-pill.success {
-        background: #dcfce7;
-        color: #166534;
-    }
-
-    .status-pill.warning {
-        background: #ffedd5;
-        color: #9a3412;
-    }
-
-    .empty-state-mini {
-        background: #ffffff;
-        color: #64748b;
-        border: 1px dashed #94a3b8;
-        border-radius: 20px;
-        padding: 24px;
-        text-align: center;
-        font-weight: 900;
-    }
-
-    @@media (max-width: 1150px) {
-        .teacher-stats-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-
-        .teacher-dashboard-grid {
-            grid-template-columns: 1fr;
-        }
-    }
-
-    @@media (max-width: 720px) {
-        .teacher-hero,
-        .hero-left {
-            flex-direction: column;
-            align-items: flex-start;
-        }
-
-        .hero-action {
-            width: 100%;
-        }
-
-        .teacher-stats-grid {
-            grid-template-columns: 1fr;
-        }
-    }
-</style>

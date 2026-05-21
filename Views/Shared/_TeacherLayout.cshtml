@@ -14,6 +14,20 @@
         Context.Session.GetString("Number") ??
         "-";
 
+    var pageTitle = ViewData["PageTitle"]?.ToString();
+
+    if (string.IsNullOrWhiteSpace(pageTitle))
+    {
+        pageTitle = ViewData["Title"]?.ToString() ?? "Öğretmen Paneli";
+    }
+
+    var pageSubtitle = ViewData["PageSubtitle"]?.ToString();
+
+    if (string.IsNullOrWhiteSpace(pageSubtitle))
+    {
+        pageSubtitle = "Derslerinizi, ödevlerinizi ve öğrenci teslimlerini buradan takip edin.";
+    }
+
     string ActiveTeacher(string action)
     {
         return currentController == "Teacher" && currentAction == action ? "active teacher-active" : "";
@@ -22,6 +36,33 @@
     string ActiveController(string controller)
     {
         return currentController == controller ? "active teacher-active" : "";
+    }
+
+    string ActiveTeacherSubmissions()
+    {
+        var isLegacyTeacherAction = currentController == "Teacher" && currentAction == "Submissions";
+        var isDedicatedController = currentController == "TeacherSubmissions";
+
+        return isLegacyTeacherAction || isDedicatedController ? "active teacher-active" : "";
+    }
+
+    string Initials(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "Ö";
+        }
+
+        var parts = value
+            .Trim()
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        if (parts.Length >= 2)
+        {
+            return $"{parts[0][0]}{parts[1][0]}".ToUpperInvariant();
+        }
+
+        return parts[0][0].ToString().ToUpperInvariant();
     }
 }
 
@@ -37,15 +78,21 @@
     <link rel="stylesheet" href="~/css/dashboard.css" asp-append-version="true" />
 </head>
 
-<body>
-    <div class="app-shell">
-        <aside class="sidebar teacher-sidebar">
+<body class="midnight-body">
+    <div class="midnight-background">
+        <div class="midnight-orb orb-a"></div>
+        <div class="midnight-orb orb-b"></div>
+        <div class="midnight-orb orb-c"></div>
+    </div>
+
+    <div class="app-shell midnight-shell">
+        <aside class="sidebar midnight-sidebar teacher-sidebar">
             <div class="brand">
                 <div class="brand-icon teacher">
                     👨‍🏫
                 </div>
 
-                <div>
+                <div class="brand-text">
                     <div class="brand-title">
                         Ödev Sistemi
                     </div>
@@ -54,6 +101,10 @@
                         Öğretmen Paneli
                     </div>
                 </div>
+            </div>
+
+            <div class="sidebar-label">
+                Öğretmen
             </div>
 
             <nav class="nav-menu">
@@ -71,9 +122,9 @@
                     <strong>Verdiğim Ödevler</strong>
                 </a>
 
-                <a class="nav-link @ActiveTeacher("Submissions")"
-                   asp-controller="Teacher"
-                   asp-action="Submissions">
+                <a class="nav-link @ActiveTeacherSubmissions()"
+                   asp-controller="TeacherSubmissions"
+                   asp-action="Index">
                     <span>📥</span>
                     <strong>Teslimler</strong>
                 </a>
@@ -86,6 +137,17 @@
                 </a>
             </nav>
 
+            <div class="sidebar-user">
+                <div class="sidebar-user-avatar">
+                    @Initials(name)
+                </div>
+
+                <div class="sidebar-user-info">
+                    <strong>@name</strong>
+                    <span>No: @number</span>
+                </div>
+            </div>
+
             <a class="logout-link teacher-logout"
                asp-controller="Auth"
                asp-action="Logout">
@@ -94,30 +156,44 @@
             </a>
         </aside>
 
-        <main class="main-content">
-            <header class="topbar">
-                <div>
-                    <div class="topbar-title">
-                        @ViewData["PageTitle"]
+        <main class="main-content midnight-main">
+            <header class="topbar midnight-topbar">
+                <div class="topbar-left">
+                    <div class="topbar-subtitle">
+                        Öğretmen Paneli
                     </div>
 
-                    <div class="topbar-subtitle">
-                        @ViewData["PageSubtitle"]
+                    <div class="topbar-title">
+                        @pageTitle
                     </div>
+
+                    @if (!string.IsNullOrWhiteSpace(pageSubtitle))
+                    {
+                        <div class="topbar-description">
+                            @pageSubtitle
+                        </div>
+                    }
                 </div>
 
-                <div class="user-chip">
-                    <div class="user-avatar teacher">
-                        Ö
+                <div class="topbar-right">
+                    <div class="system-pill">
+                        <span></span>
+                        Çevrimiçi
                     </div>
 
-                    <div>
-                        <div class="user-name">
-                            @name
+                    <div class="user-chip">
+                        <div class="user-avatar teacher">
+                            @Initials(name)
                         </div>
 
-                        <div class="user-role">
-                            No: @number
+                        <div>
+                            <div class="user-name">
+                                @name
+                            </div>
+
+                            <div class="user-role">
+                                Öğretmen · No: @number
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -128,47 +204,6 @@
             </section>
         </main>
     </div>
-
-    <style>
-        :where(.page-header-card, .form-card, .table-card, .entity-card, .stat-card, .teacher-panel, .teacher-stat-card, .lesson-row, .submission-row, .announcement-card-premium, .portal-card, .empty-state-mini) {
-            background:
-                radial-gradient(circle at 10% 0%, rgba(6, 182, 212, .14), transparent 34%),
-                radial-gradient(circle at 96% 10%, rgba(79, 70, 229, .11), transparent 30%),
-                linear-gradient(135deg, rgba(255,255,255,.98), rgba(248,250,252,.92)) !important;
-            border-color: rgba(148, 163, 184, .44) !important;
-            box-shadow:
-                0 22px 58px rgba(15, 23, 42, .12),
-                inset 0 1px 0 rgba(255,255,255,.88) !important;
-        }
-
-        :where(.topbar) {
-            background:
-                radial-gradient(circle at 12% 0%, rgba(6, 182, 212, .13), transparent 34%),
-                linear-gradient(135deg, rgba(255,255,255,.98), rgba(241,245,249,.94)) !important;
-            border-color: rgba(148, 163, 184, .46) !important;
-            box-shadow: 0 24px 64px rgba(15, 23, 42, .13) !important;
-        }
-
-        :where(.teacher-hero, .teacher-panel, .teacher-stat-card, .lesson-row, .submission-row, .table-card, .form-card) {
-            transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
-        }
-
-        :where(.teacher-stat-card, .lesson-row, .submission-row):hover {
-            border-color: rgba(6, 182, 212, .45) !important;
-            box-shadow:
-                0 28px 70px rgba(15, 23, 42, .15),
-                0 0 0 1px rgba(6, 182, 212, .08) !important;
-        }
-
-        :where(.premium-table th) {
-            background: #eef2f7 !important;
-            border-bottom-color: rgba(148, 163, 184, .38) !important;
-        }
-
-        :where(.premium-table td) {
-            border-bottom-color: rgba(203, 213, 225, .7) !important;
-        }
-    </style>
 
     <script src="~/js/site.js" asp-append-version="true"></script>
 

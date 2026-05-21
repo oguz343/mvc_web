@@ -1,535 +1,772 @@
-@model List<mvc_web.Models.TeacherSubmissionViewModel>
+@using System.Collections
+@using System.Reflection
+@model IEnumerable<object>
 
 @{
     Layout = "_TeacherLayout";
-    ViewData["Title"] = "Öğrenci Teslimleri";
-    ViewData["PageTitle"] = "Öğrenci Teslimleri";
-    ViewData["PageSubtitle"] = "Öğrencilerin teslimlerini değerlendirin, not ve geri dönüş yazın.";
+    ViewData["Title"] = "Öğretmen Teslimleri";
+    ViewData["PageTitle"] = "Öğretmen Teslimleri";
+    ViewData["PageSubtitle"] = "Öğrenci teslimlerini koyu tema ile inceleyin.";
 
-    var total = Model?.Count ?? 0;
-    var evaluated = Model?.Count(x => x.Status == "Değerlendirildi") ?? 0;
-    var pending = total - evaluated;
+    var submissions = (Model ?? Enumerable.Empty<object>()).ToList();
+
+    if (!submissions.Any())
+    {
+        submissions = ListFrom(ViewData["Submissions"] ?? ViewData["TeacherSubmissions"] ?? ViewData["RecentSubmissions"]);
+    }
+
+    var totalCount = submissions.Count;
+    var evaluatedCount = submissions.Count(IsEvaluated);
+    var waitingCount = Math.Max(0, totalCount - evaluatedCount);
+    var linkedCount = submissions.Count(x => !string.IsNullOrWhiteSpace(First(Get(x, "SubmissionFileUrl", "submissionFileUrl"), Get(x, "FileUrl", "fileUrl"), Get(x, "Link", "link"))));
+    var classOptions = submissions
+        .Select(x => First(Get(x, "ClassName", "className"), Get(x, "Class", "class")))
+        .Where(x => !string.IsNullOrWhiteSpace(x) && x != "-")
+        .Distinct()
+        .OrderBy(x => x)
+        .ToList();
 }
 
-<div class="teacher-submissions-page">
-    @if (TempData["Success"] != null)
+@functions {
+    private List<object> ListFrom(object? raw)
     {
-        <div class="alert alert-success">
-            @TempData["Success"]
-        </div>
+        if (raw == null || raw is string)
+        {
+            return new List<object>();
+        }
+
+        if (raw is IEnumerable enumerable)
+        {
+            return enumerable.Cast<object>().ToList();
+        }
+
+        return new List<object>();
     }
 
-    @if (TempData["Error"] != null)
+    private string Get(object? item, params string[] keys)
     {
-        <div class="alert alert-danger">
-            @TempData["Error"]
-        </div>
+        if (item == null)
+        {
+            return "";
+        }
+
+        if (item is IDictionary<string, object> dict)
+        {
+            foreach (var key in keys)
+            {
+                if (dict.TryGetValue(key, out var value) && value != null)
+                {
+                    return value.ToString() ?? "";
+                }
+            }
+        }
+
+        var type = item.GetType();
+
+        foreach (var key in keys)
+        {
+            var prop = type.GetProperty(key, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+
+            if (prop != null)
+            {
+                var value = prop.GetValue(item);
+
+                if (value != null)
+                {
+                    return value.ToString() ?? "";
+                }
+            }
+        }
+
+        return "";
     }
 
-    <div class="stats-grid">
-        <div class="stat-card">
-            <div class="stat-icon">📥</div>
-            <div>
-                <strong>@total</strong>
-                <span>Toplam Teslim</span>
-            </div>
-        </div>
-
-        <div class="stat-card">
-            <div class="stat-icon success">✅</div>
-            <div>
-                <strong>@evaluated</strong>
-                <span>Değerlendirildi</span>
-            </div>
-        </div>
-
-        <div class="stat-card">
-            <div class="stat-icon warning">⏳</div>
-            <div>
-                <strong>@pending</strong>
-                <span>Bekleyen</span>
-            </div>
-        </div>
-    </div>
-
-    @if (Model == null || !Model.Any())
+    private string First(params string[] values)
     {
-        <div class="empty-panel">
-            <div class="empty-icon">📭</div>
-            <h3>Henüz teslim yok</h3>
-            <p>Öğrenciler ödev teslim ettiğinde burada görünecek.</p>
-        </div>
+        foreach (var value in values)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return value;
+            }
+        }
+
+        return "";
     }
-    else
+
+    private string Safe(string value, string fallback = "-")
     {
-        <div class="table-card">
-            <div class="table-responsive">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Ödev</th>
-                            <th>Ders / Sınıf</th>
-                            <th>Öğrenci</th>
-                            <th>Cevap</th>
-                            <th>Dosya</th>
-                            <th>Durum</th>
-                            <th>Not</th>
-                            <th>Geri Dönüş</th>
-                            <th>İşlem</th>
-                        </tr>
-                    </thead>
-
-                    <tbody>
-                        @foreach (var item in Model)
-                        {
-                            var isEvaluated = item.Status == "Değerlendirildi";
-
-                            <tr>
-                                <td>
-                                    <strong>@(string.IsNullOrWhiteSpace(item.HomeworkTitle) ? "Ödev" : item.HomeworkTitle)</strong>
-                                    <small>@(item.SubmittedAt?.ToString("dd.MM.yyyy HH:mm") ?? "-")</small>
-                                </td>
-
-                                <td>
-                                    <strong>@(string.IsNullOrWhiteSpace(item.LessonName) ? "-" : item.LessonName)</strong>
-                                    <small>@(string.IsNullOrWhiteSpace(item.ClassName) ? "-" : item.ClassName)</small>
-                                </td>
-
-                                <td>
-                                    <strong>@(string.IsNullOrWhiteSpace(item.StudentName) ? "-" : item.StudentName)</strong>
-                                    <small>No: @(string.IsNullOrWhiteSpace(item.StudentNo) ? "-" : item.StudentNo)</small>
-                                </td>
-
-                                <td>
-                                    <div class="answer-box">
-                                        @(string.IsNullOrWhiteSpace(item.AnswerText) ? "-" : item.AnswerText)
-                                    </div>
-                                </td>
-
-                                <td>
-                                    @if (!string.IsNullOrWhiteSpace(item.FileUrl))
-                                    {
-                                        <a href="@item.FileUrl" target="_blank" class="file-link">
-                                            Linki Aç
-                                        </a>
-                                    }
-                                    else
-                                    {
-                                        <span>-</span>
-                                    }
-                                </td>
-
-                                <td>
-                                    @if (isEvaluated)
-                                    {
-                                        <span class="status evaluated">Değerlendirildi</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="status pending">Bekliyor</span>
-                                    }
-                                </td>
-
-                                <td>
-                                    @(string.IsNullOrWhiteSpace(item.Grade) ? "-" : item.Grade)
-                                </td>
-
-                                <td>
-                                    @(string.IsNullOrWhiteSpace(item.Feedback) ? "-" : item.Feedback)
-                                </td>
-
-                                <td>
-                                    <button type="button"
-                                            class="evaluate-btn"
-                                            data-submission-id="@item.Id"
-                                            data-submission-collection="@item.SubmissionCollection"
-                                            data-student="@item.StudentName"
-                                            data-homework="@item.HomeworkTitle"
-                                            data-grade="@item.Grade"
-                                            data-feedback="@item.Feedback">
-                                        ⭐ Değerlendir
-                                    </button>
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        </div>
+        return string.IsNullOrWhiteSpace(value) ? fallback : value;
     }
-</div>
 
-<div id="evaluateModal" class="modal-backdrop">
-    <div class="modal-card">
-        <div class="modal-icon">⭐</div>
+    private bool IsEvaluated(object item)
+    {
+        var grade = First(Get(item, "Grade", "grade"), Get(item, "Score", "score"));
+        var feedback = First(Get(item, "Feedback", "feedback"), Get(item, "Comment", "comment"));
+        var status = Get(item, "Status", "status");
 
-        <h3>Teslimi Değerlendir</h3>
-
-        <p id="evaluateInfo">Öğrenci teslimi</p>
-
-        <form asp-controller="TeacherSubmissions"
-              asp-action="Evaluate"
-              method="post">
-
-            @Html.AntiForgeryToken()
-
-            <input type="hidden" name="submissionId" id="submissionIdInput" />
-            <input type="hidden" name="submissionCollection" id="submissionCollectionInput" />
-
-            <div class="form-group">
-                <label>Not</label>
-                <input name="grade" id="gradeInput" placeholder="Örn: 100" />
-            </div>
-
-            <div class="form-group">
-                <label>Geri Dönüş</label>
-                <textarea name="feedback" id="feedbackInput" placeholder="Öğrenciye geri dönüş yazın..."></textarea>
-            </div>
-
-            <div class="modal-actions">
-                <button type="button" id="cancelEvaluateBtn" class="cancel-btn">
-                    Vazgeç
-                </button>
-
-                <button type="submit" class="save-btn">
-                    Kaydet
-                </button>
-            </div>
-        </form>
-    </div>
-</div>
+        return !string.IsNullOrWhiteSpace(grade)
+            || !string.IsNullOrWhiteSpace(feedback)
+            || status.Contains("Değerlendir", StringComparison.OrdinalIgnoreCase)
+            || status.Contains("Degerlendir", StringComparison.OrdinalIgnoreCase);
+    }
+}
 
 <style>
-    .teacher-submissions-page {
+    .ts-v2 {
         width: 100%;
-    }
-
-    .alert {
-        padding: 14px 18px;
-        border-radius: 18px;
-        margin-bottom: 18px;
-        font-weight: 900;
-    }
-
-    .alert-success {
-        background: #dcfce7;
-        color: #166534;
-    }
-
-    .alert-danger {
-        background: #fee2e2;
-        color: #991b1b;
-    }
-
-    .stats-grid {
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 16px;
-        margin-bottom: 20px;
+        gap: 18px;
     }
 
-    .stat-card {
-        background: #fff;
-        border-radius: 24px;
-        padding: 22px;
-        display: flex;
-        align-items: center;
-        gap: 16px;
-        box-shadow: 0 18px 40px rgba(15, 23, 42, .06);
+    .ts-v2-hero,
+    .ts-v2-card,
+    .ts-v2-toolbar,
+    .ts-v2-empty {
+        border: 1px solid rgba(148, 163, 184, .18);
+        background:
+            radial-gradient(circle at 0% 0%, rgba(56, 189, 248, .10), transparent 34%),
+            linear-gradient(135deg, rgba(17, 25, 46, .94), rgba(15, 23, 42, .86));
+        box-shadow: 0 18px 48px rgba(0, 0, 0, .24);
+        backdrop-filter: blur(16px);
     }
 
-    .stat-icon {
-        width: 52px;
-        height: 52px;
-        border-radius: 18px;
-        background: #eef2ff;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 24px;
-    }
-
-    .stat-icon.success {
-        background: #dcfce7;
-    }
-
-    .stat-icon.warning {
-        background: #ffedd5;
-    }
-
-    .stat-card strong {
-        display: block;
-        color: #111827;
-        font-size: 28px;
-        font-weight: 900;
-    }
-
-    .stat-card span {
-        color: #64748b;
-        font-weight: 800;
-    }
-
-    .table-card,
-    .empty-panel {
-        background: #fff;
-        border-radius: 28px;
+    .ts-v2-hero {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 380px;
+        gap: 18px;
         padding: 24px;
-        box-shadow: 0 18px 40px rgba(15, 23, 42, .06);
+        border-radius: 32px;
     }
 
-    .empty-panel {
-        text-align: center;
-    }
-
-    .empty-icon {
-        font-size: 44px;
-        margin-bottom: 12px;
-    }
-
-    .empty-panel h3 {
-        margin: 0;
-        color: #111827;
-        font-size: 24px;
-        font-weight: 900;
-    }
-
-    .empty-panel p {
-        color: #64748b;
-        font-weight: 800;
-    }
-
-    .table-responsive {
-        overflow-x: auto;
-    }
-
-    table {
-        width: 100%;
-        border-collapse: collapse;
-        min-width: 1050px;
-    }
-
-    th {
-        text-align: left;
-        color: #64748b;
-        font-weight: 900;
-        padding: 14px 10px;
-        border-bottom: 1px solid #e5e7eb;
-        white-space: nowrap;
-    }
-
-    td {
-        padding: 16px 10px;
-        color: #111827;
-        font-weight: 800;
-        vertical-align: top;
-        border-bottom: 1px solid #f1f5f9;
-    }
-
-    td strong {
-        display: block;
-        font-weight: 900;
-    }
-
-    td small {
-        display: block;
-        color: #64748b;
-        font-weight: 800;
-        margin-top: 3px;
-    }
-
-    .answer-box {
-        max-width: 260px;
-        white-space: normal;
-        word-break: break-word;
-    }
-
-    .file-link {
-        color: #4f46e5;
-        font-weight: 900;
-        text-decoration: none;
-    }
-
-    .file-link:hover {
-        text-decoration: underline;
-    }
-
-    .status {
+    .ts-v2-kicker {
+        width: fit-content;
+        min-height: 30px;
+        display: inline-flex;
+        align-items: center;
+        padding: 0 12px;
         border-radius: 999px;
-        padding: 8px 12px;
-        font-size: 12px;
-        font-weight: 900;
-        white-space: nowrap;
+        color: #67e8f9;
+        background: rgba(56, 189, 248, .10);
+        border: 1px solid rgba(103, 232, 249, .20);
+        font-size: 11px;
+        font-weight: 950;
+        letter-spacing: .16em;
+        text-transform: uppercase;
     }
 
-    .status.evaluated {
-        background: #dcfce7;
-        color: #166534;
+    .ts-v2-hero h1 {
+        margin: 14px 0 0;
+        color: #ffffff;
+        font-size: clamp(34px, 3.8vw, 58px);
+        font-weight: 950;
+        line-height: 1;
+        letter-spacing: -.06em;
     }
 
-    .status.pending {
-        background: #ffedd5;
-        color: #c2410c;
+    .ts-v2-hero p {
+        max-width: 780px;
+        margin: 14px 0 0;
+        color: #aab8cf;
+        font-size: 15px;
+        font-weight: 700;
+        line-height: 1.65;
     }
 
-    .evaluate-btn {
-        border: 0;
-        border-radius: 16px;
-        background: #06b6d4;
-        color: #fff;
-        padding: 12px 16px;
-        font-weight: 900;
-        cursor: pointer;
-        white-space: nowrap;
-    }
-
-    .evaluate-btn:hover {
-        background: #0891b2;
-    }
-
-    .modal-backdrop {
-        position: fixed;
-        inset: 0;
-        background: rgba(15, 23, 42, .62);
-        display: none;
-        align-items: center;
-        justify-content: center;
-        z-index: 99999;
-        padding: 18px;
-    }
-
-    .modal-backdrop.show {
-        display: flex;
-    }
-
-    .modal-card {
-        width: 100%;
-        max-width: 500px;
-        background: #fff;
-        border-radius: 30px;
-        padding: 28px;
-        box-shadow: 0 30px 90px rgba(0, 0, 0, .35);
-    }
-
-    .modal-icon {
-        width: 72px;
-        height: 72px;
-        border-radius: 24px;
-        background: #eef2ff;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 34px;
-        margin: 0 auto 16px;
-    }
-
-    .modal-card h3 {
-        margin: 0;
-        text-align: center;
-        color: #111827;
-        font-size: 25px;
-        font-weight: 900;
-    }
-
-    .modal-card p {
-        text-align: center;
-        color: #64748b;
-        font-weight: 800;
-    }
-
-    .form-group {
-        margin-bottom: 14px;
-    }
-
-    .form-group label {
-        display: block;
-        color: #111827;
-        font-weight: 900;
-        margin-bottom: 8px;
-    }
-
-    .form-group input,
-    .form-group textarea {
-        width: 100%;
-        border: 1px solid #e5e7eb;
-        background: #f8fafc;
-        border-radius: 18px;
-        padding: 14px;
-        font-weight: 800;
-        outline: none;
-    }
-
-    .form-group textarea {
-        min-height: 110px;
-        resize: vertical;
-    }
-
-    .modal-actions {
+    .ts-v2-summary {
         display: grid;
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    .ts-v2-summary-card {
+        min-height: 106px;
+        padding: 16px;
+        border-radius: 22px;
+        background: rgba(255, 255, 255, .055);
+        border: 1px solid rgba(148, 163, 184, .16);
+    }
+
+    .ts-v2-summary-card strong {
+        display: block;
+        color: #ffffff;
+        font-size: 30px;
+        font-weight: 950;
+    }
+
+    .ts-v2-summary-card span {
+        display: block;
+        margin-top: 6px;
+        color: #94a3b8;
+        font-size: 12px;
+        font-weight: 850;
+    }
+
+    .ts-v2-toolbar {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 220px auto;
+        gap: 14px;
+        padding: 16px;
+        border-radius: 28px;
+    }
+
+    .ts-v2-search {
+        min-height: 54px;
+        display: flex;
+        align-items: center;
         gap: 12px;
+        padding: 0 15px;
+        border-radius: 18px;
+        background: rgba(7, 17, 31, .58);
+        border: 1px solid rgba(148, 163, 184, .18);
     }
 
-    .cancel-btn,
-    .save-btn {
-        min-height: 52px;
+    .ts-v2-search input {
+        width: 100%;
         border: 0;
+        outline: 0;
+        color: #ffffff;
+        background: transparent;
+        font-size: 14px;
+        font-weight: 800;
+    }
+
+    .ts-v2-search input::placeholder {
+        color: #64748b;
+    }
+
+    .ts-v2-class-filter {
+        min-height: 54px;
+        padding: 0 13px;
+        border-radius: 18px;
+        color: #ffffff;
+        background: rgba(7, 17, 31, .58);
+        border: 1px solid rgba(148, 163, 184, .18);
+        outline: none;
+        font-size: 14px;
+        font-weight: 850;
+    }
+
+    .ts-v2-class-filter option {
+        color: #0f172a;
+        background: #ffffff;
+    }
+
+    .ts-v2-visible {
+        min-width: 170px;
+        min-height: 54px;
+        display: grid;
+        align-content: center;
+        padding: 0 15px;
+        border-radius: 18px;
+        color: #dbeafe;
+        background: rgba(255, 255, 255, .055);
+        border: 1px solid rgba(148, 163, 184, .16);
+    }
+
+    .ts-v2-visible strong {
+        color: #ffffff;
+        font-size: 24px;
+        font-weight: 950;
+    }
+
+    .ts-v2-visible span {
+        color: #94a3b8;
+        font-size: 12px;
+        font-weight: 850;
+    }
+
+    .ts-v2-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(390px, 1fr));
+        gap: 16px;
+    }
+
+    .ts-v2-card {
+        display: grid;
+        gap: 15px;
+        padding: 20px;
+        border-radius: 28px;
+        transition: .16s ease;
+    }
+
+    .ts-v2-card:hover {
+        transform: translateY(-2px);
+        border-color: rgba(125, 211, 252, .28);
+        box-shadow: 0 22px 54px rgba(0, 0, 0, .27);
+    }
+
+    .ts-v2-top {
+        display: grid;
+        grid-template-columns: 58px minmax(0, 1fr) auto;
+        gap: 13px;
+        align-items: center;
+    }
+
+    .ts-v2-icon {
+        width: 58px;
+        height: 58px;
+        display: grid;
+        place-items: center;
+        border-radius: 20px;
+        color: #ffffff;
+        background: linear-gradient(135deg, #2563eb, #7c3aed);
+        font-size: 26px;
+    }
+
+    .ts-v2-title h3 {
+        margin: 0;
+        color: #ffffff;
+        font-size: 18px;
+        font-weight: 950;
+        line-height: 1.2;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .ts-v2-title p {
+        margin: 5px 0 0;
+        color: #94a3b8;
+        font-size: 13px;
+        font-weight: 850;
+    }
+
+    .ts-v2-status {
+        min-height: 31px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 950;
+        white-space: nowrap;
+    }
+
+    .ts-v2-status.done {
+        color: #bfdbfe;
+        background: rgba(37, 99, 235, .14);
+        border: 1px solid rgba(96, 165, 250, .20);
+    }
+
+    .ts-v2-status.waiting {
+        color: #fde68a;
+        background: rgba(245, 158, 11, .13);
+        border: 1px solid rgba(251, 191, 36, .18);
+    }
+
+    .ts-v2-info {
+        display: grid;
+        gap: 9px;
+    }
+
+    .ts-v2-row {
+        display: grid;
+        grid-template-columns: 28px minmax(110px, .68fr) minmax(0, 1fr);
+        gap: 9px;
+        align-items: center;
+        padding: 10px 11px;
         border-radius: 16px;
+        color: #94a3b8;
+        background: rgba(255, 255, 255, .045);
+        border: 1px solid rgba(148, 163, 184, .12);
+        font-size: 13px;
+        font-weight: 750;
+    }
+
+    .ts-v2-row strong {
+        color: #dbeafe;
+        font-weight: 950;
+    }
+
+    .ts-v2-row b {
+        color: #ffffff;
         font-weight: 900;
+        text-align: right;
+        overflow-wrap: anywhere;
+    }
+
+    .ts-v2-answer {
+        padding: 14px;
+        border-radius: 18px;
+        color: #cbd5e1;
+        background: rgba(255, 255, 255, .045);
+        border: 1px solid rgba(148, 163, 184, .12);
+        font-size: 13px;
+        font-weight: 750;
+        line-height: 1.65;
+        overflow-wrap: anywhere;
+    }
+
+    .ts-v2-grade-form {
+        display: grid;
+        gap: 10px;
+        padding: 14px;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, .045);
+        border: 1px solid rgba(148, 163, 184, .12);
+    }
+
+    .ts-v2-grade-fields {
+        display: grid;
+        grid-template-columns: minmax(96px, 140px) minmax(0, 1fr);
+        gap: 10px;
+    }
+
+    .ts-v2-grade-form input,
+    .ts-v2-grade-form textarea {
+        width: 100%;
+        border-radius: 13px;
+        border: 1px solid rgba(148, 163, 184, .18);
+        outline: none;
+        color: #ffffff;
+        background: rgba(7, 17, 31, .58);
+        font-size: 13px;
+        font-weight: 800;
+    }
+
+    .ts-v2-grade-form input {
+        min-height: 42px;
+        padding: 0 12px;
+    }
+
+    .ts-v2-grade-form textarea {
+        min-height: 42px;
+        padding: 11px 12px;
+        resize: vertical;
+        line-height: 1.45;
+    }
+
+    .ts-v2-grade-form input:focus,
+    .ts-v2-grade-form textarea:focus {
+        border-color: rgba(103, 232, 249, .45);
+        box-shadow: 0 0 0 4px rgba(56, 189, 248, .09);
+    }
+
+    .ts-v2-evaluate {
+        min-height: 42px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        border: 1px solid rgba(125, 211, 252, .22);
+        border-radius: 13px;
+        color: #ffffff;
+        background: linear-gradient(135deg, #2563eb, #7c3aed);
+        box-shadow: 0 14px 30px rgba(37, 99, 235, .20);
         cursor: pointer;
+        font-size: 13px;
+        font-weight: 950;
     }
 
-    .cancel-btn {
-        background: #eef2ff;
-        color: #4338ca;
+    .ts-v2-link {
+        width: fit-content;
+        min-height: 38px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 12px;
+        border-radius: 13px;
+        color: #67e8f9;
+        background: rgba(56, 189, 248, .10);
+        border: 1px solid rgba(103, 232, 249, .20);
+        text-decoration: none;
+        font-size: 12px;
+        font-weight: 950;
     }
 
-    .save-btn {
-        background: #06b6d4;
-        color: #fff;
+    .ts-v2-empty {
+        min-height: 320px;
+        display: grid;
+        place-items: center;
+        padding: 42px 24px;
+        border-radius: 30px;
+        color: #94a3b8;
+        text-align: center;
+        font-size: 15px;
+        font-weight: 850;
     }
 
-    @@media (max-width: 780px) {
-        .stats-grid {
+    @@media (max-width: 1100px) {
+        .ts-v2-hero,
+        .ts-v2-toolbar {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @@media (max-width: 760px) {
+        .ts-v2-hero,
+        .ts-v2-card,
+        .ts-v2-empty {
+            border-radius: 22px;
+            padding: 16px;
+        }
+
+        .ts-v2-summary,
+        .ts-v2-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .ts-v2-top {
+            grid-template-columns: 54px minmax(0, 1fr);
+        }
+
+        .ts-v2-status {
+            grid-column: 1 / -1;
+            justify-self: start;
+        }
+
+        .ts-v2-row {
+            grid-template-columns: 24px minmax(0, 1fr);
+        }
+
+        .ts-v2-row b {
+            grid-column: 1 / -1;
+            text-align: left;
+        }
+
+        .ts-v2-grade-fields {
             grid-template-columns: 1fr;
         }
     }
 </style>
 
+<div class="ts-v2">
+    <section class="ts-v2-hero">
+        <div>
+            <div class="ts-v2-kicker">Teslimler</div>
+
+            <h1>Öğrenci teslimleri</h1>
+
+            <p>
+                Teslim edilen ödevleri, cevapları, linkleri ve değerlendirme durumlarını inceleyin.
+            </p>
+        </div>
+
+        <div class="ts-v2-summary">
+            <div class="ts-v2-summary-card">
+                <strong>@totalCount</strong>
+                <span>Toplam Teslim</span>
+            </div>
+
+            <div class="ts-v2-summary-card">
+                <strong>@evaluatedCount</strong>
+                <span>Değerlendirilen</span>
+            </div>
+
+            <div class="ts-v2-summary-card">
+                <strong>@waitingCount</strong>
+                <span>Bekleyen</span>
+            </div>
+
+            <div class="ts-v2-summary-card">
+                <strong>@linkedCount</strong>
+                <span>Dosya / Link</span>
+            </div>
+        </div>
+    </section>
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success">@TempData["Success"]</div>
+    }
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger">@TempData["Error"]</div>
+    }
+
+    <section class="ts-v2-toolbar">
+        <div class="ts-v2-search">
+            <span>🔍</span>
+            <input id="teacherSubmissionsSearchInput" type="search" placeholder="Ödev, öğrenci, sınıf veya ders ara..." autocomplete="off" />
+        </div>
+
+        <select id="teacherSubmissionsClassFilter" class="ts-v2-class-filter">
+            <option value="">Tum siniflar</option>
+            @foreach (var className in classOptions)
+            {
+                <option value="@className">@className</option>
+            }
+        </select>
+
+        <div class="ts-v2-visible">
+            <strong id="visibleTeacherSubmissionsCount">@submissions.Count</strong>
+            <span>teslim gösteriliyor</span>
+        </div>
+    </section>
+
+    @if (!submissions.Any())
+    {
+        <div class="ts-v2-empty">
+            Henüz teslim kaydı yok.
+        </div>
+    }
+    else
+    {
+        <section class="ts-v2-grid">
+            @foreach (var item in submissions)
+            {
+                var id = First(Get(item, "Id", "id"), Get(item, "DocId", "docId"));
+                var submissionCollection = First(Get(item, "SubmissionCollection", "submissionCollection"), "homework_submissions");
+                var title = First(Get(item, "AssignmentTitle", "assignmentTitle"), Get(item, "HomeworkTitle", "homeworkTitle"), Get(item, "Title", "title"), "Ödev");
+                var studentNo = First(Get(item, "StudentNo", "studentNo"), Get(item, "Number", "number"), "-");
+                var className = First(Get(item, "ClassName", "className"), Get(item, "Class", "class"), "-");
+                var lesson = First(Get(item, "LessonName", "lessonName"), Get(item, "Lesson", "lesson"), "-");
+                var answer = First(Get(item, "AnswerText", "answerText"), Get(item, "SubmissionText", "submissionText"), Get(item, "Answer", "answer"), "Açıklama yok.");
+                var link = First(Get(item, "SubmissionFileUrl", "submissionFileUrl"), Get(item, "FileUrl", "fileUrl"), Get(item, "Link", "link"));
+                var grade = First(Get(item, "Grade", "grade"), Get(item, "Score", "score"));
+                var feedback = First(Get(item, "Feedback", "feedback"), Get(item, "Comment", "comment"));
+                var evaluated = IsEvaluated(item);
+
+                <article class="ts-v2-card"
+                         data-class="@className"
+                         data-search="@($"{title} {studentNo} {className} {lesson} {answer}")">
+
+                    <div class="ts-v2-top">
+                        <div class="ts-v2-icon">📥</div>
+
+                        <div class="ts-v2-title">
+                            <h3>@title</h3>
+                            <p>Öğrenci No: @studentNo</p>
+                        </div>
+
+                        <span class="ts-v2-status @(evaluated ? "done" : "waiting")">
+                            @(evaluated ? "Değerlendirildi" : "Bekliyor")
+                        </span>
+                    </div>
+
+                    <div class="ts-v2-info">
+                        <div class="ts-v2-row">
+                            <span>📚</span>
+                            <strong>Ders</strong>
+                            <b>@lesson</b>
+                        </div>
+
+                        <div class="ts-v2-row">
+                            <span>🏫</span>
+                            <strong>Sınıf</strong>
+                            <b>@className</b>
+                        </div>
+
+                        <div class="ts-v2-row">
+                            <span>⭐</span>
+                            <strong>Not</strong>
+                            <b>@Safe(grade)</b>
+                        </div>
+                    </div>
+
+                    <div class="ts-v2-answer">
+                        @answer
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(link))
+                    {
+                        <a class="ts-v2-link" href="@link" target="_blank" rel="noopener noreferrer">
+                            Dosya / Link Aç
+                        </a>
+                    }
+                    <form class="ts-v2-grade-form"
+                          asp-controller="TeacherSubmissions"
+                          asp-action="Evaluate"
+                          method="post">
+                        @Html.AntiForgeryToken()
+
+                        <input type="hidden" name="submissionCollection" value="@submissionCollection" />
+                        <input type="hidden" name="submissionId" value="@id" />
+
+                        <div class="ts-v2-grade-fields">
+                            <input type="number"
+                                   name="grade"
+                                   value="@grade"
+                                   min="0"
+                                   max="100"
+                                   step="0.01"
+                                   inputmode="decimal"
+                                   placeholder="0-100" />
+
+                            <textarea name="feedback"
+                                      placeholder="Geri dönüş">@feedback</textarea>
+                        </div>
+
+                        <button type="submit" class="ts-v2-evaluate">
+                            Değerlendir
+                        </button>
+                    </form>
+                </article>
+            }
+        </section>
+
+        <div id="noTeacherSubmissionsResult" class="ts-v2-empty" style="display:none;">
+            Aradığınız kritere uygun teslim bulunamadı.
+        </div>
+    }
+</div>
+
 @section Scripts {
     <script>
-        const modal = document.getElementById("evaluateModal");
-        const cancelBtn = document.getElementById("cancelEvaluateBtn");
+        const teacherSubmissionsSearchInput = document.getElementById("teacherSubmissionsSearchInput");
+        const teacherSubmissionsClassFilter = document.getElementById("teacherSubmissionsClassFilter");
+        const teacherSubmissionsCards = Array.from(document.querySelectorAll(".ts-v2-card"));
+        const visibleTeacherSubmissionsCount = document.getElementById("visibleTeacherSubmissionsCount");
+        const noTeacherSubmissionsResult = document.getElementById("noTeacherSubmissionsResult");
 
-        const submissionIdInput = document.getElementById("submissionIdInput");
-        const submissionCollectionInput = document.getElementById("submissionCollectionInput");
-        const gradeInput = document.getElementById("gradeInput");
-        const feedbackInput = document.getElementById("feedbackInput");
-        const evaluateInfo = document.getElementById("evaluateInfo");
+        function normalizeTeacherSubmissionsText(value) {
+            return (value || "")
+                .toString()
+                .toLocaleLowerCase("tr-TR")
+                .replaceAll("ı", "i")
+                .replaceAll("ğ", "g")
+                .replaceAll("ü", "u")
+                .replaceAll("ş", "s")
+                .replaceAll("ö", "o")
+                .replaceAll("ç", "c")
+                .replaceAll("İ", "i")
+                .trim();
+        }
 
-        document.querySelectorAll(".evaluate-btn").forEach(btn => {
-            btn.addEventListener("click", function () {
-                submissionIdInput.value = this.dataset.submissionId || "";
-                submissionCollectionInput.value = this.dataset.submissionCollection || "homework_submissions";
-                gradeInput.value = this.dataset.grade || "";
-                feedbackInput.value = this.dataset.feedback || "";
+        function filterTeacherSubmissions() {
+            const query = normalizeTeacherSubmissionsText(teacherSubmissionsSearchInput?.value || "");
+            const selectedClass = normalizeTeacherSubmissionsText(teacherSubmissionsClassFilter?.value || "");
+            let count = 0;
 
-                const student = this.dataset.student || "Öğrenci";
-                const homework = this.dataset.homework || "Ödev";
+            teacherSubmissionsCards.forEach(card => {
+                const searchable = normalizeTeacherSubmissionsText(card.dataset.search || "");
+                const cardClass = normalizeTeacherSubmissionsText(card.dataset.class || "");
+                const matchesQuery = query === "" || searchable.includes(query);
+                const matchesClass = selectedClass === "" || cardClass === selectedClass;
+                const show = matchesQuery && matchesClass;
 
-                evaluateInfo.innerText = `${student} • ${homework}`;
+                card.style.display = show ? "" : "none";
 
-                modal.classList.add("show");
+                if (show) {
+                    count++;
+                }
             });
-        });
 
-        cancelBtn.addEventListener("click", function () {
-            modal.classList.remove("show");
-        });
-
-        modal.addEventListener("click", function (event) {
-            if (event.target === modal) {
-                modal.classList.remove("show");
+            if (visibleTeacherSubmissionsCount) {
+                visibleTeacherSubmissionsCount.textContent = count;
             }
-        });
+
+            if (noTeacherSubmissionsResult) {
+                noTeacherSubmissionsResult.style.display = count === 0 ? "grid" : "none";
+            }
+        }
+
+        if (teacherSubmissionsSearchInput) {
+            teacherSubmissionsSearchInput.addEventListener("input", filterTeacherSubmissions);
+            teacherSubmissionsSearchInput.addEventListener("keydown", function (event) {
+                if (event.key === "Enter") {
+                    event.preventDefault();
+                }
+            });
+        }
+
+        if (teacherSubmissionsClassFilter) {
+            teacherSubmissionsClassFilter.addEventListener("change", filterTeacherSubmissions);
+        }
+
+        filterTeacherSubmissions();
     </script>
 }

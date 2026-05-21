@@ -1,7 +1,7 @@
 using Google.Cloud.Firestore;
 using Microsoft.AspNetCore.Mvc;
 using mvc_web.Models;
-using mvc_web.Services; 
+using mvc_web.Services;
 using mvc_web.Filters;
 using System.Security.Cryptography;
 
@@ -115,6 +115,12 @@ namespace mvc_web.Controllers
             var requestUpdate = new Dictionary<string, object>
             {
                 { "status", "Onaylandı" },
+
+                // Aktivasyon kodu artık sadece TempData ile üstte tek seferlik görünmez.
+                // Talep kartının içinde de kalıcı olarak saklanır ve gösterilir.
+                { "activationCode", activationCode },
+                { "ActivationCode", activationCode },
+
                 { "passwordDeliveredInUi", true },
                 { "PasswordDeliveredInUi", true },
                 { "approvedAt", now },
@@ -124,7 +130,7 @@ namespace mvc_web.Controllers
 
             await UpdateMatchingRequests(data, requestUpdate);
 
-            TempData["Success"] = $"Şifre talebi onaylandı. Yeni aktivasyon kodu: {activationCode}";
+            TempData["Success"] = "Şifre talebi onaylandı. Yeni aktivasyon kodu talep kartının içine eklendi.";
             return RedirectToAction(nameof(Index));
         }
 
@@ -212,9 +218,16 @@ namespace mvc_web.Controllers
         private async Task<List<PasswordRequestViewModel>> LoadPasswordRequests()
         {
             var all = new List<PasswordRequestViewModel>();
+            var primary = new List<PasswordRequestViewModel>();
+            var legacy = new List<PasswordRequestViewModel>();
 
-            await AddRequestsFromCollection("passwordRequests", all);
-            await AddRequestsFromCollection("password_requests", all);
+            await Task.WhenAll(
+                AddRequestsFromCollection("passwordRequests", primary),
+                AddRequestsFromCollection("password_requests", legacy)
+            );
+
+            all.AddRange(primary);
+            all.AddRange(legacy);
 
             var merged = new Dictionary<string, PasswordRequestViewModel>();
 
@@ -364,30 +377,6 @@ namespace mvc_web.Controllers
                 return targeted;
             }
 
-            var snapshot = await _firestore.Collection("users").GetSnapshotAsync();
-
-            var roleKey = NormalizeKey(role);
-            var numberKey = OnlyDigits(number);
-
-            foreach (var doc in snapshot.Documents)
-            {
-                var data = doc.ToDictionary();
-
-                var userRole = NormalizeKey(GetString(data, "role", "Role"));
-
-                var userNumber = OnlyDigits(
-                    FirstNonEmpty(
-                        GetString(data, "schoolNo", "SchoolNo"),
-                        GetString(data, "number", "Number")
-                    )
-                );
-
-                if (userRole == roleKey && userNumber == numberKey)
-                {
-                    return doc;
-                }
-            }
-
             return null;
         }
 
@@ -395,57 +384,37 @@ namespace mvc_web.Controllers
         {
             var roleKey = NormalizeKey(role);
             var numberKey = OnlyDigits(number);
-            var roleFields = new[] { "role", "Role", "userRole", "UserRole" };
-            var numberFields = new[] { "number", "Number", "schoolNo", "SchoolNo", "studentNo", "StudentNo", "teacherNo", "TeacherNo" };
 
-            foreach (var roleField in roleFields)
-            {
-                foreach (var roleValue in RoleQueryValues(roleKey))
-                {
-                    foreach (var numberField in numberFields)
-                    {
-                        try
-                        {
-                            var snapshot = await _firestore
-                                .Collection("users")
-                                .WhereEqualTo(roleField, roleValue)
-                                .WhereEqualTo(numberField, numberKey)
-                                .Limit(10)
-                                .GetSnapshotAsync();
-
-                            var match = FirstMatchingUser(snapshot, roleKey, numberKey);
-
-                            if (match != null)
-                            {
-                                return match;
-                            }
-                        }
-                        catch
-                        {
-                        }
-                    }
-                }
-            }
-
-            foreach (var numberField in numberFields)
+            async Task<QuerySnapshot?> ReadByNumberField(string numberField)
             {
                 try
                 {
-                    var snapshot = await _firestore
+                    return await _firestore
                         .Collection("users")
                         .WhereEqualTo(numberField, numberKey)
                         .Limit(25)
                         .GetSnapshotAsync();
-
-                    var match = FirstMatchingUser(snapshot, roleKey, numberKey);
-
-                    if (match != null)
-                    {
-                        return match;
-                    }
                 }
                 catch
                 {
+                    return null;
+                }
+            }
+
+            var snapshots = await Task.WhenAll(NumberQueryFields().Select(ReadByNumberField));
+
+            foreach (var snapshot in snapshots)
+            {
+                if (snapshot == null)
+                {
+                    continue;
+                }
+
+                var match = FirstMatchingUser(snapshot, roleKey, numberKey);
+
+                if (match != null)
+                {
+                    return match;
                 }
             }
 
@@ -465,7 +434,10 @@ namespace mvc_web.Controllers
                         GetString(data, "schoolNo", "SchoolNo"),
                         GetString(data, "number", "Number"),
                         GetString(data, "studentNo", "StudentNo"),
-                        GetString(data, "teacherNo", "TeacherNo")
+                        GetString(data, "teacherNo", "TeacherNo"),
+                        GetString(data, "teacherNumber", "TeacherNumber"),
+                        GetString(data, "parentNo", "ParentNo"),
+                        GetString(data, "userNumber", "UserNumber")
                     )
                 );
 
@@ -478,25 +450,59 @@ namespace mvc_web.Controllers
             return null;
         }
 
+        private static string[] NumberQueryFields()
+        {
+            return new[]
+            {
+                "number",
+                "Number",
+                "schoolNo",
+                "SchoolNo",
+                "studentNo",
+                "StudentNo",
+                "teacherNo",
+                "TeacherNo",
+                "teacherNumber",
+                "TeacherNumber",
+                "parentNo",
+                "ParentNo",
+                "userNumber",
+                "UserNumber"
+            };
+        }
+
         private static string[] RoleQueryValues(string roleKey)
         {
             var values = new List<string> { roleKey };
 
             if (roleKey == "ogrenci")
             {
-                values.Add("Ã–ÄŸrenci");
+                values.Add("Öğrenci");
+                values.Add("Ogrenci");
+                values.Add("öğrenci");
+                values.Add("ogrenci");
+                values.Add("student");
             }
             else if (roleKey == "ogretmen")
             {
-                values.Add("Ã–ÄŸretmen");
+                values.Add("Öğretmen");
+                values.Add("Ogretmen");
+                values.Add("öğretmen");
+                values.Add("ogretmen");
+                values.Add("teacher");
             }
             else if (roleKey == "veli")
             {
                 values.Add("Veli");
+                values.Add("veli");
+                values.Add("parent");
             }
             else if (roleKey == "admin")
             {
                 values.Add("Admin");
+                values.Add("admin");
+                values.Add("Yönetici");
+                values.Add("Yonetici");
             }
 
             return values.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
@@ -514,46 +520,97 @@ namespace mvc_web.Controllers
                 FirstNonEmpty(
                     GetString(originalData, "number", "Number"),
                     GetString(originalData, "schoolNo", "SchoolNo"),
-                    GetString(originalData, "studentNo", "StudentNo")
+                    GetString(originalData, "studentNo", "StudentNo"),
+                    GetString(originalData, "teacherNo", "TeacherNo"),
+                    GetString(originalData, "parentNo", "ParentNo"),
+                    GetString(originalData, "userNumber", "UserNumber")
                 )
             );
 
+            var refs = new Dictionary<string, DocumentReference>();
+            var queries = new List<Task<QuerySnapshot?>>();
+
             foreach (var collection in collections)
             {
-                try
+                if (!string.IsNullOrWhiteSpace(requestKey))
                 {
-                    var snapshot = await _firestore.Collection(collection).GetSnapshotAsync();
+                    var directRef = _firestore.Collection(collection).Document(requestKey);
+                    refs.TryAdd(directRef.Path, directRef);
+                }
 
-                    foreach (var doc in snapshot.Documents)
+                if (!string.IsNullOrWhiteSpace(userId))
+                {
+                    queries.Add(ReadRequestQuery(collection, "userId", userId));
+                    queries.Add(ReadRequestQuery(collection, "UserId", userId));
+                }
+
+                foreach (var numberField in NumberQueryFields())
+                {
+                    queries.Add(ReadRequestQuery(collection, numberField, number));
+                }
+            }
+
+            var snapshots = await Task.WhenAll(queries);
+
+            foreach (var snapshot in snapshots)
+            {
+                if (snapshot == null)
+                {
+                    continue;
+                }
+
+                foreach (var doc in snapshot.Documents)
+                {
+                    var data = doc.ToDictionary();
+
+                    var docRequestKey = GetString(data, "requestKey", "RequestKey");
+                    var docUserId = GetString(data, "userId", "UserId");
+                    var docRole = GetString(data, "role", "Role");
+
+                    var docNumber = OnlyDigits(
+                        FirstNonEmpty(
+                            GetString(data, "number", "Number"),
+                            GetString(data, "schoolNo", "SchoolNo"),
+                            GetString(data, "studentNo", "StudentNo"),
+                            GetString(data, "teacherNo", "TeacherNo"),
+                            GetString(data, "parentNo", "ParentNo"),
+                            GetString(data, "userNumber", "UserNumber")
+                        )
+                    );
+
+                    var same =
+                        (!string.IsNullOrWhiteSpace(requestKey) && docRequestKey == requestKey) ||
+                        (!string.IsNullOrWhiteSpace(userId) && docUserId == userId) ||
+                        (NormalizeKey(docRole) == NormalizeKey(role) && docNumber == number);
+
+                    if (same)
                     {
-                        var data = doc.ToDictionary();
-
-                        var docRequestKey = GetString(data, "requestKey", "RequestKey");
-                        var docUserId = GetString(data, "userId", "UserId");
-                        var docRole = GetString(data, "role", "Role");
-
-                        var docNumber = OnlyDigits(
-                            FirstNonEmpty(
-                                GetString(data, "number", "Number"),
-                                GetString(data, "schoolNo", "SchoolNo"),
-                                GetString(data, "studentNo", "StudentNo")
-                            )
-                        );
-
-                        var same =
-                            (!string.IsNullOrWhiteSpace(requestKey) && docRequestKey == requestKey) ||
-                            (!string.IsNullOrWhiteSpace(userId) && docUserId == userId) ||
-                            (NormalizeKey(docRole) == NormalizeKey(role) && docNumber == number);
-
-                        if (same)
-                        {
-                            await doc.Reference.SetAsync(update, SetOptions.MergeAll);
-                        }
+                        refs.TryAdd(doc.Reference.Path, doc.Reference);
                     }
                 }
-                catch
-                {
-                }
+            }
+
+            await Task.WhenAll(refs.Values.Select(docRef => docRef.SetAsync(update, SetOptions.MergeAll)));
+        }
+
+        private async Task<QuerySnapshot?> ReadRequestQuery(string collection, string field, string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return null;
+            }
+
+            try
+            {
+                return await _firestore
+                    .Collection(collection)
+                    .WhereEqualTo(field, value)
+                    .Limit(10)
+                    .GetSnapshotAsync();
+            }
+            catch
+            {
+                return null;
             }
         }
 
@@ -631,7 +688,12 @@ namespace mvc_web.Controllers
                 return "Veli";
             }
 
-            return role;
+            if (value == "admin")
+            {
+                return "Admin";
+            }
+
+            return string.IsNullOrWhiteSpace(role) ? "-" : role;
         }
 
         private static string BuildRequestKey(string role, string number, string userId, string requestKey = "")

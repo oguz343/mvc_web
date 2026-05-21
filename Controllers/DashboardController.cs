@@ -19,18 +19,35 @@ namespace mvc_web.Controllers
 
         public async Task<IActionResult> Index()
         {
-            var users = await LoadUsers();
-            var validClasses = await LoadValidClasses();
+            var usersTask = LoadUsers();
+            var validClassesTask = LoadValidClasses();
+
+            await Task.WhenAll(usersTask, validClassesTask);
+
+            var users = usersTask.Result;
+            var validClasses = validClassesTask.Result;
 
             ViewData["StudentCount"] = users.Count(x => x.Role == "Öğrenci");
             ViewData["TeacherCount"] = users.Count(x => x.Role == "Öğretmen");
             ViewData["ParentCount"] = users.Count(x => x.Role == "Veli");
 
+            var lessonCountTask = CountLessons(validClasses);
+            var announcementCountTask = CountAnnouncements();
+            var submissionCountTask = CountSubmissions();
+            var passwordRequestCountTask = CountPasswordRequests();
+
+            await Task.WhenAll(
+                lessonCountTask,
+                announcementCountTask,
+                submissionCountTask,
+                passwordRequestCountTask
+            );
+
             ViewData["ClassCount"] = validClasses.Count;
-            ViewData["LessonCount"] = await CountLessons(validClasses);
-            ViewData["AnnouncementCount"] = await CountAnnouncements();
-            ViewData["SubmissionCount"] = await CountSubmissions();
-            ViewData["PasswordRequestCount"] = await CountPasswordRequests();
+            ViewData["LessonCount"] = lessonCountTask.Result;
+            ViewData["AnnouncementCount"] = announcementCountTask.Result;
+            ViewData["SubmissionCount"] = submissionCountTask.Result;
+            ViewData["PasswordRequestCount"] = passwordRequestCountTask.Result;
 
             ViewData["RecentUsers"] = users
                 .Where(x => !string.IsNullOrWhiteSpace(x.Name) || !string.IsNullOrWhiteSpace(x.SchoolNo))

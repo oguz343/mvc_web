@@ -188,10 +188,10 @@ public class SubmissionsController : Controller
                 await canonicalRef.SetAsync(merged, SetOptions.MergeAll);
                 report.Merged++;
             }
-            catch (Exception ex)
+            catch
             {
                 report.Errors++;
-                report.Messages.Add($"Hata: {legacyDoc.Id} - {ex.Message}");
+                report.Messages.Add($"Hata: {legacyDoc.Id} - kayıt dönüştürülemedi.");
             }
         }
 

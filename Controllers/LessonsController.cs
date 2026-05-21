@@ -228,6 +228,8 @@ public class LessonsController : Controller
                     DataIntegrityService.GetString(data, "number", "Number")
                 )
             ),
+            TeacherName = DataIntegrityService.GetString(data, "teacherName", "TeacherName", "teacher", "Teacher"),
+            TeacherBranch = DataIntegrityService.GetString(data, "teacherBranch", "TeacherBranch", "branch", "Branch"),
             Teachers = await _integrity.LoadActiveTeachersAsync(),
             Classes = await _integrity.LoadActiveClassesAsync(),
         };
@@ -382,6 +384,8 @@ public class LessonEditPageModel
     public string Name { get; set; } = "";
     public string ClassName { get; set; } = "";
     public string TeacherNo { get; set; } = "";
+    public string TeacherName { get; set; } = "";
+    public string TeacherBranch { get; set; } = "";
     public List<TeacherOption> Teachers { get; set; } = new();
     public List<ClassOption> Classes { get; set; } = new();
 }

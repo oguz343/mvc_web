@@ -2,6 +2,7 @@ using Google.Cloud.Firestore;
 using Microsoft.AspNetCore.Mvc;
 using mvc_web.Models;
 using mvc_web.Services;
+using System.Globalization;
 using System.Text.RegularExpressions;
 
 namespace mvc_web.Controllers;
@@ -48,10 +49,12 @@ public class TeacherController : Controller
         var teacherBranch = GetText(teacherProfile, "Branch", "branch", "TeacherBranch", "teacherBranch");
         var teacherId = GetText(teacherProfile, "Id", "id", "TeacherId", "teacherId");
 
+        var announcementsTask = LoadTeacherAnnouncements();
         var lessons = await LoadTeacherLessons(teacherNo, realTeacherName, teacherBranch, teacherId);
         var assignments = await LoadTeacherAssignments(teacherNo, realTeacherName, teacherBranch, teacherId, lessons);
+
         var submissions = await LoadTeacherSubmissions(teacherNo, realTeacherName, teacherBranch, teacherId, lessons, assignments);
-        var announcements = await LoadTeacherAnnouncements();
+        var announcements = await announcementsTask;
 
         ViewBag.TeacherName = realTeacherName;
         ViewBag.TeacherNo = teacherNo;
@@ -413,7 +416,7 @@ public class TeacherController : Controller
         ViewBag.TeacherLessons = BuildLessonOptions(lessons);
         ViewBag.Assignment = assignment;
 
-        return View(BuildAssignmentViewModel(assignment));
+        return View(assignment);
     }
 
     [HttpPost]
@@ -597,7 +600,7 @@ public class TeacherController : Controller
     }
 
     [HttpGet]
-    public async Task<IActionResult> Submissions()
+    public async Task<IActionResult> Submissions(string? assignmentId = null)
     {
         var teacherNumber = GetSessionValue(
             "UserNumber",
@@ -629,6 +632,21 @@ public class TeacherController : Controller
 
         var lessons = await LoadTeacherLessons(teacherNo, realTeacherName, teacherBranch, teacherId);
         var assignments = await LoadTeacherAssignments(teacherNo, realTeacherName, teacherBranch, teacherId, lessons);
+        var selectedAssignmentId = (assignmentId ?? "").Trim();
+
+        if (!string.IsNullOrWhiteSpace(selectedAssignmentId))
+        {
+            assignments = assignments
+                .Where(x => GetText(x, "Id", "id") == selectedAssignmentId)
+                .ToList();
+
+            if (assignments.Count == 0)
+            {
+                TempData["Error"] = "Ödev bulunamadı veya bu ödev size ait değil.";
+                return RedirectToAction(nameof(Submissions));
+            }
+        }
+
         var submissions = await LoadTeacherSubmissions(teacherNo, realTeacherName, teacherBranch, teacherId, lessons, assignments);
 
         ViewBag.TeacherName = realTeacherName;
@@ -639,8 +657,53 @@ public class TeacherController : Controller
         ViewBag.Lessons = lessons;
         ViewBag.Assignments = assignments;
         ViewBag.Submissions = submissions;
+        ViewBag.SelectedAssignmentId = selectedAssignmentId;
 
         return View(BuildSubmissionViewModels(submissions));
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> GradeSubmission(string id)
+    {
+        id = (id ?? "").Trim();
+
+        if (string.IsNullOrWhiteSpace(id))
+        {
+            TempData["Error"] = "Teslim bulunamadı.";
+            return RedirectToAction(nameof(Submissions));
+        }
+
+        var teacherProfile = await LoadCurrentTeacherProfile();
+
+        if (teacherProfile.Count == 0)
+        {
+            return RedirectToAction("Login", "Auth");
+        }
+
+        var teacherNo = OnlyDigits(GetText(teacherProfile, "Number", "number", "TeacherNo", "teacherNo"));
+        var realTeacherName = GetText(teacherProfile, "Name", "name", "TeacherName", "teacherName");
+        var teacherBranch = GetText(teacherProfile, "Branch", "branch", "TeacherBranch", "teacherBranch");
+        var teacherId = GetText(teacherProfile, "Id", "id", "TeacherId", "teacherId");
+        var lessons = await LoadTeacherLessons(teacherNo, realTeacherName, teacherBranch, teacherId);
+        var assignments = await LoadTeacherAssignments(teacherNo, realTeacherName, teacherBranch, teacherId, lessons);
+
+        var submissions = await LoadTeacherSubmissions(teacherNo, realTeacherName, teacherBranch, teacherId, lessons, assignments);
+        var submission = submissions.FirstOrDefault(x => GetText(x, "Id", "id") == id);
+
+        if (submission == null)
+        {
+            TempData["Error"] = "Bu teslim size ait bir ödeve bağlı değil.";
+            return RedirectToAction(nameof(Submissions));
+        }
+
+        return View(submission);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> GradeSubmission(string id, string grade, string feedback)
+    {
+        return await EvaluateSubmission(id, grade, feedback);
     }
 
     [HttpPost]
@@ -678,6 +741,12 @@ public class TeacherController : Controller
         if (string.IsNullOrWhiteSpace(score) && string.IsNullOrWhiteSpace(feedback))
         {
             TempData["Error"] = "Not veya geri dönüş alanlarından en az biri doldurulmalı.";
+            return RedirectToAction(nameof(Submissions));
+        }
+
+        if (!IsValidScore(score))
+        {
+            TempData["Error"] = "Not 0 ile 100 arasında olmalı.";
             return RedirectToAction(nameof(Submissions));
         }
 
@@ -932,7 +1001,52 @@ public class TeacherController : Controller
         var numberKey = OnlyDigits(teacherNumber);
         var nameKey = NormalizeKey(teacherName);
 
+        if (!string.IsNullOrWhiteSpace(numberKey))
+        {
+            async Task<QuerySnapshot?> ReadByNumberField(string numberField)
+            {
+                try
+                {
+                    return await _firestore
+                        .Collection("users")
+                        .WhereEqualTo(numberField, numberKey)
+                        .Limit(10)
+                        .GetSnapshotAsync();
+                }
+                catch
+                {
+                    return null;
+                }
+            }
+
+            var targetedSnapshots = await Task.WhenAll(
+                new[] { "number", "Number", "schoolNo", "SchoolNo", "teacherNo", "TeacherNo", "teacherNumber", "TeacherNumber" }
+                    .Select(ReadByNumberField)
+            );
+
+            foreach (var targetedSnapshot in targetedSnapshots.Where(x => x != null))
+            {
+                var targeted = BuildTeacherProfileFromSnapshot(targetedSnapshot!, numberKey, nameKey);
+
+                if (targeted.Count > 0)
+                {
+                    return targeted;
+                }
+            }
+        }
+
         var snapshot = await _firestore.Collection("users").GetSnapshotAsync();
+
+        return BuildTeacherProfileFromSnapshot(snapshot, numberKey, nameKey);
+    }
+
+    private static Dictionary<string, object> BuildTeacherProfileFromSnapshot(
+        QuerySnapshot snapshot,
+        string numberKey,
+        string nameKey
+    )
+    {
+        var result = new Dictionary<string, object>();
 
         foreach (var doc in snapshot.Documents)
         {
@@ -993,8 +1107,7 @@ public class TeacherController : Controller
             data["Branch"] = FirstNonEmpty(GetText(data, "branch", "Branch"), GetText(data, "teacherBranch", "TeacherBranch"));
             data["branch"] = data["Branch"];
 
-            result = data;
-            break;
+            return data;
         }
 
         return result;
@@ -1010,8 +1123,14 @@ public class TeacherController : Controller
         var result = new List<Dictionary<string, object>>();
         var seen = new HashSet<string>();
 
-        var activeTeachers = await _integrity.LoadActiveTeachersAsync();
-        var activeClasses = await _integrity.LoadActiveClassesAsync();
+        var activeTeachersTask = _integrity.LoadActiveTeachersAsync();
+        var activeClassesTask = _integrity.LoadActiveClassesAsync();
+        var lessonSnapshotTask = _firestore.Collection("lessons").GetSnapshotAsync();
+
+        await Task.WhenAll(activeTeachersTask, activeClassesTask, lessonSnapshotTask);
+
+        var activeTeachers = activeTeachersTask.Result;
+        var activeClasses = activeClassesTask.Result;
 
         var activeTeacherIds = activeTeachers
             .Select(x => DataIntegrityService.NormalizeKey(x.Id))
@@ -1038,7 +1157,7 @@ public class TeacherController : Controller
         var teacherBranchKey = NormalizeKey(teacherBranch);
         var teacherIdKey = NormalizeKey(teacherId);
 
-        var snapshot = await _firestore.Collection("lessons").GetSnapshotAsync();
+        var snapshot = lessonSnapshotTask.Result;
 
         foreach (var doc in snapshot.Documents)
         {
@@ -1193,13 +1312,23 @@ public class TeacherController : Controller
         var teacherNameKey = NormalizeKey(teacherName);
         var teacherIdKey = NormalizeKey(teacherId);
 
-        var collections = new[] { "homeworks", "assignments" };
-
-        foreach (var collection in collections)
+        async Task<QuerySnapshot?> ReadCollection(string collection)
         {
-            var snapshot = await _firestore.Collection(collection).GetSnapshotAsync();
+            try
+            {
+                return await _firestore.Collection(collection).GetSnapshotAsync();
+            }
+            catch
+            {
+                return null;
+            }
+        }
 
-            foreach (var doc in snapshot.Documents)
+        var snapshots = await Task.WhenAll(new[] { "homeworks", "assignments" }.Select(ReadCollection));
+
+        foreach (var snapshot in snapshots.Where(x => x != null))
+        {
+            foreach (var doc in snapshot!.Documents)
             {
                 var data = doc.ToDictionary();
 
@@ -1344,18 +1473,20 @@ public class TeacherController : Controller
             .Where(x => !string.IsNullOrWhiteSpace(x))
             .ToHashSet();
 
-        var collections = new[] { "submissions", "homework_submissions" };
-
-        foreach (var collection in collections)
+        var submissionGroups = await Task.WhenAll(new[] { "submissions", "homework_submissions" }.Select(async collection => new
         {
-            var docs = await LoadTeacherSubmissionDocs(
+            Collection = collection,
+            Docs = await LoadTeacherSubmissionDocs(
                 collection,
                 teacherId,
                 teacherNumber,
                 assignmentIds
-            );
+            )
+        }));
 
-            foreach (var doc in docs)
+        foreach (var group in submissionGroups)
+        {
+            foreach (var doc in group.Docs)
             {
                 var data = doc.ToDictionary();
 
@@ -1474,44 +1605,55 @@ public class TeacherController : Controller
         var teacherNo = OnlyDigits(teacherNumber);
         var collectionRef = _firestore.Collection(collection);
 
-        async Task AddQuery(Query query)
+        async Task<QuerySnapshot?> ReadQuery(Query query)
         {
             try
             {
-                var snapshot = await query.GetSnapshotAsync();
-
-                foreach (var doc in snapshot.Documents)
-                {
-                    if (seen.Add(doc.Id))
-                    {
-                        result.Add(doc);
-                    }
-                }
+                return await query.GetSnapshotAsync();
             }
             catch
             {
+                return null;
             }
         }
 
+        var queries = new List<Query>();
+
         if (!string.IsNullOrWhiteSpace(teacherId))
         {
-            await AddQuery(collectionRef.WhereEqualTo("teacherId", teacherId));
-            await AddQuery(collectionRef.WhereEqualTo("TeacherId", teacherId));
+            queries.Add(collectionRef.WhereEqualTo("teacherId", teacherId));
+            queries.Add(collectionRef.WhereEqualTo("TeacherId", teacherId));
         }
 
         if (!string.IsNullOrWhiteSpace(teacherNo))
         {
             foreach (var field in new[] { "teacherNo", "TeacherNo", "teacherNumber", "TeacherNumber" })
             {
-                await AddQuery(collectionRef.WhereEqualTo(field, teacherNo));
+                queries.Add(collectionRef.WhereEqualTo(field, teacherNo));
             }
         }
 
-        foreach (var assignmentId in assignmentIds.Where(x => !string.IsNullOrWhiteSpace(x)))
+        foreach (var chunk in ChunkValues(assignmentIds.Where(x => !string.IsNullOrWhiteSpace(x)).ToList(), 10))
         {
             foreach (var field in new[] { "assignmentId", "AssignmentId", "homeworkId", "HomeworkId" })
             {
-                await AddQuery(collectionRef.WhereEqualTo(field, assignmentId));
+                queries.Add(collectionRef.WhereIn(field, chunk.Cast<object>().ToArray()));
+            }
+        }
+
+        foreach (var snapshot in await Task.WhenAll(queries.Select(ReadQuery)))
+        {
+            if (snapshot == null)
+            {
+                continue;
+            }
+
+            foreach (var doc in snapshot.Documents)
+            {
+                if (seen.Add(doc.Id))
+                {
+                    result.Add(doc);
+                }
             }
         }
 
@@ -1768,6 +1910,25 @@ public class TeacherController : Controller
         return "";
     }
 
+    private static bool IsValidScore(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return true;
+        }
+
+        var normalized = value.Trim().Replace(',', '.');
+
+        return decimal.TryParse(
+                   normalized,
+                   NumberStyles.AllowDecimalPoint | NumberStyles.AllowLeadingSign,
+                   CultureInfo.InvariantCulture,
+                   out var score
+               ) &&
+               score >= 0 &&
+               score <= 100;
+    }
+
     private static DateTime? GetDate(Dictionary<string, object> data, params string[] keys)
     {
         foreach (var key in keys)
@@ -1843,6 +2004,17 @@ public class TeacherController : Controller
         }
 
         return original.ToUpperInvariant();
+    }
+
+    private static IEnumerable<List<string>> ChunkValues(List<string> values, int size)
+    {
+        for (var i = 0; i < values.Count; i += size)
+        {
+            yield return values
+                .Skip(i)
+                .Take(size)
+                .ToList();
+        }
     }
 
     private static string NormalizeKey(string value)

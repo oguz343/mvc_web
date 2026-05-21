@@ -1,5 +1,6 @@
 using Google.Cloud.Firestore;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Memory;
 using mvc_web.Services;
 using System.Globalization;
 
@@ -10,21 +11,34 @@ public class AuthController : Controller
     private readonly FirestoreDb _firestore;
     private readonly IWebHostEnvironment _environment;
     private readonly AuthLoginService _authLoginService;
+    private readonly IMemoryCache _cache;
+
+    private const string LoginStatsCacheKey = "auth_login_stats_v1";
+    private const string DefaultAdminCacheKey = "auth_default_admin_checked_v1";
+
+    private sealed record LoginStats(
+        int ActiveUserCount,
+        int ActiveLessonCount,
+        int CompletedHomeworkCount,
+        int TotalHomeworkCount
+    );
 
     public AuthController(
         FirestoreDb firestore,
         IWebHostEnvironment environment,
-        AuthLoginService authLoginService)
+        AuthLoginService authLoginService,
+        IMemoryCache cache)
     {
         _firestore = firestore;
         _environment = environment;
         _authLoginService = authLoginService;
+        _cache = cache;
     }
 
     [HttpGet]
     public async Task<IActionResult> Login()
     {
-        await EnsureDefaultAdminAsync();
+        await EnsureDefaultAdminCachedAsync();
         await FillLoginStatsAsync();
 
         return View();
@@ -158,7 +172,7 @@ public class AuthController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Login(string Role, string Number, string Password)
     {
-        await EnsureDefaultAdminAsync();
+        await EnsureDefaultAdminCachedAsync();
 
         Role = (Role ?? "").Trim();
         Number = OnlyDigits(Number);
@@ -299,16 +313,53 @@ public class AuthController : Controller
 
     private async Task FillLoginStatsAsync()
     {
-        var activeUserCount = await CountActiveUsersAsync();
+        if (_cache.TryGetValue(LoginStatsCacheKey, out LoginStats? cachedStats) && cachedStats is not null)
+        {
+            ViewBag.ActiveUserCount = FormatNumber(cachedStats.ActiveUserCount);
+            ViewBag.ActiveUsersText = FormatNumber(cachedStats.ActiveUserCount);
 
-        var activeLessonCount = await CountFirstNonEmptyCollectionAsync(
+            ViewBag.ActiveLessonCount = FormatNumber(cachedStats.ActiveLessonCount);
+            ViewBag.ActiveLessonsText = FormatNumber(cachedStats.ActiveLessonCount);
+
+            ViewBag.CompletedHomeworkCount = FormatNumber(cachedStats.CompletedHomeworkCount);
+            ViewBag.CompletedHomeworksText = FormatNumber(cachedStats.CompletedHomeworkCount);
+
+            ViewBag.SystemSuccessRateText = cachedStats.TotalHomeworkCount > 0
+                ? FormatPercent(cachedStats.CompletedHomeworkCount, cachedStats.TotalHomeworkCount)
+                : "%0";
+
+            ViewBag.SystemStatusTitle = "Sistem Aktif";
+            ViewBag.SystemStatusSubTitle = "Tüm Sistemler Çevrimiçi";
+            return;
+        }
+
+        var activeUserTask = CountActiveUsersAsync();
+
+        var activeLessonTask = CountFirstNonEmptyCollectionAsync(
             "lessons",
             "dersler",
             "courses",
             "classesLessons"
         );
 
-        var homeworkStats = await GetHomeworkStatsAsync();
+        var homeworkStatsTask = GetHomeworkStatsAsync();
+
+        await Task.WhenAll(activeUserTask, activeLessonTask, homeworkStatsTask);
+
+        var activeUserCount = activeUserTask.Result;
+        var activeLessonCount = activeLessonTask.Result;
+        var homeworkStats = homeworkStatsTask.Result;
+
+        _cache.Set(
+            LoginStatsCacheKey,
+            new LoginStats(
+                activeUserCount,
+                activeLessonCount,
+                homeworkStats.CompletedCount,
+                homeworkStats.TotalCount
+            ),
+            TimeSpan.FromMinutes(3)
+        );
 
         ViewBag.ActiveUserCount = FormatNumber(activeUserCount);
         ViewBag.ActiveUsersText = FormatNumber(activeUserCount);
@@ -329,28 +380,35 @@ public class AuthController : Controller
 
     private async Task<int> CountActiveUsersAsync()
     {
-        var snapshot = await _firestore.Collection("users").GetSnapshotAsync();
-
-        var count = 0;
-
-        foreach (var doc in snapshot.Documents)
+        try
         {
-            if (!doc.Exists)
+            var snapshot = await _firestore.Collection("users").GetSnapshotAsync();
+
+            var count = 0;
+
+            foreach (var doc in snapshot.Documents)
             {
-                continue;
+                if (!doc.Exists)
+                {
+                    continue;
+                }
+
+                var data = doc.ToDictionary();
+
+                if (IsDeleted(data))
+                {
+                    continue;
+                }
+
+                count++;
             }
 
-            var data = doc.ToDictionary();
-
-            if (IsDeleted(data))
-            {
-                continue;
-            }
-
-            count++;
+            return count;
         }
-
-        return count;
+        catch
+        {
+            return 0;
+        }
     }
 
     private async Task<int> CountFirstNonEmptyCollectionAsync(params string[] collectionNames)
@@ -728,6 +786,29 @@ public class AuthController : Controller
         );
 
         return !string.IsNullOrWhiteSpace(passwordValue);
+    }
+
+    private async Task EnsureDefaultAdminCachedAsync()
+    {
+        if (_cache.TryGetValue(DefaultAdminCacheKey, out bool _))
+        {
+            return;
+        }
+
+        try
+        {
+            await EnsureDefaultAdminAsync();
+
+            _cache.Set(
+                DefaultAdminCacheKey,
+                true,
+                IsDevelopment() ? TimeSpan.FromMinutes(2) : TimeSpan.FromMinutes(15)
+            );
+        }
+        catch
+        {
+            _cache.Set(DefaultAdminCacheKey, true, TimeSpan.FromSeconds(30));
+        }
     }
 
     private async Task EnsureDefaultAdminAsync()

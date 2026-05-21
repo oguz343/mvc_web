@@ -1,100 +1,375 @@
-@model AssignmentViewModel
+@using System.Reflection
+@model IDictionary<string, object>
 
 @{
     Layout = "_TeacherLayout";
     ViewData["Title"] = "Ödev Düzenle";
+    ViewData["PageTitle"] = "Ödev Düzenle";
+    ViewData["PageSubtitle"] = "Yayınladığınız ödevin başlığını, açıklamasını, dersini, sınıfını ve son teslim tarihini güncelleyin.";
 
-    var lessons = ViewBag.TeacherLessons as List<TeacherLessonOptionViewModel> ?? new List<TeacherLessonOptionViewModel>();
+    var data = Model ?? new Dictionary<string, object>();
+
+    var id = First(Get(data, "Id", "id"), Get(data, "docId", "DocId"));
+    var title = First(Get(data, "title", "Title"), Get(data, "name", "Name"), Get(data, "homeworkTitle", "HomeworkTitle"), Get(data, "assignmentTitle", "AssignmentTitle"));
+    var description = First(Get(data, "description", "Description"), Get(data, "content", "Content"), Get(data, "text", "Text"));
+    var lessonName = First(Get(data, "lessonName", "LessonName"), Get(data, "lesson", "Lesson"), Get(data, "courseName", "CourseName"), Get(data, "course", "Course"));
+    var className = First(Get(data, "className", "ClassName"), Get(data, "class", "Class"), Get(data, "targetClass", "TargetClass"));
+    var fileType = First(Get(data, "fileType", "FileType"), Get(data, "type", "Type"), Get(data, "submissionType", "SubmissionType"), "Dosya");
+    var dueDate = HtmlDateValue(First(Get(data, "dueDate", "DueDate"), Get(data, "deadline", "Deadline"), Get(data, "endDate", "EndDate"), Get(data, "dueDateText", "DueDateText")));
 }
 
-<div class="form-card">
-    @if (!ViewData.ModelState.IsValid)
+@functions {
+    private string Get(IDictionary<string, object> dict, params string[] keys)
     {
-        <div class="alert alert-danger">
-            @foreach (var error in ViewData.ModelState.Values.SelectMany(v => v.Errors))
+        foreach (var key in keys)
+        {
+            if (dict.TryGetValue(key, out var value) && value != null)
             {
-                <div>@error.ErrorMessage</div>
+                return value.ToString() ?? "";
             }
-        </div>
+        }
+
+        return "";
     }
 
-    @if (lessons.Count == 0)
+    private string First(params string[] values)
     {
-        <div class="alert alert-warning">
-            Size atanmış ders bulunmuyor. Admin panelinden önce öğretmene ders atanmalıdır.
-        </div>
+        foreach (var value in values)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return value;
+            }
+        }
+
+        return "";
     }
 
-    <form asp-controller="Teacher" asp-action="EditAssignment" method="post">
-        @Html.AntiForgeryToken()
+    private string HtmlDateValue(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "";
+        }
 
-        <input type="hidden" asp-for="Id" />
+        if (DateTime.TryParse(value, out var parsed))
+        {
+            return parsed.ToString("yyyy-MM-ddTHH:mm");
+        }
 
-        <div class="form-grid">
-            <div class="form-group full">
-                <label class="form-label" asp-for="Title">Ödev Başlığı</label>
-                <input class="form-control" asp-for="Title" placeholder="Örn: Fonksiyonlar çalışma kağıdı" />
-                <span asp-validation-for="Title" class="text-danger"></span>
+        return "";
+    }
+}
+
+<style>
+    .teacher-edit-v2 {
+        display: grid;
+        gap: 18px;
+        width: 100%;
+    }
+
+    .teacher-edit-hero,
+    .teacher-edit-card,
+    .teacher-edit-side {
+        border: 1px solid rgba(148, 163, 184, .18);
+        background:
+            radial-gradient(circle at 0% 0%, rgba(56, 189, 248, .10), transparent 34%),
+            linear-gradient(135deg, rgba(17, 25, 46, .94), rgba(15, 23, 42, .86));
+        box-shadow: 0 18px 48px rgba(0, 0, 0, .24);
+        backdrop-filter: blur(16px);
+    }
+
+    .teacher-edit-hero {
+        padding: 24px;
+        border-radius: 32px;
+    }
+
+    .teacher-edit-kicker {
+        width: fit-content;
+        min-height: 30px;
+        display: inline-flex;
+        align-items: center;
+        padding: 0 12px;
+        border-radius: 999px;
+        color: #67e8f9;
+        background: rgba(56, 189, 248, .10);
+        border: 1px solid rgba(103, 232, 249, .20);
+        font-size: 11px;
+        font-weight: 950;
+        letter-spacing: .16em;
+        text-transform: uppercase;
+    }
+
+    .teacher-edit-hero h1 {
+        margin: 14px 0 0;
+        color: #fff;
+        font-size: clamp(34px, 3.8vw, 58px);
+        font-weight: 950;
+        line-height: 1;
+        letter-spacing: -.06em;
+    }
+
+    .teacher-edit-hero p {
+        max-width: 780px;
+        margin: 14px 0 0;
+        color: #aab8cf;
+        font-size: 15px;
+        font-weight: 700;
+        line-height: 1.65;
+    }
+
+    .teacher-edit-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 360px;
+        gap: 18px;
+        align-items: start;
+    }
+
+    .teacher-edit-card,
+    .teacher-edit-side {
+        padding: 22px;
+        border-radius: 30px;
+    }
+
+    .teacher-edit-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+    }
+
+    .teacher-edit-field {
+        display: grid;
+        gap: 8px;
+    }
+
+    .teacher-edit-field.full {
+        grid-column: 1 / -1;
+    }
+
+    .teacher-edit-field label {
+        color: #dbeafe;
+        font-size: 13px;
+        font-weight: 950;
+    }
+
+    .teacher-edit-field input,
+    .teacher-edit-field select,
+    .teacher-edit-field textarea {
+        width: 100%;
+        min-height: 48px;
+        padding: 0 13px;
+        border-radius: 15px;
+        border: 1px solid rgba(148, 163, 184, .18);
+        outline: none;
+        color: #ffffff;
+        background: rgba(7, 17, 31, .58);
+        font-size: 14px;
+        font-weight: 750;
+    }
+
+    .teacher-edit-field textarea {
+        min-height: 170px;
+        padding-top: 13px;
+        resize: vertical;
+        line-height: 1.55;
+    }
+
+    .teacher-edit-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 16px;
+    }
+
+    .teacher-edit-save,
+    .teacher-edit-back {
+        min-height: 46px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 16px;
+        border-radius: 15px;
+        border: 1px solid transparent;
+        text-decoration: none;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 950;
+    }
+
+    .teacher-edit-save {
+        color: #ffffff;
+        background: linear-gradient(135deg, #2563eb, #7c3aed);
+        border-color: rgba(125, 211, 252, .22);
+        box-shadow: 0 14px 30px rgba(37, 99, 235, .24);
+    }
+
+    .teacher-edit-back {
+        color: #dbeafe;
+        background: rgba(255, 255, 255, .060);
+        border-color: rgba(148, 163, 184, .18);
+    }
+
+    .teacher-edit-side h3 {
+        margin: 0;
+        color: #ffffff;
+        font-size: 20px;
+        font-weight: 950;
+    }
+
+    .teacher-edit-side p {
+        margin: 8px 0 0;
+        color: #94a3b8;
+        font-size: 13px;
+        font-weight: 750;
+        line-height: 1.55;
+    }
+
+    .teacher-edit-info {
+        display: grid;
+        gap: 10px;
+        margin-top: 16px;
+    }
+
+    .teacher-edit-info div {
+        padding: 12px;
+        border-radius: 16px;
+        color: #dbeafe;
+        background: rgba(255, 255, 255, .045);
+        border: 1px solid rgba(148, 163, 184, .12);
+        font-size: 13px;
+        font-weight: 800;
+        line-height: 1.45;
+        overflow-wrap: anywhere;
+    }
+
+    @@media (max-width: 1100px) {
+        .teacher-edit-layout {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @@media (max-width: 700px) {
+        .teacher-edit-hero,
+        .teacher-edit-card,
+        .teacher-edit-side {
+            border-radius: 22px;
+            padding: 16px;
+        }
+
+        .teacher-edit-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .teacher-edit-actions {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .teacher-edit-save,
+        .teacher-edit-back {
+            width: 100%;
+        }
+    }
+</style>
+
+<div class="teacher-edit-v2">
+    <section class="teacher-edit-hero">
+        <div class="teacher-edit-kicker">Ödev Düzenle</div>
+
+        <h1>@(string.IsNullOrWhiteSpace(title) ? "Ödev Düzenle" : title)</h1>
+
+        <p>
+            Ödev bilgilerini güncelleyin. Kaydettiğiniz değişiklikler hem öğretmen hem öğrenci/veli tarafındaki akışa yansır.
+        </p>
+    </section>
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success">@TempData["Success"]</div>
+    }
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger">@TempData["Error"]</div>
+    }
+
+    <section class="teacher-edit-layout">
+        <form asp-controller="Teacher"
+              asp-action="EditAssignment"
+              asp-route-id="@id"
+              method="post"
+              class="teacher-edit-card">
+
+            @Html.AntiForgeryToken()
+
+            <div class="teacher-edit-grid">
+                <div class="teacher-edit-field full">
+                    <label>Ödev Başlığı</label>
+                    <input type="text"
+                           name="title"
+                           value="@title"
+                           maxlength="120"
+                           required />
+                </div>
+
+                <div class="teacher-edit-field">
+                    <label>Ders</label>
+                    <input type="text" name="lessonName" value="@lessonName" />
+                </div>
+
+                <div class="teacher-edit-field">
+                    <label>Sınıf</label>
+                    <input type="text" name="className" value="@className" />
+                </div>
+
+                <div class="teacher-edit-field">
+                    <label>Son Teslim Tarihi</label>
+                    <input type="datetime-local" name="dueDate" value="@dueDate" />
+                </div>
+
+                <div class="teacher-edit-field">
+                    <label>Teslim Türü</label>
+                    <select name="fileType">
+                        <option value="Dosya" selected="@(fileType == "Dosya" ? "selected" : null)">Dosya</option>
+                        <option value="Metin" selected="@(fileType == "Metin" ? "selected" : null)">Metin</option>
+                        <option value="Dosya veya Metin" selected="@(fileType == "Dosya veya Metin" ? "selected" : null)">Dosya veya Metin</option>
+                        <option value="Link" selected="@(fileType == "Link" ? "selected" : null)">Link</option>
+                    </select>
+                </div>
+
+                <div class="teacher-edit-field full">
+                    <label>Açıklama</label>
+                    <textarea name="description">@description</textarea>
+                </div>
             </div>
 
-            <div class="form-group full">
-                <label class="form-label" asp-for="LessonId">Ders</label>
-                <select class="form-control" asp-for="LessonId">
-                    <option value="">Ders seç</option>
-                    @foreach (var lesson in lessons)
-                    {
-                        <option value="@lesson.Id">@lesson.Name • @lesson.ClassName</option>
-                    }
-                </select>
-                <span asp-validation-for="LessonId" class="text-danger"></span>
+            <div class="teacher-edit-actions">
+                <a asp-controller="Teacher"
+                   asp-action="Assignments"
+                   class="teacher-edit-back">
+                    Vazgeç
+                </a>
+
+                <button type="submit" class="teacher-edit-save">
+                    💾 Değişiklikleri Kaydet
+                </button>
             </div>
+        </form>
 
-            <div class="form-group">
-                <label class="form-label" asp-for="DueDate">Son Teslim Tarihi</label>
-                <input class="form-control" asp-for="DueDate" type="date" />
-                <span asp-validation-for="DueDate" class="text-danger"></span>
+        <aside class="teacher-edit-side">
+            <h3>Mevcut Bilgiler</h3>
+
+            <p>
+                Bu alan ödevin şu anki kayıt bilgilerini hızlıca görmeniz için hazırlanmıştır.
+            </p>
+
+            <div class="teacher-edit-info">
+                <div>📘 Ders: @(string.IsNullOrWhiteSpace(lessonName) ? "-" : lessonName)</div>
+                <div>🏫 Sınıf: @(string.IsNullOrWhiteSpace(className) ? "-" : className)</div>
+                <div>📎 Teslim Türü: @(string.IsNullOrWhiteSpace(fileType) ? "-" : fileType)</div>
+                <div>🆔 Kayıt ID: @(string.IsNullOrWhiteSpace(id) ? "-" : id)</div>
             </div>
-
-            <div class="form-group">
-                <label class="form-label" asp-for="Type">Ödev Türü</label>
-                <select class="form-control" asp-for="Type">
-                    <option value="Metin">Metin</option>
-                    <option value="Dosya">Dosya</option>
-                    <option value="Link">Link</option>
-                    <option value="PDF">PDF</option>
-                    <option value="PPTX">PPTX</option>
-                </select>
-            </div>
-
-            <div class="form-group">
-                <label class="form-label" asp-for="Status">Durum</label>
-                <select class="form-control" asp-for="Status">
-                    <option value="Aktif">Aktif</option>
-                    <option value="Teslim Bekliyor">Teslim Bekliyor</option>
-                    <option value="Pasif">Pasif</option>
-                </select>
-            </div>
-
-            <div class="form-group full">
-                <label class="form-label" asp-for="Description">Ödev Açıklaması</label>
-                <textarea class="form-control" asp-for="Description" placeholder="Öğrencinin yapması gerekenleri yaz"></textarea>
-            </div>
-        </div>
-
-        <div style="height: 22px;"></div>
-
-        <div class="alert alert-warning">
-            Bu ödev yalnızca size atanmış derslerden biriyle eşleştirilebilir.
-        </div>
-
-        <div class="page-actions">
-            <button class="btn btn-teacher" type="submit" @(lessons.Count == 0 ? "disabled" : "")>
-                💾 Değişiklikleri Kaydet
-            </button>
-
-            <a class="btn btn-light" asp-controller="Teacher" asp-action="Assignments">
-                ← Geri Dön
-            </a>
-        </div>
-    </form>
+        </aside>
+    </section>
 </div>

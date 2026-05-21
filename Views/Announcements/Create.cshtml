@@ -1,155 +1,320 @@
-@model AnnouncementViewModel
+@model mvc_web.Models.AnnouncementViewModel
 
 @{
     Layout = "_AdminLayout";
-    ViewData["Title"] = "Duyuru Ekle";
+    ViewData["Title"] = "Yeni Duyuru";
+    ViewData["PageTitle"] = "Yeni Duyuru";
+    ViewData["PageSubtitle"] = "Öğrenci, öğretmen, veli veya tüm okula duyuru yayınlayın.";
 }
 
-<div class="announcement-create-page">
-    <section class="announcement-create-hero">
-        <div class="announce-icon">D</div>
-        <div>
-            <p>Admin Duyuru Merkezi</p>
-            <h2>Yeni duyuru oluştur</h2>
-            <span>Hedef kitleyi seçin, mesajınızı yazın ve panellere temiz bir duyuru olarak yayınlayın.</span>
-        </div>
-    </section>
-
-    <div class="form-card announcement-create-card">
-        @if (!ViewData.ModelState.IsValid)
-        {
-            <div class="alert alert-danger">
-                @foreach (var error in ViewData.ModelState.Values.SelectMany(v => v.Errors))
-                {
-                    <div>@error.ErrorMessage</div>
-                }
-            </div>
-        }
-
-        <form asp-controller="Announcements" asp-action="Create" method="post">
-            @Html.AntiForgeryToken()
-
-            <div class="form-grid">
-                <div class="form-group full">
-                    <label class="form-label" asp-for="Title">Başlık</label>
-                    <input class="form-control" asp-for="Title" placeholder="Duyuru başlığı" />
-                    <span asp-validation-for="Title" class="text-danger"></span>
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label" asp-for="Author">Yayınlayan</label>
-                    <input class="form-control" asp-for="Author" placeholder="Admin" />
-                    <span asp-validation-for="Author" class="text-danger"></span>
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label" asp-for="Target">Hedef Kitle</label>
-                    <select class="form-control" asp-for="Target">
-                        <option value="Tüm Okul">Tüm Okul</option>
-                        <option value="Öğrenciler">Öğrenciler</option>
-                        <option value="Öğretmenler">Öğretmenler</option>
-                        <option value="Veliler">Veliler</option>
-                    </select>
-                    <span asp-validation-for="Target" class="text-danger"></span>
-                </div>
-
-                <div class="form-group full">
-                    <label class="form-label" asp-for="Content">Duyuru İçeriği</label>
-                    <textarea class="form-control" asp-for="Content" placeholder="Duyuru metnini yaz"></textarea>
-                    <span asp-validation-for="Content" class="text-danger"></span>
-                </div>
-            </div>
-
-            <div style="height: 22px;"></div>
-
-            <div class="page-actions">
-                <button class="btn btn-primary" type="submit">
-                    Duyuruyu Yayınla
-                </button>
-
-                <a class="btn btn-light" asp-controller="Announcements" asp-action="Index">
-                    Geri Dön
-                </a>
-            </div>
-        </form>
-    </div>
-</div>
-
 <style>
-    .announcement-create-page {
+    .final-form-page {
+        width: 100%;
         display: grid;
         gap: 18px;
     }
 
-    .announcement-create-hero {
-        border-radius: 28px;
+    .final-form-hero,
+    .final-form-card,
+    .final-form-side {
+        border: 1px solid rgba(148, 163, 184, .18);
+        background:
+            radial-gradient(circle at 0% 0%, rgba(56, 189, 248, .10), transparent 34%),
+            linear-gradient(135deg, rgba(17, 25, 46, .94), rgba(15, 23, 42, .86));
+        box-shadow: 0 18px 48px rgba(0, 0, 0, .24);
+        backdrop-filter: blur(16px);
+    }
+
+    .final-form-hero {
         padding: 24px;
-        background: linear-gradient(135deg, #0f172a, #4f46e5 58%, #06b6d4);
-        color: #fff;
-        display: flex;
+        border-radius: 32px;
+    }
+
+    .final-form-kicker {
+        width: fit-content;
+        min-height: 30px;
+        display: inline-flex;
         align-items: center;
-        gap: 16px;
-        box-shadow: 0 24px 56px rgba(15, 23, 42, .18);
+        padding: 0 12px;
+        border-radius: 999px;
+        color: #67e8f9;
+        background: rgba(56, 189, 248, .10);
+        border: 1px solid rgba(103, 232, 249, .20);
+        font-size: 11px;
+        font-weight: 950;
+        letter-spacing: .16em;
+        text-transform: uppercase;
     }
 
-    .announce-icon {
-        width: 62px;
-        height: 62px;
-        border-radius: 22px;
-        background: rgba(255,255,255,.18);
-        border: 1px solid rgba(255,255,255,.24);
+    .final-form-hero h1 {
+        margin: 14px 0 0;
+        color: #ffffff;
+        font-size: clamp(34px, 3.8vw, 58px);
+        font-weight: 950;
+        line-height: 1;
+        letter-spacing: -.06em;
+    }
+
+    .final-form-hero p {
+        max-width: 820px;
+        margin: 14px 0 0;
+        color: #aab8cf;
+        font-size: 15px;
+        font-weight: 700;
+        line-height: 1.65;
+    }
+
+    .final-form-layout {
         display: grid;
-        place-items: center;
+        grid-template-columns: minmax(0, 1fr) 360px;
+        gap: 18px;
+        align-items: start;
+    }
+
+    .final-form-card,
+    .final-form-side {
+        padding: 22px;
+        border-radius: 30px;
+    }
+
+    .final-form-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+    }
+
+    .final-form-field {
+        display: grid;
+        gap: 8px;
+    }
+
+    .final-form-field.full {
+        grid-column: 1 / -1;
+    }
+
+    .final-form-field label {
+        color: #dbeafe;
+        font-size: 13px;
         font-weight: 950;
-        font-size: 25px;
     }
 
-    .announcement-create-hero p,
-    .announcement-create-hero h2,
-    .announcement-create-hero span {
-        margin: 0;
-    }
-
-    .announcement-create-hero p {
-        opacity: .74;
-        font-weight: 900;
-        margin-bottom: 5px;
-    }
-
-    .announcement-create-hero h2 {
-        font-size: 31px;
-        font-weight: 950;
-        letter-spacing: 0;
-    }
-
-    .announcement-create-hero span {
-        display: block;
-        margin-top: 7px;
-        opacity: .82;
+    .final-form-field input,
+    .final-form-field select,
+    .final-form-field textarea {
+        width: 100%;
+        min-height: 48px;
+        padding: 0 13px;
+        border-radius: 15px;
+        border: 1px solid rgba(148, 163, 184, .18);
+        outline: none;
+        color: #ffffff;
+        background: rgba(7, 17, 31, .58);
+        font-size: 14px;
         font-weight: 750;
     }
 
-    .announcement-create-card {
-        border-radius: 28px;
-        padding: 24px;
-    }
-
-    .announcement-create-card textarea {
+    .final-form-field textarea {
         min-height: 190px;
+        padding-top: 13px;
         resize: vertical;
         line-height: 1.55;
     }
 
-    .announcement-create-card .form-control {
-        border-radius: 18px;
-        min-height: 50px;
-        font-weight: 800;
-        background: #f8fafc;
+    .final-form-field input:focus,
+    .final-form-field select:focus,
+    .final-form-field textarea:focus {
+        border-color: rgba(103, 232, 249, .45);
+        box-shadow: 0 0 0 4px rgba(56, 189, 248, .09);
     }
 
-    .announcement-create-card .form-control:focus {
-        background: #fff;
-        border-color: #4f46e5;
-        box-shadow: 0 0 0 4px rgba(79, 70, 229, .10);
+    .final-form-field option {
+        color: #0f172a;
+        background: #ffffff;
+    }
+
+    .final-form-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 16px;
+    }
+
+    .final-form-save,
+    .final-form-back {
+        min-height: 46px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 16px;
+        border-radius: 15px;
+        border: 1px solid transparent;
+        text-decoration: none;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 950;
+    }
+
+    .final-form-save {
+        color: #ffffff;
+        background: linear-gradient(135deg, #2563eb, #7c3aed);
+        border-color: rgba(125, 211, 252, .22);
+        box-shadow: 0 14px 30px rgba(37, 99, 235, .24);
+    }
+
+    .final-form-back {
+        color: #dbeafe;
+        background: rgba(255, 255, 255, .060);
+        border-color: rgba(148, 163, 184, .18);
+    }
+
+    .final-form-side h3 {
+        margin: 0;
+        color: #ffffff;
+        font-size: 20px;
+        font-weight: 950;
+    }
+
+    .final-form-side p {
+        margin: 8px 0 0;
+        color: #94a3b8;
+        font-size: 13px;
+        font-weight: 750;
+        line-height: 1.55;
+    }
+
+    .final-note-list {
+        display: grid;
+        gap: 10px;
+        margin-top: 16px;
+    }
+
+    .final-note {
+        padding: 12px;
+        border-radius: 16px;
+        color: #dbeafe;
+        background: rgba(255, 255, 255, .045);
+        border: 1px solid rgba(148, 163, 184, .12);
+        font-size: 13px;
+        font-weight: 800;
+        line-height: 1.45;
+    }
+
+    @@media (max-width: 1100px) {
+        .final-form-layout {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @@media (max-width: 700px) {
+        .final-form-hero,
+        .final-form-card,
+        .final-form-side {
+            border-radius: 22px;
+            padding: 16px;
+        }
+
+        .final-form-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .final-form-actions {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .final-form-save,
+        .final-form-back {
+            width: 100%;
+        }
     }
 </style>
+
+<div class="final-form-page">
+    <section class="final-form-hero">
+        <div class="final-form-kicker">Duyuru Yayınla</div>
+
+        <h1>Yeni duyuru oluşturun.</h1>
+
+        <p>
+            Hedef kitleyi seçin, başlık ve içerik girin. Duyuru ilgili panelde kullanıcılara görünür.
+        </p>
+    </section>
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success">@TempData["Success"]</div>
+    }
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger">@TempData["Error"]</div>
+    }
+
+    <section class="final-form-layout">
+        <form asp-controller="Announcements"
+              asp-action="Create"
+              method="post"
+              class="final-form-card">
+
+            @Html.AntiForgeryToken()
+
+            <div class="final-form-grid">
+                <div class="final-form-field full">
+                    <label>Duyuru Başlığı</label>
+                    <input asp-for="Title"
+                           name="Title"
+                           maxlength="120"
+                           placeholder="Örn: Yarın deneme sınavı yapılacaktır"
+                           required />
+                </div>
+
+                <div class="final-form-field full">
+                    <label>Hedef Kitle</label>
+                    <select asp-for="Target" name="Target" required>
+                        <option value="">Hedef seçin</option>
+                        <option value="Tüm Okul">Tüm Okul</option>
+                        <option value="Öğrenci">Öğrenci</option>
+                        <option value="Öğretmen">Öğretmen</option>
+                        <option value="Veli">Veli</option>
+                    </select>
+                </div>
+
+                <div class="final-form-field full">
+                    <label>Duyuru İçeriği</label>
+                    <textarea asp-for="Content"
+                              name="Content"
+                              placeholder="Duyuru metnini yazın..."
+                              required></textarea>
+                </div>
+            </div>
+
+            <div class="final-form-actions">
+                <a asp-controller="Announcements"
+                   asp-action="Index"
+                   class="final-form-back">
+                    Vazgeç
+                </a>
+
+                <button type="submit" class="final-form-save">
+                    📣 Duyuruyu Yayınla
+                </button>
+            </div>
+        </form>
+
+        <aside class="final-form-side">
+            <h3>Duyuru Notları</h3>
+
+            <p>
+                Duyuru kısa, net ve hedef kitlesi doğru seçilmiş olmalı.
+            </p>
+
+            <div class="final-note-list">
+                <div class="final-note">🌐 Tüm Okul: herkes görür.</div>
+                <div class="final-note">🎒 Öğrenci: öğrenci panelinde görünür.</div>
+                <div class="final-note">👨‍🏫 Öğretmen: öğretmen panelinde görünür.</div>
+                <div class="final-note">👪 Veli: veli panelinde görünür.</div>
+            </div>
+        </aside>
+    </section>
+</div>

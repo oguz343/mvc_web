@@ -1,939 +1,637 @@
- @model mvc_web.Models.PortalViewModel
+﻿@model mvc_web.Models.PortalViewModel
 
 @{
     Layout = "_Layout";
-    ViewData["Title"] = "Kullanıcı Paneli";
 
-    var isStudent = Model.Role == "Öğrenci";
-    var icon = Model.Role == "Veli" ? "👪" : "🎒";
-    var color = Model.Role == "Veli" ? "#f59e0b" : "#4f46e5";
+    var role = Model.Role ?? "";
+    var isParent = role.Equals("Veli", StringComparison.OrdinalIgnoreCase);
+    var isStudent = !isParent;
+
+    ViewData["Title"] = isParent ? "Veli Paneli" : "Öğrenci Paneli";
 
     var submittedHomeworkCount = Model.Homeworks.Count(x => x.IsSubmitted);
     var pendingHomeworkCount = Model.Homeworks.Count - submittedHomeworkCount;
     var gradedHomeworkCount = Model.Homeworks.Count(x => !string.IsNullOrWhiteSpace(x.Grade) || !string.IsNullOrWhiteSpace(x.Feedback));
+    var now = DateTime.Now;
+    var lateHomeworkCount = Model.Homeworks.Count(x => !x.IsSubmitted && x.DueDate != null && x.DueDate.Value < now);
+    var soonHomeworkCount = Model.Homeworks.Count(x => !x.IsSubmitted && x.DueDate != null && x.DueDate.Value >= now && x.DueDate.Value <= now.AddDays(2));
+    var lessonOptions = Model.Homeworks
+        .Select(x => (x.LessonName ?? "").Trim())
+        .Where(x => !string.IsNullOrWhiteSpace(x))
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .OrderBy(x => x)
+        .ToList();
+    var teacherOptions = Model.Homeworks
+        .Select(x => (x.TeacherName ?? "").Trim())
+        .Where(x => !string.IsNullOrWhiteSpace(x))
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .OrderBy(x => x)
+        .ToList();
+    var orderedHomeworks = Model.Homeworks
+        .OrderBy(HomeworkPriority)
+        .ThenBy(x => x.DueDate ?? DateTime.MaxValue)
+        .ThenBy(x => x.Title)
+        .ToList();
     var nextHomework = Model.Homeworks
         .Where(x => !x.IsSubmitted)
         .OrderBy(x => x.DueDate ?? DateTime.MaxValue)
         .FirstOrDefault();
+
+    var progressPercent = Model.Homeworks.Count == 0
+        ? 0
+        : Math.Round((double)submittedHomeworkCount / Model.Homeworks.Count * 100);
+
+    string SafeText(string value, string fallback = "-")
+    {
+        return string.IsNullOrWhiteSpace(value) ? fallback : value;
+    }
+
+    string DateText(DateTime? date)
+    {
+        return date?.ToString("dd.MM.yyyy HH:mm") ?? "-";
+    }
+
+    string DueStatusClass(DateTime? date, bool isSubmitted)
+    {
+        if (isSubmitted)
+        {
+            return "done";
+        }
+
+        if (date == null)
+        {
+            return "neutral";
+        }
+
+        if (date.Value < DateTime.Now)
+        {
+            return "late";
+        }
+
+        if (date.Value <= DateTime.Now.AddDays(2))
+        {
+            return "soon";
+        }
+
+        return "normal";
+    }
+
+    string DueStatusText(DateTime? date, bool isSubmitted)
+    {
+        if (isSubmitted)
+        {
+            return "Teslim Edildi";
+        }
+
+        if (date == null)
+        {
+            return "Tarih Yok";
+        }
+
+        if (date.Value < DateTime.Now)
+        {
+            return "Süresi Geçti";
+        }
+
+        if (date.Value <= DateTime.Now.AddDays(2))
+        {
+            return "Yaklaşıyor";
+        }
+
+        return "Bekliyor";
+    }
+
+    int HomeworkPriority(mvc_web.Models.PortalHomeworkItem homework)
+    {
+        var isGraded = !string.IsNullOrWhiteSpace(homework.Grade) || !string.IsNullOrWhiteSpace(homework.Feedback);
+
+        if (!homework.IsSubmitted && homework.DueDate != null && homework.DueDate.Value < DateTime.Now)
+        {
+            return 0;
+        }
+
+        if (!homework.IsSubmitted && homework.DueDate != null && homework.DueDate.Value <= DateTime.Now.AddDays(2))
+        {
+            return 1;
+        }
+
+        if (!homework.IsSubmitted)
+        {
+            return 2;
+        }
+
+        return isGraded ? 4 : 3;
+    }
 }
 
-<div class="portal-page">
-    <div class="portal-shell">
-        <div class="portal-header">
-            <div class="portal-avatar" style="background:@color">
-                @icon
+<div class="portal-v2">
+    <section class="portal-v2-hero">
+        <div>
+            <div class="portal-v2-kicker">
+                @(isParent ? "Veli İzleme Paneli" : "Öğrenci Paneli")
             </div>
 
-            <div>
-                <h1>Hoş geldin, @Model.Name</h1>
-                <p>@Model.Role • No: @Model.Number</p>
+            <div class="portal-v2-title-row">
+                <div class="portal-v2-avatar">
+                    @(isParent ? "V" : "Ö")
+                </div>
+
+                <div>
+                    <h1>Hoş geldin, @Model.Name</h1>
+                    <p class="portal-v2-hero-text">
+                        @(isStudent
+                            ? "Ödevlerini, duyurularını, teslim durumunu ve öğretmen geri dönüşlerini bu panelden takip edebilirsin."
+                            : "Bağlı öğrencinin ödevlerini, teslim durumunu, notlarını ve öğretmen geri dönüşlerini bu panelden izleyebilirsin.")
+                    </p>
+                </div>
+            </div>
+
+            <div class="portal-v2-identity">
+                <span class="portal-v2-chip">@Model.Role</span>
+                <span class="portal-v2-chip">No: @Model.Number</span>
 
                 @if (!string.IsNullOrWhiteSpace(Model.ClassName))
                 {
-                    <p>Sınıf: @Model.ClassName</p>
+                    <span class="portal-v2-chip">Sınıf: @Model.ClassName</span>
                 }
 
-                @if (Model.Role == "Veli" && !string.IsNullOrWhiteSpace(Model.LinkedStudentNo))
+                @if (isParent && !string.IsNullOrWhiteSpace(Model.LinkedStudentNo))
                 {
-                    <p>Bağlı öğrenci no: @Model.LinkedStudentNo</p>
+                    <span class="portal-v2-chip">Bağlı öğrenci: @Model.LinkedStudentNo</span>
                 }
             </div>
-
-            <a asp-controller="Auth" asp-action="Logout" class="logout-btn">
-                Çıkış Yap
-            </a>
         </div>
 
-        @if (TempData["Success"] != null)
-        {
-            <div class="alert alert-success">
-                @TempData["Success"]
-            </div>
-        }
-
-        @if (TempData["Error"] != null)
-        {
-            <div class="alert alert-danger">
-                @TempData["Error"]
-            </div>
-        }
-
-        <div class="stats-grid">
-            <div class="stat-card">
-                <span>Rol</span>
-                <strong>@Model.Role</strong>
-            </div>
-
-            <div class="stat-card">
-                <span>Duyuru</span>
-                <strong>@Model.Announcements.Count</strong>
-            </div>
-
-            <div class="stat-card">
-                <span>Ödev</span>
-                <strong>@Model.Homeworks.Count</strong>
-            </div>
-        </div>
-
-        <div class="premium-insight-grid">
-            <div class="premium-insight-card" style="--card-accent: rgba(79,70,229,.13); --icon-bg: #eef2ff; --icon-color: #4338ca;">
-                <div class="premium-insight-top">
-                    <div class="premium-insight-icon">📌</div>
-                    <div>
-                        <strong>@Model.Homeworks.Count</strong>
-                        <span>Ödev özeti</span>
-                    </div>
-                </div>
-                <p>@submittedHomeworkCount teslim edildi, @pendingHomeworkCount ödev bekliyor.</p>
-            </div>
-
-            <div class="premium-insight-card" style="--card-accent: rgba(14,165,233,.14); --icon-bg: #e0f2fe; --icon-color: #0369a1;">
-                <div class="premium-insight-top">
-                    <div class="premium-insight-icon">🔔</div>
-                    <div>
-                        <strong>@Model.Announcements.Count</strong>
-                        <span>Duyuru merkezi</span>
-                    </div>
-                </div>
-                <p>Okuldan gelen duyurular ve sınıf bilgilendirmeleri burada listelenir.</p>
-            </div>
-
-            <div class="premium-insight-card" style="--card-accent: rgba(245,158,11,.16); --icon-bg: #fef3c7; --icon-color: #b45309;">
-                <div class="premium-insight-top">
-                    <div class="premium-insight-icon">⏱</div>
-                    <div>
-                        <strong>@(nextHomework?.DueDate?.ToString("dd.MM") ?? "-")</strong>
-                        <span>Sıradaki teslim</span>
-                    </div>
-                </div>
-                <p>@(nextHomework == null ? "Bekleyen teslim görünmüyor." : nextHomework.Title)</p>
-            </div>
-        </div>
-
-        <div class="portal-status-strip">
-            <div>
-                <strong>@submittedHomeworkCount / @Model.Homeworks.Count</strong>
+        <div>
+            <div class="portal-v2-progress-card">
+                <strong>%@progressPercent</strong>
                 <span>Teslim ilerlemesi</span>
+
+                <div class="portal-v2-progress-rail">
+                    <div class="portal-v2-progress-fill" style="--progress-percent: @progressPercent%;"></div>
+                </div>
             </div>
 
+            <div class="portal-v2-next-card">
+                <strong>@(nextHomework == null ? "Bekleyen teslim yok" : nextHomework.Title)</strong>
+                <span>
+                    @(nextHomework == null
+                        ? "Şu anda teslim bekleyen ödev görünmüyor."
+                        : $"Son tarih: {DateText(nextHomework.DueDate)}")
+                </span>
+            </div>
+        </div>
+    </section>
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="portal-v2-alert success">@TempData["Success"]</div>
+    }
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="portal-v2-alert error">@TempData["Error"]</div>
+    }
+
+    <section class="portal-v2-stat-grid">
+        <div class="portal-v2-stat-card">
+            <div class="portal-v2-stat-icon">D</div>
+            <div>
+                <strong>@Model.Announcements.Count</strong>
+                <span>Duyuru</span>
+            </div>
+        </div>
+
+        <div class="portal-v2-stat-card">
+            <div class="portal-v2-stat-icon">Ö</div>
+            <div>
+                <strong>@Model.Homeworks.Count</strong>
+                <span>Toplam Ödev</span>
+            </div>
+        </div>
+
+        <div class="portal-v2-stat-card">
+            <div class="portal-v2-stat-icon">T</div>
+            <div>
+                <strong>@submittedHomeworkCount</strong>
+                <span>Teslim Edilen</span>
+            </div>
+        </div>
+
+        <div class="portal-v2-stat-card">
+            <div class="portal-v2-stat-icon">B</div>
+            <div>
+                <strong>@pendingHomeworkCount</strong>
+                <span>Bekleyen</span>
+            </div>
+        </div>
+
+        <div class="portal-v2-stat-card">
+            <div class="portal-v2-stat-icon">!</div>
+            <div>
+                <strong>@lateHomeworkCount</strong>
+                <span>Süresi Geçen</span>
+            </div>
+        </div>
+
+        <div class="portal-v2-stat-card">
+            <div class="portal-v2-stat-icon">Y</div>
+            <div>
+                <strong>@soonHomeworkCount</strong>
+                <span>Yaklaşan</span>
+            </div>
+        </div>
+
+        <div class="portal-v2-stat-card">
+            <div class="portal-v2-stat-icon">N</div>
             <div>
                 <strong>@gradedHomeworkCount</strong>
-                <span>Not veya geri dönüş alan ödev</span>
-            </div>
-
-            <div>
-                <strong>@(isStudent ? "Teslim aktif" : "Veli izleme")</strong>
-                <span>@(isStudent ? "Ödev formları kullanılabilir." : "Öğrenci durumu görüntülenir.")</span>
+                <span>Notlandırılan</span>
             </div>
         </div>
+    </section>
 
-        <div class="section-title">Duyurular</div>
+    <section class="portal-v2-main-grid">
+        <div class="portal-v2-panel">
+            <div class="portal-v2-panel-head">
+                <div>
+                    <h2>Duyurular</h2>
+                    <p>Okuldan ve öğretmenlerden gelen bilgilendirmeler.</p>
+                </div>
 
-        @if (!Model.Announcements.Any())
-        {
-            <div class="empty-box">Henüz görüntülenecek duyuru yok.</div>
-        }
-        else
-        {
-            <div class="announcement-list">
-                @foreach (var item in Model.Announcements)
-                {
-                    <div class="announcement-card">
-                        <div class="announcement-top">
-                            <div class="announcement-icon">📢</div>
-
-                            <div>
-                                <h3>@item.Title</h3>
-                                <span>@item.Author • @item.Target • @(item.CreatedAt?.ToString("dd.MM.yyyy HH:mm") ?? "-")</span>
-                            </div>
-                        </div>
-
-                        <p>@item.Content</p>
-                    </div>
-                }
+                <span class="portal-v2-section-badge">@Model.Announcements.Count kayıt</span>
             </div>
-        }
 
-        <div class="section-title homework-title">Ödevler</div>
+            @if (!Model.Announcements.Any())
+            {
+                <div class="portal-v2-empty">Henüz görüntülenecek duyuru yok.</div>
+            }
+            else
+            {
+                <div class="portal-v2-announcement-list">
+                    @foreach (var item in Model.Announcements)
+                    {
+                        <article class="portal-v2-announcement-card">
+                            <div class="portal-v2-announcement-top">
+                                <div class="portal-v2-card-icon">D</div>
 
-        @if (!Model.Homeworks.Any())
-        {
-            <div class="empty-box">Henüz görüntülenecek ödev yok.</div>
-        }
-        else
-        {
-            <div class="homework-list">
-                @foreach (var homework in Model.Homeworks)
-                {
-                    <div class="homework-card">
-                        <div class="homework-top">
-                            <div>
-                                <h3>@homework.Title</h3>
+                                <div class="portal-v2-card-title">
+                                    <h3>@item.Title</h3>
+                                    <span>@SafeText(item.Author) - @SafeText(item.Target) - @DateText(item.CreatedAt)</span>
+                                </div>
 
-                                <span>
-                                    @homework.TeacherName • @homework.ClassName
-                                    @if (homework.DueDate != null)
-                                    {
-                                        <text> • Son tarih: @homework.DueDate?.ToString("dd.MM.yyyy HH:mm")</text>
-                                    }
-                                </span>
+                                <span class="portal-v2-status normal">Duyuru</span>
                             </div>
+
+                            <p class="portal-v2-card-content">@item.Content</p>
+                        </article>
+                    }
+                </div>
+            }
+        </div>
+
+        <div class="portal-v2-panel">
+            <div class="portal-v2-panel-head">
+                <div>
+                    <h2>Ödevler</h2>
+                    <p>@(isStudent ? "Ödevlerini teslim et, güncelle ve değerlendirmeleri takip et." : "Bağlı öğrencinin teslim ve değerlendirme durumunu takip et.")</p>
+                </div>
+
+                <span class="portal-v2-section-badge">@Model.Homeworks.Count kayıt</span>
+            </div>
+
+            <div class="portal-v2-homework-tools">
+                <input id="portalHomeworkSearch"
+                       class="portal-v2-homework-search"
+                       type="search"
+                       placeholder="Ödev, ders veya öğretmen ara..."
+                       autocomplete="off" />
+
+                <div class="portal-v2-filter-group" aria-label="Ödev filtresi">
+                    <button type="button" class="portal-v2-filter active" data-filter="all">Tümü</button>
+                    <button type="button" class="portal-v2-filter" data-filter="urgent">Acil</button>
+                    <button type="button" class="portal-v2-filter" data-filter="late">Süresi Geçen</button>
+                    <button type="button" class="portal-v2-filter" data-filter="pending">Bekleyen</button>
+                    <button type="button" class="portal-v2-filter" data-filter="submitted">Teslim</button>
+                    <button type="button" class="portal-v2-filter" data-filter="graded">Notlanan</button>
+                </div>
+
+                <div class="portal-v2-filter-selects">
+                    <select id="portalHomeworkLesson" class="portal-v2-filter-select" aria-label="Ders filtresi">
+                        <option value="">Tüm dersler</option>
+                        @foreach (var lesson in lessonOptions)
+                        {
+                            <option value="@lesson">@lesson</option>
+                        }
+                    </select>
+
+                    <select id="portalHomeworkTeacher" class="portal-v2-filter-select" aria-label="Öğretmen filtresi">
+                        <option value="">Tüm öğretmenler</option>
+                        @foreach (var teacher in teacherOptions)
+                        {
+                            <option value="@teacher">@teacher</option>
+                        }
+                    </select>
+                </div>
+            </div>
+
+            @if (!Model.Homeworks.Any())
+            {
+                <div class="portal-v2-empty">Henüz görüntülenecek ödev yok.</div>
+            }
+            else
+            {
+                <div class="portal-v2-homework-list">
+                    @foreach (var homework in orderedHomeworks)
+                    {
+                        var statusClass = DueStatusClass(homework.DueDate, homework.IsSubmitted);
+                        var statusText = DueStatusText(homework.DueDate, homework.IsSubmitted);
+                        var isGraded = !string.IsNullOrWhiteSpace(homework.Grade) || !string.IsNullOrWhiteSpace(homework.Feedback);
+                        var filterStatus = !homework.IsSubmitted ? "pending" : (isGraded ? "graded" : "submitted");
+                        var lessonText = SafeText(homework.LessonName, "");
+                        var hasTeacherAttachment = !string.IsNullOrWhiteSpace(homework.AttachmentFileUrl);
+
+                        <article class="portal-v2-homework-card"
+                                 data-status="@filterStatus"
+                                 data-urgency="@statusClass"
+                                 data-lesson="@homework.LessonName"
+                                 data-teacher="@homework.TeacherName"
+                                 data-search="@($"{homework.Title} {homework.Description} {homework.LessonName} {homework.TeacherName} {homework.ClassName} {statusText} {DateText(homework.DueDate)}")">
+                            <div class="portal-v2-homework-top">
+                                <div class="portal-v2-card-icon">Ö</div>
+
+                                <div class="portal-v2-card-title">
+                                    <h3>@homework.Title</h3>
+                                    <span>
+                                        @if (!string.IsNullOrWhiteSpace(lessonText))
+                                        {
+                                            <text>@lessonText - </text>
+                                        }
+                                        @SafeText(homework.TeacherName)
+                                        - @SafeText(homework.ClassName)
+                                        @if (homework.DueDate != null)
+                                        {
+                                            <text> - Son tarih: @DateText(homework.DueDate)</text>
+                                        }
+                                    </span>
+                                </div>
+
+                                <span class="portal-v2-status @statusClass">@statusText</span>
+                            </div>
+
+                            @if (!string.IsNullOrWhiteSpace(homework.Description) || hasTeacherAttachment)
+                            {
+                                <div class="portal-v2-teacher-note">
+                                    <div>
+                                        <strong>Öğretmen yönergesi</strong>
+                                        <p>@(string.IsNullOrWhiteSpace(homework.Description) ? "Bu ödev için ayrıca açıklama eklenmemiş." : homework.Description)</p>
+                                    </div>
+
+                                    @if (hasTeacherAttachment)
+                                    {
+                                        <a class="portal-v2-resource-link"
+                                           href="@homework.AttachmentFileUrl"
+                                           target="_blank"
+                                           rel="noopener noreferrer">
+                                            Öğretmen ekini aç
+                                        </a>
+                                    }
+                                </div>
+                            }
 
                             @if (homework.IsSubmitted)
                             {
-                                <span class="submitted-badge">Teslim Edildi</span>
+                                <div class="portal-v2-detail-grid">
+                                    <div class="portal-v2-submission-box">
+                                        <strong>@(isParent ? "Öğrenci teslimi" : "Senin teslimin")</strong>
+
+                                        @if (!string.IsNullOrWhiteSpace(homework.SubmissionText))
+                                        {
+                                            <div class="portal-v2-answer-text">@homework.SubmissionText</div>
+                                        }
+
+                                        @if (!string.IsNullOrWhiteSpace(homework.SubmissionFileUrl))
+                                        {
+                                            <a class="portal-v2-student-file-link"
+                                               href="@homework.SubmissionFileUrl"
+                                               target="_blank"
+                                               rel="noopener noreferrer">
+                                                Teslim dosyasını aç
+                                            </a>
+                                        }
+
+                                        <span>Teslim tarihi: @DateText(homework.SubmittedAt)</span>
+                                    </div>
+
+                                    @if (isGraded)
+                                    {
+                                        <div class="portal-v2-grade-box">
+                                            <strong>Değerlendirme</strong>
+                                            <div><b>Not:</b> @(string.IsNullOrWhiteSpace(homework.Grade) ? "-" : homework.Grade)</div>
+                                            <div><b>Geri dönüş:</b> @(string.IsNullOrWhiteSpace(homework.Feedback) ? "-" : homework.Feedback)</div>
+                                            <span>Değerlendirme tarihi: @DateText(homework.EvaluatedAt)</span>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="portal-v2-waiting-box">Öğretmen henüz değerlendirme yapmadı.</div>
+                                    }
+                                </div>
+                            }
+
+                            @if (isStudent)
+                            {
+                                <details class="portal-v2-action-details">
+                                    <summary>@(homework.IsSubmitted ? "Teslimini düzenle" : "Teslim alanını aç")</summary>
+
+                                    <form asp-controller="Portal"
+                                          asp-action="SubmitHomework"
+                                          method="post"
+                                          enctype="multipart/form-data"
+                                          class="portal-v2-submit-form">
+
+                                        @Html.AntiForgeryToken()
+
+                                        <input type="hidden" name="homeworkId" value="@homework.Id" />
+                                        <input type="hidden" name="homeworkCollection" value="@homework.CollectionName" />
+
+                                        <label>Senin cevabın / açıklaman</label>
+                                        <textarea name="answerText" placeholder="Teslim açıklamanı veya cevabını yaz...">@homework.SubmissionText</textarea>
+
+                                        <label>Senin teslim dosyan</label>
+                                        <div class="portal-v2-file-box">
+                                            <label class="portal-v2-file-label">
+                                                <input type="file"
+                                                       name="file"
+                                                       class="portal-v2-file-input"
+                                                       accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.txt,.zip" />
+
+                                                <div class="portal-v2-file-text">
+                                                    <strong>Teslim dosyası seç</strong>
+                                                    <span>PDF, Word, görsel, TXT veya ZIP yükleyebilirsin.</span>
+                                                </div>
+
+                                                <div class="portal-v2-file-button">Dosya Seç</div>
+                                            </label>
+
+                                            <div class="portal-v2-file-selected">
+                                                <span class="portal-v2-file-name">Henüz dosya seçilmedi</span>
+                                                <button type="button" class="portal-v2-file-clear">Kaldır</button>
+                                            </div>
+                                        </div>
+
+                                        <button type="submit" class="portal-v2-submit-button">
+                                            @(homework.IsSubmitted ? "Teslimi Güncelle" : "Ödevi Teslim Et")
+                                        </button>
+                                    </form>
+                                </details>
                             }
                             else
                             {
-                                <span class="pending-badge">Bekliyor</span>
-                            }
-                        </div>
-
-                        <p>@homework.Description</p>
-
-                        @if (homework.IsSubmitted)
-                        {
-                            <div class="submission-box">
-                                <strong>Teslim bilgisi:</strong>
-
-                                @if (!string.IsNullOrWhiteSpace(homework.SubmissionText))
-                                {
-                                    <div>@homework.SubmissionText</div>
-                                }
-
-                                @if (!string.IsNullOrWhiteSpace(homework.SubmissionFileUrl))
-                                {
-                                    <a href="@homework.SubmissionFileUrl" target="_blank">
-                                        Dosyayı Aç
-                                    </a>
-                                }
-
-                                <span>
-                                    Teslim tarihi: @(homework.SubmittedAt?.ToString("dd.MM.yyyy HH:mm") ?? "-")
-                                </span>
-
-                                @if (!string.IsNullOrWhiteSpace(homework.Grade) || !string.IsNullOrWhiteSpace(homework.Feedback))
-                                {
-                                    <div class="grade-box">
-                                        <strong>Değerlendirme:</strong>
-
-                                        <div>
-                                            <b>Not:</b> @(string.IsNullOrWhiteSpace(homework.Grade) ? "-" : homework.Grade)
-                                        </div>
-
-                                        <div>
-                                            <b>Geri dönüş:</b> @(string.IsNullOrWhiteSpace(homework.Feedback) ? "-" : homework.Feedback)
-                                        </div>
-
-                                        <span>
-                                            Değerlendirme tarihi: @(homework.EvaluatedAt?.ToString("dd.MM.yyyy HH:mm") ?? "-")
-                                        </span>
-                                    </div>
-                                }
-                                else
-                                {
-                                    <div class="waiting-grade-box">
-                                        Öğretmen henüz değerlendirme yapmadı.
-                                    </div>
-                                }
-                            </div>
-                        }
-
-                        @if (isStudent)
-                        {
-                            <form asp-controller="Portal"
-                                  asp-action="SubmitHomework"
-                                  method="post"
-                                  enctype="multipart/form-data"
-                                  class="submit-form">
-
-                                @Html.AntiForgeryToken()
-
-                                <input type="hidden" name="homeworkId" value="@homework.Id" />
-                                <input type="hidden" name="homeworkCollection" value="@homework.CollectionName" />
-
-                                <label>Cevap / Açıklama</label>
-                                <textarea name="answerText" placeholder="Ödev açıklamanızı yazın...">@homework.SubmissionText</textarea>
-
-                                <label>Dosya Yükle</label>
-
-                                <div class="lux-file-upload">
-                                    <label class="lux-file-label">
-                                        <input type="file"
-                                               name="file"
-                                               class="lux-file-input"
-                                               accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.txt,.zip" />
-
-                                        <div class="lux-file-icon">
-                                            📎
-                                        </div>
-
-                                        <div class="lux-file-content">
-                                            <strong>Dosya seç veya buraya tıkla</strong>
-                                            <span>PDF, Word, görsel, TXT veya ZIP yükleyebilirsin.</span>
-                                        </div>
-
-                                        <div class="lux-file-button">
-                                            Dosya Seç
-                                        </div>
-                                    </label>
-
-                                    <div class="lux-file-selected">
-                                        <span class="lux-file-name">Henüz dosya seçilmedi</span>
-
-                                        <button type="button" class="lux-file-clear">
-                                            Kaldır
-                                        </button>
-                                    </div>
+                                <div class="portal-v2-parent-box">
+                                    Veli hesabı ödev teslim edemez. Sadece bağlı öğrencinin teslim durumunu, notunu ve öğretmen geri dönüşünü görüntüler.
                                 </div>
-
-                                <button type="submit">
-                                    @(homework.IsSubmitted ? "Teslimi Güncelle" : "Ödev Teslim Et")
-                                </button>
-                            </form>
-                        }
-                        else
-                        {
-                            <div class="parent-info">
-                                Veli hesabı ödev teslim edemez, sadece bağlı öğrencinin teslim durumunu, notunu ve geri dönüşünü görüntüler.
-                            </div>
-                        }
-                    </div>
-                }
-            </div>
-        }
-    </div>
+                            }
+                        </article>
+                    }
+                </div>
+                <div id="portalHomeworkNoResult" class="portal-v2-empty" style="display:none;">Aradığınız kritere uygun ödev bulunamadı.</div>
+            }
+        </div>
+    </section>
 </div>
-
-<style>
-    .portal-page {
-        min-height: 100vh;
-        background:
-            radial-gradient(circle at 14% 8%, rgba(79, 70, 229, .20), transparent 30%),
-            radial-gradient(circle at 88% 18%, rgba(14, 165, 233, .18), transparent 28%),
-            radial-gradient(circle at 50% 100%, rgba(16, 185, 129, .10), transparent 30%),
-            linear-gradient(180deg, #eef3f9 0%, #e7edf5 100%);
-        padding: 24px;
-    }
-
-    .portal-shell {
-        max-width: 1100px;
-        margin: 0 auto;
-    }
-
-    .portal-header {
-        position: relative;
-        overflow: hidden;
-        background:
-            linear-gradient(135deg, rgba(255,255,255,.98), rgba(248,250,252,.90)),
-            radial-gradient(circle at 86% 15%, rgba(79,70,229,.17), transparent 30%);
-        border: 1px solid rgba(203,213,225,.92);
-        border-radius: 30px;
-        padding: 28px;
-        display: flex;
-        align-items: center;
-        gap: 18px;
-        box-shadow: 0 28px 76px rgba(15,23,42,.13);
-        margin-bottom: 18px;
-    }
-
-    .portal-header::after {
-        content: "";
-        position: absolute;
-        right: -70px;
-        bottom: -95px;
-        width: 260px;
-        height: 260px;
-        border-radius: 50%;
-        background: rgba(79,70,229,.08);
-        pointer-events: none;
-    }
-
-    .portal-avatar {
-        width: 70px;
-        height: 70px;
-        border-radius: 22px;
-        color: #fff;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 34px;
-        box-shadow: 0 18px 34px rgba(79,70,229,.26);
-        flex: 0 0 auto;
-    }
-
-    .portal-header h1 {
-        margin: 0;
-        color: #111827;
-        font-size: 31px;
-        line-height: 1.08;
-        font-weight: 900;
-        letter-spacing: 0;
-    }
-
-    .portal-header p {
-        margin: 4px 0 0;
-        color: #64748b;
-        font-weight: 800;
-    }
-
-    .logout-btn {
-        position: relative;
-        z-index: 1;
-        margin-left: auto;
-        background: #fff1f2;
-        color: #991b1b;
-        text-decoration: none;
-        padding: 13px 18px;
-        border-radius: 16px;
-        font-weight: 900;
-        border: 1px solid #fecdd3;
-        transition: .18s ease;
-    }
-
-    .logout-btn:hover {
-        transform: translateY(-1px);
-        background: #ffe4e6;
-    }
-
-    .alert {
-        padding: 14px 18px;
-        border-radius: 18px;
-        margin-bottom: 18px;
-        font-weight: 800;
-    }
-
-    .alert-success {
-        background: #dcfce7;
-        color: #166534;
-    }
-
-    .alert-danger {
-        background: #fee2e2;
-        color: #991b1b;
-    }
-
-    .stats-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-        gap: 16px;
-        margin-bottom: 24px;
-    }
-
-    .stat-card {
-        position: relative;
-        overflow: hidden;
-        background:
-            linear-gradient(135deg, rgba(255,255,255,.98), rgba(248,250,252,.92));
-        border: 1px solid #cbd5e1;
-        border-radius: 24px;
-        padding: 20px 22px;
-        box-shadow: 0 20px 50px rgba(15,23,42,.10);
-    }
-
-    .stat-card::before {
-        content: "";
-        position: absolute;
-        inset: 0 auto 0 0;
-        width: 5px;
-        background: linear-gradient(180deg, #4f46e5, #06b6d4);
-    }
-
-    .stat-card::after {
-        content: "";
-        position: absolute;
-        right: 18px;
-        top: 18px;
-        width: 42px;
-        height: 42px;
-        border-radius: 16px;
-        background: linear-gradient(135deg, rgba(79,70,229,.12), rgba(6,182,212,.12));
-    }
-
-    .stat-card span {
-        display: block;
-        color: #64748b;
-        font-weight: 800;
-        margin-bottom: 8px;
-    }
-
-    .stat-card strong {
-        color: #111827;
-        font-size: 28px;
-        font-weight: 900;
-        position: relative;
-        z-index: 1;
-    }
-
-    .section-title {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        font-size: 26px;
-        font-weight: 900;
-        color: #111827;
-        margin: 18px 0 14px;
-    }
-
-    .section-title::before {
-        content: "";
-        width: 11px;
-        height: 28px;
-        border-radius: 999px;
-        background: linear-gradient(180deg, #4f46e5, #06b6d4);
-    }
-
-    .homework-title {
-        margin-top: 30px;
-    }
-
-    .announcement-list,
-    .homework-list {
-        display: grid;
-        gap: 16px;
-    }
-
-    .announcement-card,
-    .homework-card {
-        position: relative;
-        overflow: hidden;
-        background:
-            linear-gradient(135deg, rgba(255,255,255,.98), rgba(248,250,252,.93));
-        border: 1px solid #cbd5e1;
-        border-radius: 26px;
-        padding: 22px;
-        box-shadow: 0 20px 50px rgba(15,23,42,.10);
-        transition: .18s ease;
-    }
-
-    .announcement-card::before,
-    .homework-card::before {
-        content: "";
-        position: absolute;
-        inset: 0 auto 0 0;
-        width: 6px;
-        background: linear-gradient(180deg, #4f46e5, #06b6d4);
-    }
-
-    .announcement-card:hover,
-    .homework-card:hover {
-        transform: translateY(-2px);
-        border-color: #a5b4fc;
-        box-shadow: 0 26px 62px rgba(15,23,42,.13);
-    }
-
-    .announcement-top,
-    .homework-top {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 14px;
-        margin-bottom: 12px;
-    }
-
-    .announcement-icon {
-        width: 52px;
-        height: 52px;
-        border-radius: 18px;
-        background: linear-gradient(135deg, #eef2ff, #ecfeff);
-        color: #4338ca;
-        box-shadow: inset 0 0 0 1px rgba(199,210,254,.75);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 24px;
-    }
-
-    .announcement-card h3,
-    .homework-card h3 {
-        margin: 0;
-        color: #111827;
-        font-weight: 900;
-    }
-
-    .announcement-card span,
-    .homework-card span {
-        color: #64748b;
-        font-weight: 700;
-    }
-
-    .announcement-card p,
-    .homework-card p {
-        color: #334155;
-        font-weight: 700;
-        line-height: 1.5;
-    }
-
-    .submitted-badge,
-    .pending-badge {
-        border-radius: 999px;
-        padding: 9px 13px;
-        font-weight: 900;
-        white-space: nowrap;
-        border: 1px solid transparent;
-    }
-
-    .submitted-badge {
-        background: #dcfce7;
-        color: #166534;
-        border-color: #bbf7d0;
-    }
-
-    .pending-badge {
-        background: #ffedd5;
-        color: #c2410c;
-        border-color: #fed7aa;
-    }
-
-    .submission-box {
-        background: linear-gradient(135deg, #ecfdf5, #f0fdf4);
-        color: #047857;
-        border-radius: 18px;
-        padding: 14px;
-        border: 1px solid #bbf7d0;
-        display: grid;
-        gap: 8px;
-        font-weight: 800;
-        margin: 14px 0;
-    }
-
-    .submission-box a {
-        color: #0369a1;
-        font-weight: 900;
-    }
-
-    .grade-box {
-        background: #eef2ff;
-        color: #3730a3;
-        border-radius: 16px;
-        padding: 14px;
-        border: 1px solid #c7d2fe;
-        display: grid;
-        gap: 6px;
-        margin-top: 10px;
-        font-weight: 800;
-    }
-
-    .grade-box strong {
-        color: #312e81;
-    }
-
-    .waiting-grade-box {
-        background: #ffedd5;
-        color: #9a3412;
-        border-radius: 16px;
-        padding: 12px 14px;
-        margin-top: 10px;
-        font-weight: 900;
-        border: 1px solid #fed7aa;
-    }
-
-    .submit-form {
-        margin-top: 16px;
-        display: grid;
-        gap: 10px;
-    }
-
-    .submit-form label {
-        color: #111827;
-        font-weight: 900;
-    }
-
-    .submit-form textarea {
-        width: 100%;
-        min-height: 110px;
-        border: 1px solid #cbd5e1;
-        border-radius: 18px;
-        padding: 14px;
-        font-weight: 700;
-        resize: vertical;
-    }
-
-    .submit-form button {
-        border: 0;
-        background: linear-gradient(135deg, #4f46e5, #06b6d4);
-        color: #fff;
-        border-radius: 18px;
-        min-height: 52px;
-        font-weight: 900;
-        cursor: pointer;
-    }
-
-    .submit-form button:hover {
-        box-shadow: 0 16px 32px rgba(79, 70, 229, .18);
-        transform: translateY(-1px);
-    }
-
-    .lux-file-upload {
-        display: grid;
-        gap: 10px;
-    }
-
-    .lux-file-label {
-        border: 2px dashed #c7d2fe;
-        background:
-            radial-gradient(circle at top left, rgba(79, 70, 229, .10), transparent 35%),
-            linear-gradient(135deg, #f8fafc, #eef2ff);
-        border-radius: 22px;
-        padding: 18px;
-        display: grid;
-        grid-template-columns: 54px 1fr auto;
-        align-items: center;
-        gap: 14px;
-        cursor: pointer;
-        transition: .18s ease;
-    }
-
-    .lux-file-label:hover {
-        border-color: #4f46e5;
-        background:
-            radial-gradient(circle at top left, rgba(79, 70, 229, .16), transparent 35%),
-            linear-gradient(135deg, #ffffff, #eef2ff);
-        transform: translateY(-1px);
-        box-shadow: 0 16px 34px rgba(79, 70, 229, .14);
-    }
-
-    .lux-file-label.has-file {
-        border-color: #10b981;
-        background:
-            radial-gradient(circle at top left, rgba(16, 185, 129, .12), transparent 35%),
-            linear-gradient(135deg, #f8fafc, #ecfdf5);
-    }
-
-    .lux-file-input {
-        display: none !important;
-    }
-
-    .lux-file-icon {
-        width: 54px;
-        height: 54px;
-        border-radius: 18px;
-        background: #4f46e5;
-        color: #fff;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 26px;
-        box-shadow: 0 12px 24px rgba(79, 70, 229, .25);
-    }
-
-    .lux-file-label.has-file .lux-file-icon {
-        background: #10b981;
-        box-shadow: 0 12px 24px rgba(16, 185, 129, .25);
-    }
-
-    .lux-file-content {
-        display: grid;
-        gap: 4px;
-    }
-
-    .lux-file-content strong {
-        color: #111827;
-        font-size: 16px;
-        font-weight: 900;
-    }
-
-    .lux-file-content span {
-        color: #64748b;
-        font-size: 13px;
-        font-weight: 800;
-    }
-
-    .lux-file-button {
-        background: #4f46e5;
-        color: #fff;
-        border-radius: 16px;
-        padding: 12px 16px;
-        font-weight: 900;
-        white-space: nowrap;
-    }
-
-    .lux-file-label.has-file .lux-file-button {
-        background: #10b981;
-    }
-
-    .lux-file-selected {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-        background: #f8fafc;
-        border: 1px solid #e5e7eb;
-        border-radius: 18px;
-        padding: 12px 14px;
-    }
-
-    .lux-file-name {
-        color: #334155;
-        font-weight: 900;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-
-    .lux-file-clear {
-        border: 0;
-        background: #fee2e2;
-        color: #991b1b;
-        border-radius: 14px;
-        padding: 9px 12px;
-        font-weight: 900;
-        cursor: pointer;
-        display: none;
-    }
-
-    .lux-file-clear.show {
-        display: inline-flex;
-    }
-
-    .lux-file-clear:hover {
-        background: #fecaca;
-    }
-
-    .parent-info {
-        background: linear-gradient(135deg, #fff7ed, #fffbeb);
-        color: #9a3412;
-        border-radius: 18px;
-        padding: 14px;
-        font-weight: 800;
-        margin-top: 14px;
-        border: 1px solid #fed7aa;
-    }
-
-    .empty-box {
-        position: relative;
-        overflow: hidden;
-        background:
-            linear-gradient(135deg, rgba(255,255,255,.94), rgba(248,250,252,.90)),
-            radial-gradient(circle at 8% 0%, rgba(79,70,229,.12), transparent 30%);
-        border: 1px dashed rgba(99,102,241,.44);
-        border-radius: 24px;
-        padding: 34px 28px 34px 92px;
-        text-align: center;
-        color: #64748b;
-        font-weight: 800;
-        min-height: 92px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        box-shadow: 0 20px 50px rgba(15,23,42,.08);
-    }
-
-    .empty-box::before {
-        content: "";
-        position: absolute;
-        left: 28px;
-        width: 44px;
-        height: 44px;
-        border-radius: 16px;
-        background:
-            linear-gradient(135deg, #4f46e5, #06b6d4);
-        box-shadow: 0 14px 30px rgba(79,70,229,.20);
-    }
-
-    .empty-box::after {
-        content: "";
-        position: absolute;
-        left: 43px;
-        width: 14px;
-        height: 14px;
-        border-radius: 5px;
-        background: #fff;
-    }
-
-    @@media (max-width: 680px) {
-        .portal-page {
-            padding: 16px;
-        }
-
-        .portal-header {
-            flex-direction: column;
-            align-items: flex-start;
-            padding: 22px;
-        }
-
-        .portal-header h1 {
-            font-size: 25px;
-        }
-
-        .logout-btn {
-            margin-left: 0;
-            width: 100%;
-            text-align: center;
-        }
-
-        .homework-top {
-            flex-direction: column;
-            align-items: flex-start;
-        }
-
-        .lux-file-label {
-            grid-template-columns: 1fr;
-            text-align: center;
-        }
-
-        .lux-file-icon {
-            margin: 0 auto;
-        }
-
-        .lux-file-button {
-            width: 100%;
-            text-align: center;
-        }
-
-        .lux-file-selected {
-            flex-direction: column;
-            align-items: stretch;
-        }
-
-        .lux-file-clear {
-            justify-content: center;
-        }
-
-        .empty-box {
-            padding: 80px 20px 24px;
-        }
-
-        .empty-box::before {
-            left: 50%;
-            top: 24px;
-            transform: translateX(-50%);
-        }
-
-        .empty-box::after {
-            left: 50%;
-            top: 39px;
-            transform: translateX(-50%);
-        }
-    }
-</style>
 
 @section Scripts {
     <script>
-        document.querySelectorAll(".lux-file-upload").forEach(upload => {
-            const input = upload.querySelector(".lux-file-input");
-            const fileName = upload.querySelector(".lux-file-name");
-            const clearBtn = upload.querySelector(".lux-file-clear");
-            const label = upload.querySelector(".lux-file-label");
+        document.addEventListener("change", function (event) {
+            const input = event.target.closest(".portal-v2-file-input");
 
-            input.addEventListener("change", function () {
-                if (this.files && this.files.length > 0) {
-                    fileName.textContent = this.files[0].name;
-                    clearBtn.classList.add("show");
-                    label.classList.add("has-file");
-                } else {
-                    fileName.textContent = "Henüz dosya seçilmedi";
-                    clearBtn.classList.remove("show");
-                    label.classList.remove("has-file");
+            if (!input) {
+                return;
+            }
+
+            const box = input.closest(".portal-v2-file-box");
+            const selected = box?.querySelector(".portal-v2-file-selected");
+            const name = box?.querySelector(".portal-v2-file-name");
+
+            if (!selected || !name) {
+                return;
+            }
+
+            if (input.files && input.files.length > 0) {
+                name.textContent = input.files[0].name;
+                selected.classList.add("active");
+            } else {
+                name.textContent = "Henüz dosya seçilmedi";
+                selected.classList.remove("active");
+            }
+        });
+
+        document.addEventListener("click", function (event) {
+            const clearButton = event.target.closest(".portal-v2-file-clear");
+
+            if (!clearButton) {
+                return;
+            }
+
+            const box = clearButton.closest(".portal-v2-file-box");
+            const input = box?.querySelector(".portal-v2-file-input");
+            const selected = box?.querySelector(".portal-v2-file-selected");
+            const name = box?.querySelector(".portal-v2-file-name");
+
+            if (input) {
+                input.value = "";
+            }
+
+            if (name) {
+                name.textContent = "Henüz dosya seçilmedi";
+            }
+
+            if (selected) {
+                selected.classList.remove("active");
+            }
+        });
+
+        const portalHomeworkSearch = document.getElementById("portalHomeworkSearch");
+        const portalHomeworkLesson = document.getElementById("portalHomeworkLesson");
+        const portalHomeworkTeacher = document.getElementById("portalHomeworkTeacher");
+        const portalHomeworkCards = Array.from(document.querySelectorAll(".portal-v2-homework-card"));
+        const portalHomeworkFilters = Array.from(document.querySelectorAll(".portal-v2-filter"));
+        const portalHomeworkNoResult = document.getElementById("portalHomeworkNoResult");
+        let portalHomeworkFilter = "all";
+
+        function normalizePortalText(value) {
+            return (value || "")
+                .toString()
+                .toLocaleLowerCase("tr-TR")
+                .replaceAll("ı", "i")
+                .replaceAll("ğ", "g")
+                .replaceAll("ü", "u")
+                .replaceAll("ş", "s")
+                .replaceAll("ö", "o")
+                .replaceAll("ç", "c")
+                .replaceAll("İ", "i")
+                .trim();
+        }
+
+        function filterPortalHomeworks() {
+            const query = normalizePortalText(portalHomeworkSearch?.value || "");
+            const lesson = normalizePortalText(portalHomeworkLesson?.value || "");
+            const teacher = normalizePortalText(portalHomeworkTeacher?.value || "");
+            let visibleCount = 0;
+
+            portalHomeworkCards.forEach(card => {
+                const searchable = normalizePortalText(card.dataset.search || "");
+                const status = card.dataset.status || "";
+                const urgency = card.dataset.urgency || "";
+                const cardLesson = normalizePortalText(card.dataset.lesson || "");
+                const cardTeacher = normalizePortalText(card.dataset.teacher || "");
+                const matchesQuery = query === "" || searchable.includes(query);
+                const matchesLesson = lesson === "" || cardLesson === lesson;
+                const matchesTeacher = teacher === "" || cardTeacher === teacher;
+                const matchesStatus =
+                    portalHomeworkFilter === "all" ||
+                    status === portalHomeworkFilter ||
+                    (portalHomeworkFilter === "urgent" && (urgency === "late" || urgency === "soon")) ||
+                    (portalHomeworkFilter === "late" && urgency === "late");
+                const show = matchesQuery && matchesLesson && matchesTeacher && matchesStatus;
+
+                card.style.display = show ? "" : "none";
+
+                if (show) {
+                    visibleCount++;
                 }
             });
 
-            clearBtn.addEventListener("click", function () {
-                input.value = "";
-                fileName.textContent = "Henüz dosya seçilmedi";
-                clearBtn.classList.remove("show");
-                label.classList.remove("has-file");
+            if (portalHomeworkNoResult) {
+                portalHomeworkNoResult.style.display = visibleCount === 0 ? "grid" : "none";
+            }
+        }
+
+        if (portalHomeworkSearch) {
+            portalHomeworkSearch.addEventListener("input", filterPortalHomeworks);
+            portalHomeworkSearch.addEventListener("keydown", function (event) {
+                if (event.key === "Enter") {
+                    event.preventDefault();
+                }
+            });
+        }
+
+        [portalHomeworkLesson, portalHomeworkTeacher].forEach(select => {
+            if (select) {
+                select.addEventListener("change", filterPortalHomeworks);
+            }
+        });
+
+        portalHomeworkFilters.forEach(button => {
+            button.addEventListener("click", function () {
+                portalHomeworkFilter = button.dataset.filter || "all";
+                portalHomeworkFilters.forEach(item => item.classList.toggle("active", item === button));
+                filterPortalHomeworks();
             });
         });
+
+        filterPortalHomeworks();
     </script>
 }
+

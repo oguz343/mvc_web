@@ -4,6 +4,8 @@
 @{
     Layout = "_AdminLayout";
     ViewData["Title"] = "Kontrol Paneli";
+    ViewData["PageTitle"] = "Kontrol Paneli";
+    ViewData["PageSubtitle"] = "Okul sisteminin genel durumunu, kullanıcıları, dersleri, teslimleri ve güvenlik akışını tek ekrandan takip edin.";
 
     int GetInt(params string[] keys)
     {
@@ -91,30 +93,686 @@
     var passwordRequestCount = GetInt("PasswordRequestCount", "PasswordRequestsCount", "SifreTalebiCount", "SifreTalepSayisi");
 
     var recentUsers = GetRecentUsers();
+
     var totalUserCount = studentCount + teacherCount + parentCount;
-    var setupCount = classCount + lessonCount;
-    var visibleSchoolFlow = submissionCount + announcementCount;
-    var userBalanceText = totalUserCount > 0
-        ? $"{studentCount} öğrenci, {teacherCount} öğretmen, {parentCount} veli"
-        : "Kullanıcı eklenince dağılım burada görünür.";
-    var securityText = passwordRequestCount > 0
-        ? $"{passwordRequestCount} şifre talebi bekliyor."
-        : "Açık şifre talebi yok.";
+    var totalSetupCount = classCount + lessonCount;
+    var activeFlowCount = submissionCount + announcementCount;
+    var completionPercent = totalSetupCount <= 0
+        ? 0
+        : Math.Min(100, Math.Round(((double)activeFlowCount / Math.Max(1, totalSetupCount + activeFlowCount)) * 100));
+
+    string SafeText(string value, string fallback = "-")
+    {
+        return string.IsNullOrWhiteSpace(value) ? fallback : value;
+    }
+
+    string RoleClass(string role)
+    {
+        role = (role ?? "").Trim().ToLowerInvariant();
+
+        return role switch
+        {
+            "admin" or "yönetici" or "yonetici" => "admin",
+            "öğretmen" or "ogretmen" or "teacher" => "teacher",
+            "öğrenci" or "ogrenci" or "student" => "student",
+            "veli" or "parent" => "parent",
+            _ => "default"
+        };
+    }
 }
+
+<style>
+    .dash-page {
+        width: 100%;
+        max-width: none;
+        display: grid;
+        gap: 18px;
+    }
+
+    .dash-hero {
+        position: relative;
+        overflow: hidden;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 360px;
+        gap: 18px;
+        padding: 24px;
+        border-radius: 30px;
+        color: #ffffff;
+        background:
+            radial-gradient(circle at 8% 0%, rgba(56, 189, 248, .18), transparent 34%),
+            radial-gradient(circle at 98% 4%, rgba(139, 92, 246, .20), transparent 34%),
+            linear-gradient(135deg, rgba(15, 23, 42, .95), rgba(16, 24, 45, .90));
+        border: 1px solid rgba(148, 163, 184, .20);
+        box-shadow: 0 24px 70px rgba(0, 0, 0, .28);
+        backdrop-filter: blur(18px);
+    }
+
+    .dash-hero::after {
+        content: "";
+        position: absolute;
+        width: 360px;
+        height: 360px;
+        right: -160px;
+        top: -180px;
+        border-radius: 999px;
+        background: rgba(99, 102, 241, .24);
+        filter: blur(4px);
+        pointer-events: none;
+    }
+
+    .dash-hero-main,
+    .dash-hero-side {
+        position: relative;
+        z-index: 1;
+    }
+
+    .dash-kicker {
+        width: fit-content;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 30px;
+        padding: 0 12px;
+        border-radius: 999px;
+        color: #67e8f9;
+        background: rgba(56, 189, 248, .10);
+        border: 1px solid rgba(103, 232, 249, .20);
+        font-size: 11px;
+        font-weight: 950;
+        letter-spacing: .16em;
+        text-transform: uppercase;
+    }
+
+    .dash-hero h2 {
+        max-width: 820px;
+        margin: 14px 0 0;
+        color: #ffffff;
+        font-size: clamp(34px, 4vw, 62px);
+        font-weight: 950;
+        line-height: .98;
+        letter-spacing: -.065em;
+    }
+
+    .dash-hero p {
+        max-width: 740px;
+        margin: 14px 0 0;
+        color: #aab8cf;
+        font-size: 15px;
+        font-weight: 700;
+        line-height: 1.65;
+    }
+
+    .dash-hero-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 20px;
+    }
+
+    .dash-action-primary,
+    .dash-action-soft {
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 15px;
+        border-radius: 15px;
+        text-decoration: none;
+        font-size: 13px;
+        font-weight: 950;
+        transition: .16s ease;
+    }
+
+    .dash-action-primary {
+        color: #ffffff;
+        background: linear-gradient(135deg, #2563eb, #7c3aed);
+        border: 1px solid rgba(125, 211, 252, .22);
+        box-shadow: 0 14px 30px rgba(37, 99, 235, .25);
+    }
+
+    .dash-action-soft {
+        color: #dbeafe;
+        background: rgba(255, 255, 255, .060);
+        border: 1px solid rgba(148, 163, 184, .18);
+    }
+
+    .dash-action-primary:hover,
+    .dash-action-soft:hover {
+        transform: translateY(-1px);
+    }
+
+    .dash-hero-side {
+        display: grid;
+        gap: 12px;
+    }
+
+    .dash-big-meter {
+        min-height: 168px;
+        padding: 18px;
+        border-radius: 24px;
+        background:
+            radial-gradient(circle at 100% 0%, rgba(56, 189, 248, .18), transparent 34%),
+            rgba(255, 255, 255, .060);
+        border: 1px solid rgba(148, 163, 184, .18);
+    }
+
+    .dash-big-meter strong {
+        display: block;
+        color: #ffffff;
+        font-size: 46px;
+        font-weight: 950;
+        line-height: 1;
+        letter-spacing: -.05em;
+    }
+
+    .dash-big-meter span {
+        display: block;
+        margin-top: 7px;
+        color: #aab8cf;
+        font-size: 13px;
+        font-weight: 800;
+    }
+
+    .dash-meter-line {
+        height: 10px;
+        margin-top: 20px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: rgba(148, 163, 184, .16);
+    }
+
+    .dash-meter-fill {
+        width: @completionPercent%;
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(135deg, #38bdf8, #6366f1);
+    }
+
+    .dash-mini-status {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    .dash-mini-status div {
+        min-height: 82px;
+        padding: 13px;
+        border-radius: 20px;
+        background: rgba(255, 255, 255, .052);
+        border: 1px solid rgba(148, 163, 184, .15);
+    }
+
+    .dash-mini-status strong {
+        display: block;
+        color: #ffffff;
+        font-size: 24px;
+        font-weight: 950;
+        line-height: 1;
+    }
+
+    .dash-mini-status span {
+        display: block;
+        margin-top: 6px;
+        color: #94a3b8;
+        font-size: 12px;
+        font-weight: 800;
+    }
+
+    .dash-stats-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(180px, 1fr));
+        gap: 14px;
+    }
+
+    .dash-stat-card {
+        position: relative;
+        overflow: hidden;
+        min-height: 118px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 18px;
+        border-radius: 24px;
+        color: #ffffff;
+        text-decoration: none;
+        background:
+            radial-gradient(circle at 100% 0%, var(--stat-glow), transparent 42%),
+            linear-gradient(135deg, rgba(17, 25, 46, .94), rgba(15, 23, 42, .86));
+        border: 1px solid rgba(148, 163, 184, .18);
+        box-shadow: 0 16px 40px rgba(0, 0, 0, .20);
+        transition: .16s ease;
+    }
+
+    .dash-stat-card:hover {
+        transform: translateY(-2px);
+        border-color: rgba(125, 211, 252, .28);
+        box-shadow: 0 22px 54px rgba(0, 0, 0, .26);
+    }
+
+    .dash-stat-icon {
+        width: 54px;
+        height: 54px;
+        flex: 0 0 54px;
+        display: grid;
+        place-items: center;
+        border-radius: 19px;
+        font-size: 24px;
+        background: var(--stat-icon);
+        box-shadow: 0 14px 30px rgba(0, 0, 0, .16);
+    }
+
+    .dash-stat-card strong {
+        display: block;
+        color: #ffffff;
+        font-size: 32px;
+        font-weight: 950;
+        line-height: 1;
+        letter-spacing: -.04em;
+    }
+
+    .dash-stat-card span {
+        display: block;
+        margin-top: 6px;
+        color: #aab8cf;
+        font-size: 13px;
+        font-weight: 850;
+    }
+
+    .dash-stat-card.purple {
+        --stat-glow: rgba(124, 58, 237, .22);
+        --stat-icon: linear-gradient(135deg, #4f46e5, #8b5cf6);
+    }
+
+    .dash-stat-card.cyan {
+        --stat-glow: rgba(6, 182, 212, .22);
+        --stat-icon: linear-gradient(135deg, #0891b2, #2563eb);
+    }
+
+    .dash-stat-card.orange {
+        --stat-glow: rgba(249, 115, 22, .20);
+        --stat-icon: linear-gradient(135deg, #f97316, #f59e0b);
+    }
+
+    .dash-stat-card.green {
+        --stat-glow: rgba(34, 197, 94, .18);
+        --stat-icon: linear-gradient(135deg, #16a34a, #14b8a6);
+    }
+
+    .dash-stat-card.blue {
+        --stat-glow: rgba(37, 99, 235, .22);
+        --stat-icon: linear-gradient(135deg, #2563eb, #38bdf8);
+    }
+
+    .dash-stat-card.indigo {
+        --stat-glow: rgba(99, 102, 241, .22);
+        --stat-icon: linear-gradient(135deg, #4f46e5, #6366f1);
+    }
+
+    .dash-stat-card.pink {
+        --stat-glow: rgba(236, 72, 153, .18);
+        --stat-icon: linear-gradient(135deg, #db2777, #7c3aed);
+    }
+
+    .dash-stat-card.red {
+        --stat-glow: rgba(239, 68, 68, .18);
+        --stat-icon: linear-gradient(135deg, #ef4444, #f97316);
+    }
+
+    .dash-main-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.35fr) minmax(330px, .65fr);
+        gap: 18px;
+        align-items: start;
+    }
+
+    .dash-panel {
+        min-height: auto !important;
+        padding: 20px;
+        border-radius: 26px;
+        color: #ffffff;
+        background:
+            radial-gradient(circle at 0% 0%, rgba(56, 189, 248, .07), transparent 34%),
+            linear-gradient(135deg, rgba(17, 25, 46, .94), rgba(15, 23, 42, .84));
+        border: 1px solid rgba(148, 163, 184, .18);
+        box-shadow: 0 16px 44px rgba(0, 0, 0, .20);
+        backdrop-filter: blur(16px);
+    }
+
+    .dash-panel-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 14px;
+        padding: 0 0 14px;
+        border-bottom: 1px solid rgba(148, 163, 184, .14);
+    }
+
+    .dash-panel-head h3 {
+        margin: 0;
+        color: #ffffff;
+        font-size: 18px;
+        font-weight: 950;
+        letter-spacing: -.02em;
+    }
+
+    .dash-panel-head p {
+        margin: 4px 0 0;
+        color: #94a3b8;
+        font-size: 13px;
+        font-weight: 700;
+    }
+
+    .dash-panel-head a {
+        min-height: 36px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 12px;
+        border-radius: 999px;
+        color: #dbeafe;
+        background: rgba(255, 255, 255, .055);
+        border: 1px solid rgba(148, 163, 184, .16);
+        text-decoration: none;
+        font-size: 12px;
+        font-weight: 900;
+    }
+
+    .dash-user-list {
+        display: grid;
+        gap: 10px;
+    }
+
+    .dash-user-row {
+        display: grid;
+        grid-template-columns: 44px minmax(0, 1fr) auto;
+        gap: 12px;
+        align-items: center;
+        padding: 12px;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, .045);
+        border: 1px solid rgba(148, 163, 184, .12);
+    }
+
+    .dash-user-avatar {
+        width: 44px;
+        height: 44px;
+        display: grid;
+        place-items: center;
+        border-radius: 16px;
+        color: #ffffff;
+        font-size: 18px;
+        background: linear-gradient(135deg, #2563eb, #7c3aed);
+    }
+
+    .dash-user-name {
+        color: #ffffff;
+        font-size: 14px;
+        font-weight: 950;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .dash-user-detail {
+        margin-top: 4px;
+        color: #94a3b8;
+        font-size: 12px;
+        font-weight: 750;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .dash-role-pill {
+        min-height: 30px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 950;
+        white-space: nowrap;
+    }
+
+    .dash-role-pill.student {
+        color: #bbf7d0;
+        background: rgba(34, 197, 94, .13);
+        border: 1px solid rgba(74, 222, 128, .18);
+    }
+
+    .dash-role-pill.teacher {
+        color: #a5f3fc;
+        background: rgba(6, 182, 212, .13);
+        border: 1px solid rgba(103, 232, 249, .18);
+    }
+
+    .dash-role-pill.parent {
+        color: #fde68a;
+        background: rgba(245, 158, 11, .13);
+        border: 1px solid rgba(251, 191, 36, .18);
+    }
+
+    .dash-role-pill.admin {
+        color: #bfdbfe;
+        background: rgba(37, 99, 235, .14);
+        border: 1px solid rgba(96, 165, 250, .20);
+    }
+
+    .dash-role-pill.default {
+        color: #dbeafe;
+        background: rgba(148, 163, 184, .12);
+        border: 1px solid rgba(148, 163, 184, .18);
+    }
+
+    .dash-empty {
+        min-height: 180px !important;
+        display: grid;
+        place-items: center;
+        padding: 26px;
+        border-radius: 20px;
+        color: #94a3b8;
+        background: rgba(255, 255, 255, .040);
+        border: 1px dashed rgba(148, 163, 184, .20);
+        text-align: center;
+        font-weight: 800;
+    }
+
+    .dash-quick-grid {
+        display: grid;
+        gap: 10px;
+    }
+
+    .dash-quick-link {
+        min-height: 62px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px;
+        border-radius: 18px;
+        color: #ffffff;
+        background: rgba(255, 255, 255, .045);
+        border: 1px solid rgba(148, 163, 184, .12);
+        text-decoration: none;
+        transition: .16s ease;
+    }
+
+    .dash-quick-link:hover {
+        transform: translateY(-1px);
+        border-color: rgba(125, 211, 252, .24);
+        background: rgba(56, 189, 248, .075);
+    }
+
+    .dash-quick-icon {
+        width: 40px;
+        height: 40px;
+        flex: 0 0 40px;
+        display: grid;
+        place-items: center;
+        border-radius: 15px;
+        background: linear-gradient(135deg, #2563eb, #7c3aed);
+        font-size: 18px;
+    }
+
+    .dash-quick-link strong {
+        display: block;
+        font-size: 13px;
+        font-weight: 950;
+    }
+
+    .dash-quick-link span {
+        display: block;
+        margin-top: 3px;
+        color: #94a3b8;
+        font-size: 12px;
+        font-weight: 750;
+    }
+
+    .dash-health-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+    }
+
+    .dash-health-card {
+        min-height: 132px;
+        padding: 18px;
+        border-radius: 24px;
+        background:
+            radial-gradient(circle at 100% 0%, rgba(56, 189, 248, .10), transparent 34%),
+            linear-gradient(135deg, rgba(17, 25, 46, .94), rgba(15, 23, 42, .84));
+        border: 1px solid rgba(148, 163, 184, .18);
+        box-shadow: 0 16px 40px rgba(0, 0, 0, .18);
+    }
+
+    .dash-health-card strong {
+        display: block;
+        color: #ffffff;
+        font-size: 28px;
+        font-weight: 950;
+        line-height: 1;
+        letter-spacing: -.035em;
+    }
+
+    .dash-health-card span {
+        display: block;
+        margin-top: 6px;
+        color: #dbeafe;
+        font-size: 13px;
+        font-weight: 900;
+    }
+
+    .dash-health-card p {
+        margin: 10px 0 0;
+        color: #94a3b8;
+        font-size: 13px;
+        font-weight: 700;
+        line-height: 1.5;
+    }
+
+    @@media (max-width: 1200px) {
+        .dash-hero {
+            grid-template-columns: 1fr;
+        }
+
+        .dash-stats-grid,
+        .dash-health-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .dash-main-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @@media (max-width: 700px) {
+        .dash-hero,
+        .dash-panel,
+        .dash-health-card {
+            border-radius: 22px;
+            padding: 16px;
+        }
+
+        .dash-stats-grid,
+        .dash-health-grid,
+        .dash-mini-status {
+            grid-template-columns: 1fr;
+        }
+
+        .dash-user-row {
+            grid-template-columns: 40px minmax(0, 1fr);
+        }
+
+        .dash-role-pill {
+            grid-column: 1 / -1;
+            justify-self: start;
+        }
+
+        .dash-hero-actions {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .dash-action-primary,
+        .dash-action-soft {
+            width: 100%;
+        }
+    }
+</style>
 
 <div class="dash-page">
     <section class="dash-hero">
-        <div>
+        <div class="dash-hero-main">
             <div class="dash-kicker">Genel Bakış</div>
-            <h2>Okul yönetim paneli</h2>
-            <p>Kullanıcıları, sınıfları, ödevleri, teslimleri ve şifre taleplerini tek yerden takip edin.</p>
+
+            <h2>Okul yönetimi artık tek ekranda.</h2>
+
+            <p>
+                Kullanıcıları, sınıfları, dersleri, duyuruları, ödev teslimlerini ve şifre taleplerini
+                koyu tema ile daha okunabilir, daha düzenli ve daha hızlı takip edin.
+            </p>
+
+            <div class="dash-hero-actions">
+                <a class="dash-action-primary" asp-controller="Users" asp-action="Create">
+                    👤 Yeni Kullanıcı
+                </a>
+
+                <a class="dash-action-soft" asp-controller="Classes" asp-action="Create">
+                    🏫 Yeni Sınıf
+                </a>
+
+                <a class="dash-action-soft" asp-controller="Lessons" asp-action="Create">
+                    📚 Ders Ataması
+                </a>
+
+                <a class="dash-action-soft" asp-controller="Announcements" asp-action="Create">
+                    📣 Duyuru Yayınla
+                </a>
+            </div>
         </div>
 
-        <div class="dash-hero-card">
-            <div class="dash-hero-icon">📊</div>
-            <div>
+        <div class="dash-hero-side">
+            <div class="dash-big-meter">
                 <strong>@totalUserCount</strong>
-                <span>Toplam Kullanıcı</span>
+                <span>Toplam aktif kullanıcı</span>
+
+                <div class="dash-meter-line">
+                    <div class="dash-meter-fill"></div>
+                </div>
+            </div>
+
+            <div class="dash-mini-status">
+                <div>
+                    <strong>@totalSetupCount</strong>
+                    <span>Akademik kurulum</span>
+                </div>
+
+                <div>
+                    <strong>@activeFlowCount</strong>
+                    <span>Sistem hareketi</span>
+                </div>
             </div>
         </div>
     </section>
@@ -185,58 +843,32 @@
         </a>
     </section>
 
-    <section class="premium-insight-grid">
-        <div class="premium-insight-card" style="--card-accent: rgba(79,70,229,.13); --icon-bg: #eef2ff; --icon-color: #4338ca;">
-            <div class="premium-insight-top">
-                <div class="premium-insight-icon">👥</div>
-                <div>
-                    <strong>@totalUserCount</strong>
-                    <span>Kullanıcı dengesi</span>
-                </div>
-            </div>
-            <p>@userBalanceText</p>
+    <section class="dash-health-grid">
+        <div class="dash-health-card">
+            <strong>@totalUserCount</strong>
+            <span>Kullanıcı dengesi</span>
+            <p>@studentCount öğrenci, @teacherCount öğretmen ve @parentCount veli sistemde kayıtlı.</p>
         </div>
 
-        <div class="premium-insight-card" style="--card-accent: rgba(14,165,233,.14); --icon-bg: #e0f2fe; --icon-color: #0369a1;">
-            <div class="premium-insight-top">
-                <div class="premium-insight-icon">📚</div>
-                <div>
-                    <strong>@setupCount</strong>
-                    <span>Akademik kurulum</span>
-                </div>
-            </div>
-            <p>@classCount sınıf ve @lessonCount ders ataması aktif görünüyor.</p>
+        <div class="dash-health-card">
+            <strong>@totalSetupCount</strong>
+            <span>Akademik yapı</span>
+            <p>@classCount sınıf ve @lessonCount ders ataması üzerinden okul yapısı hazırlanıyor.</p>
         </div>
 
-        <div class="premium-insight-card" style="--card-accent: rgba(16,185,129,.14); --icon-bg: #dcfce7; --icon-color: #047857;">
-            <div class="premium-insight-top">
-                <div class="premium-insight-icon">✅</div>
-                <div>
-                    <strong>@submissionCount</strong>
-                    <span>Ödev akışı</span>
-                </div>
-            </div>
-            <p>@visibleSchoolFlow toplam teslim ve duyuru hareketi panelden takip ediliyor.</p>
-        </div>
-
-        <div class="premium-insight-card" style="--card-accent: rgba(244,63,94,.13); --icon-bg: #ffe4e6; --icon-color: #be123c;">
-            <div class="premium-insight-top">
-                <div class="premium-insight-icon">🛡️</div>
-                <div>
-                    <strong>@passwordRequestCount</strong>
-                    <span>Güvenlik gündemi</span>
-                </div>
-            </div>
-            <p>@securityText</p>
+        <div class="dash-health-card">
+            <strong>@passwordRequestCount</strong>
+            <span>Güvenlik gündemi</span>
+            <p>@(passwordRequestCount > 0 ? $"{passwordRequestCount} şifre talebi işlem bekliyor." : "Açık şifre talebi görünmüyor.")</p>
         </div>
     </section>
 
-    <section class="dash-bottom-grid">
+    <section class="dash-main-grid">
         <div class="dash-panel">
             <div class="dash-panel-head">
                 <div>
                     <h3>Son Eklenen Kullanıcılar</h3>
-                    <p>Firestore users koleksiyonundan son kayıtlar</p>
+                    <p>Son kayıtlar burada sade liste halinde görünür.</p>
                 </div>
 
                 <a asp-controller="Users" asp-action="Index">
@@ -252,513 +884,105 @@
             }
             else
             {
-                <div class="dash-table-wrap">
-                    <table class="dash-table">
-                        <thead>
-                            <tr>
-                                <th>Ad Soyad</th>
-                                <th>Rol</th>
-                                <th>Numara</th>
-                                <th>Detay</th>
-                            </tr>
-                        </thead>
+                <div class="dash-user-list">
+                    @foreach (var user in recentUsers)
+                    {
+                        var name = GetText(user, "Name", "name");
+                        var role = GetText(user, "Role", "role");
+                        var number = GetText(user, "SchoolNo", "schoolNo", "Number", "number");
+                        var className = GetText(user, "ClassName", "className");
+                        var branch = GetText(user, "Branch", "branch");
+                        var linkedStudent = GetText(user, "LinkedStudentNo", "linkedStudentNo");
 
-                        <tbody>
-                            @foreach (var user in recentUsers)
-                            {
-                                var name = GetText(user, "Name", "name");
-                                var role = GetText(user, "Role", "role");
-                                var number = GetText(user, "SchoolNo", "schoolNo", "Number", "number");
-                                var className = GetText(user, "ClassName", "className");
-                                var branch = GetText(user, "Branch", "branch");
-                                var linkedStudent = GetText(user, "LinkedStudentNo", "linkedStudentNo");
+                        var detail = role == "Öğrenci"
+                            ? $"Sınıf: {SafeText(className)}"
+                            : role == "Öğretmen"
+                                ? $"Branş: {SafeText(branch)}"
+                                : role == "Veli"
+                                    ? $"Öğrenci No: {SafeText(linkedStudent)}"
+                                    : "Sistem yöneticisi";
 
-                                var detail = role == "Öğrenci"
-                                    ? $"Sınıf: {(string.IsNullOrWhiteSpace(className) ? "-" : className)}"
-                                    : role == "Öğretmen"
-                                        ? $"Branş: {(string.IsNullOrWhiteSpace(branch) ? "-" : branch)}"
-                                        : role == "Veli"
-                                            ? $"Bağlı öğrenci: {(string.IsNullOrWhiteSpace(linkedStudent) ? "-" : linkedStudent)}"
-                                            : "-";
+                        var icon = role == "Öğrenci"
+                            ? "🎒"
+                            : role == "Öğretmen"
+                                ? "👨‍🏫"
+                                : role == "Veli"
+                                    ? "👪"
+                                    : "🛡️";
 
-                                <tr>
-                                    <td>
-                                        <strong>@(string.IsNullOrWhiteSpace(name) ? "-" : name)</strong>
-                                    </td>
+                        <div class="dash-user-row">
+                            <div class="dash-user-avatar">
+                                @icon
+                            </div>
 
-                                    <td>
-                                        <span class="role-pill">@role</span>
-                                    </td>
+                            <div>
+                                <div class="dash-user-name">
+                                    @SafeText(name, "İsimsiz Kullanıcı")
+                                </div>
 
-                                    <td>@(string.IsNullOrWhiteSpace(number) ? "-" : number)</td>
+                                <div class="dash-user-detail">
+                                    No: @SafeText(number) · @detail
+                                </div>
+                            </div>
 
-                                    <td>@detail</td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
+                            <span class="dash-role-pill @RoleClass(role)">
+                                @SafeText(role, "Rol Yok")
+                            </span>
+                        </div>
+                    }
                 </div>
             }
         </div>
 
-        <div class="dash-panel quick-panel">
+        <div class="dash-panel">
             <div class="dash-panel-head">
                 <div>
                     <h3>Hızlı İşlemler</h3>
-                    <p>Sık kullanılan yönetim araçları</p>
+                    <p>En sık kullanılan yönetim adımları.</p>
                 </div>
             </div>
 
-            <div class="premium-detail-feed">
-                <div class="premium-feed-item" style="--feed-accent: rgba(244,63,94,.10); --feed-icon-bg: #ffe4e6; --feed-icon-color: #be123c;">
-                    <div class="premium-feed-icon">🔐</div>
-                    <div class="premium-feed-body">
-                        <strong>Şifre talepleri</strong>
-                        <span>@securityText</span>
+            <div class="dash-quick-grid">
+                <a class="dash-quick-link" asp-controller="Users" asp-action="Create">
+                    <div class="dash-quick-icon">👤</div>
+                    <div>
+                        <strong>Yeni Kullanıcı</strong>
+                        <span>Öğrenci, öğretmen, veli veya admin oluştur.</span>
                     </div>
-                    <div class="premium-feed-tag">@passwordRequestCount</div>
-                </div>
+                </a>
 
-                <div class="premium-feed-item" style="--feed-accent: rgba(16,185,129,.10); --feed-icon-bg: #dcfce7; --feed-icon-color: #047857;">
-                    <div class="premium-feed-icon">📥</div>
-                    <div class="premium-feed-body">
-                        <strong>Teslim hareketi</strong>
-                        <span>Öğretmenlerin değerlendireceği son teslimler.</span>
+                <a class="dash-quick-link" asp-controller="Classes" asp-action="Create">
+                    <div class="dash-quick-icon">🏫</div>
+                    <div>
+                        <strong>Yeni Sınıf</strong>
+                        <span>Sınıf ve sınıf öğretmeni ayarla.</span>
                     </div>
-                    <div class="premium-feed-tag">@submissionCount</div>
-                </div>
-            </div>
-
-            <div class="quick-actions premium-section-spacer">
-                <a asp-controller="Users" asp-action="Create">
-                    <span>👥</span>
-                    Yeni Kullanıcı
                 </a>
 
-                <a asp-controller="Classes" asp-action="Create">
-                    <span>🏫</span>
-                    Yeni Sınıf
+                <a class="dash-quick-link" asp-controller="Lessons" asp-action="Create">
+                    <div class="dash-quick-icon">📚</div>
+                    <div>
+                        <strong>Ders Ataması</strong>
+                        <span>Dersi öğretmen ve sınıfla eşleştir.</span>
+                    </div>
                 </a>
 
-                <a asp-controller="Lessons" asp-action="Create">
-                    <span>📚</span>
-                    Yeni Ders Ataması
+                <a class="dash-quick-link" asp-controller="Announcements" asp-action="Create">
+                    <div class="dash-quick-icon">📣</div>
+                    <div>
+                        <strong>Duyuru Yayınla</strong>
+                        <span>Okul geneline veya role göre duyuru paylaş.</span>
+                    </div>
                 </a>
 
-                <a asp-controller="Announcements" asp-action="Create">
-                    <span>📣</span>
-                    Duyuru Yayınla
-                </a>
-
-                <a asp-controller="AdminAccount" asp-action="ChangePassword">
-                    <span>🛡️</span>
-                    Admin Şifresi
+                <a class="dash-quick-link" asp-controller="PasswordRequests" asp-action="Index">
+                    <div class="dash-quick-icon">🔑</div>
+                    <div>
+                        <strong>Şifre Talepleri</strong>
+                        <span>Aktivasyon kodu üret ve talepleri yönet.</span>
+                    </div>
                 </a>
             </div>
         </div>
     </section>
 </div>
-
-<style>
-    .dash-page {
-        display: grid;
-        gap: 22px;
-        padding: 2px;
-    }
-
-    .dash-hero {
-        position: relative;
-        overflow: hidden;
-        background:
-            radial-gradient(circle at 8% 12%, rgba(79, 70, 229, .20), transparent 32%),
-            radial-gradient(circle at 94% 18%, rgba(6, 182, 212, .16), transparent 28%),
-            linear-gradient(135deg, #ffffff, #f1f5fb);
-        border: 1px solid rgba(203,213,225,.95);
-        border-radius: 32px;
-        padding: 28px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 22px;
-        box-shadow: 0 26px 70px rgba(15, 23, 42, .12);
-    }
-
-    .dash-hero::after {
-        content: "";
-        position: absolute;
-        inset: auto -70px -120px auto;
-        width: 270px;
-        height: 270px;
-        border-radius: 999px;
-        background: rgba(79, 70, 229, .08);
-        pointer-events: none;
-    }
-
-    .dash-kicker {
-        width: fit-content;
-        color: #3730a3;
-        background: #eef2ff;
-        border: 1px solid #c7d2fe;
-        border-radius: 999px;
-        padding: 7px 11px;
-        font-weight: 950;
-        font-size: 13px;
-        margin-bottom: 10px;
-    }
-
-    .dash-hero h2 {
-        margin: 0;
-        color: #0f172a;
-        font-size: 34px;
-        font-weight: 950;
-        letter-spacing: -.7px;
-    }
-
-    .dash-hero p {
-        margin: 8px 0 0;
-        color: #64748b;
-        font-weight: 800;
-        line-height: 1.5;
-        max-width: 640px;
-    }
-
-    .dash-hero-card {
-        position: relative;
-        z-index: 1;
-        min-width: 210px;
-        background: rgba(255,255,255,.92);
-        border: 1px solid #cbd5e1;
-        border-radius: 26px;
-        padding: 18px;
-        display: flex;
-        align-items: center;
-        gap: 14px;
-        box-shadow: 0 18px 44px rgba(15, 23, 42, .12);
-    }
-
-    .dash-hero-icon {
-        width: 58px;
-        height: 58px;
-        border-radius: 20px;
-        background: linear-gradient(135deg, #4f46e5, #06b6d4);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: #fff;
-        font-size: 28px;
-    }
-
-    .dash-hero-card strong {
-        display: block;
-        color: #0f172a;
-        font-size: 30px;
-        font-weight: 950;
-    }
-
-    .dash-hero-card span {
-        color: #64748b;
-        font-weight: 850;
-    }
-
-    .dash-stats-grid {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 16px;
-    }
-
-    .dash-stat-card {
-        position: relative;
-        overflow: hidden;
-        background:
-            linear-gradient(135deg, rgba(255,255,255,.98), rgba(248,250,252,.92));
-        border: 1px solid #cbd5e1;
-        border-radius: 28px;
-        padding: 20px;
-        display: flex;
-        align-items: center;
-        gap: 15px;
-        text-decoration: none;
-        box-shadow: 0 20px 48px rgba(15, 23, 42, .105);
-        transition: .18s ease;
-        min-height: 118px;
-    }
-
-    .dash-stat-card::before {
-        content: "";
-        position: absolute;
-        inset: 0 auto 0 0;
-        width: 7px;
-        background: #4f46e5;
-    }
-
-    .dash-stat-card::after {
-        content: "";
-        position: absolute;
-        right: -34px;
-        top: -42px;
-        width: 118px;
-        height: 118px;
-        border-radius: 999px;
-        background: rgba(79, 70, 229, .08);
-        pointer-events: none;
-    }
-
-    .dash-stat-card:hover {
-        transform: translateY(-3px);
-        border-color: #a5b4fc;
-        box-shadow: 0 28px 62px rgba(15, 23, 42, .14);
-    }
-
-    .dash-stat-icon {
-        width: 58px;
-        height: 58px;
-        border-radius: 20px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 27px;
-        flex: 0 0 auto;
-        position: relative;
-        z-index: 1;
-    }
-
-    .dash-stat-card strong {
-        display: block;
-        color: #0f172a;
-        font-size: 32px;
-        line-height: 1;
-        font-weight: 950;
-        position: relative;
-        z-index: 1;
-    }
-
-    .dash-stat-card span {
-        display: block;
-        color: #64748b;
-        font-weight: 900;
-        margin-top: 6px;
-        position: relative;
-        z-index: 1;
-    }
-
-    .dash-stat-card.purple::before { background: #4f46e5; }
-    .dash-stat-card.cyan::before { background: #0891b2; }
-    .dash-stat-card.orange::before { background: #ea580c; }
-    .dash-stat-card.green::before { background: #059669; }
-    .dash-stat-card.blue::before { background: #2563eb; }
-    .dash-stat-card.indigo::before { background: #6366f1; }
-    .dash-stat-card.pink::before { background: #db2777; }
-    .dash-stat-card.red::before { background: #dc2626; }
-
-    .dash-stat-card.purple .dash-stat-icon {
-        background: #eef2ff;
-        color: #3730a3;
-    }
-
-    .dash-stat-card.cyan .dash-stat-icon {
-        background: #cffafe;
-        color: #0e7490;
-    }
-
-    .dash-stat-card.orange .dash-stat-icon {
-        background: #ffedd5;
-        color: #c2410c;
-    }
-
-    .dash-stat-card.green .dash-stat-icon {
-        background: #dcfce7;
-        color: #047857;
-    }
-
-    .dash-stat-card.blue .dash-stat-icon {
-        background: #dbeafe;
-        color: #1d4ed8;
-    }
-
-    .dash-stat-card.indigo .dash-stat-icon {
-        background: #e0e7ff;
-        color: #4338ca;
-    }
-
-    .dash-stat-card.pink .dash-stat-icon {
-        background: #fce7f3;
-        color: #be185d;
-    }
-
-    .dash-stat-card.red .dash-stat-icon {
-        background: #fee2e2;
-        color: #b91c1c;
-    }
-
-    .dash-bottom-grid {
-        display: grid;
-        grid-template-columns: 1.45fr .85fr;
-        gap: 18px;
-    }
-
-    .dash-panel {
-        background:
-            linear-gradient(135deg, rgba(255,255,255,.98), rgba(248,250,252,.94));
-        border: 1px solid #cbd5e1;
-        border-radius: 30px;
-        padding: 22px;
-        box-shadow: 0 20px 50px rgba(15, 23, 42, .10);
-    }
-
-    .dash-panel-head {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 14px;
-        margin-bottom: 16px;
-    }
-
-    .dash-panel-head h3 {
-        margin: 0;
-        color: #0f172a;
-        font-size: 22px;
-        font-weight: 950;
-    }
-
-    .dash-panel-head p {
-        margin: 5px 0 0;
-        color: #64748b;
-        font-weight: 800;
-    }
-
-    .dash-panel-head a {
-        background: #eef2ff;
-        color: #4338ca;
-        text-decoration: none;
-        border-radius: 16px;
-        padding: 12px 16px;
-        font-weight: 950;
-        white-space: nowrap;
-    }
-
-    .dash-empty {
-        background: #f8fafc;
-        border-radius: 20px;
-        padding: 22px;
-        color: #64748b;
-        font-weight: 900;
-        text-align: center;
-    }
-
-    .dash-table-wrap {
-        overflow-x: auto;
-    }
-
-    .dash-table {
-        width: 100%;
-        border-collapse: collapse;
-        min-width: 620px;
-    }
-
-    .dash-table th {
-        text-align: left;
-        padding: 14px 12px;
-        color: #64748b;
-        font-weight: 950;
-        background: #f1f5f9;
-        border-bottom: 1px solid #cbd5e1;
-        white-space: nowrap;
-    }
-
-    .dash-table td {
-        padding: 15px 12px;
-        border-bottom: 1px solid #e2e8f0;
-        color: #334155;
-        font-weight: 800;
-    }
-
-    .dash-table td strong {
-        color: #0f172a;
-        font-weight: 950;
-    }
-
-    .role-pill {
-        display: inline-flex;
-        align-items: center;
-        border-radius: 999px;
-        background: #f1f5f9;
-        color: #334155;
-        padding: 7px 11px;
-        font-size: 12px;
-        font-weight: 950;
-    }
-
-    .quick-actions {
-        display: grid;
-        gap: 12px;
-    }
-
-    .quick-actions a {
-        min-height: 58px;
-        background: #ffffff;
-        border: 1px solid #cbd5e1;
-        border-radius: 20px;
-        color: #0f172a;
-        text-decoration: none;
-        font-weight: 950;
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        padding: 0 16px;
-        transition: .18s ease;
-    }
-
-    .quick-actions a:hover {
-        background: #eef2ff;
-        border-color: #c7d2fe;
-        color: #3730a3;
-        transform: translateX(3px);
-        box-shadow: 0 14px 28px rgba(79, 70, 229, .12);
-    }
-
-    .quick-actions span {
-        width: 40px;
-        height: 40px;
-        border-radius: 14px;
-        background: #fff;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 20px;
-    }
-
-    @@media (max-width: 1180px) {
-        .dash-stats-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-
-        .dash-bottom-grid {
-            grid-template-columns: 1fr;
-        }
-    }
-
-    @@media (max-width: 720px) {
-        .dash-hero {
-            flex-direction: column;
-            align-items: flex-start;
-        }
-
-        .dash-hero-card {
-            width: 100%;
-        }
-
-        .dash-stats-grid {
-            grid-template-columns: 1fr;
-        }
-
-        .dash-panel-head {
-            flex-direction: column;
-            align-items: flex-start;
-        }
-
-        .dash-panel-head a {
-            width: 100%;
-            text-align: center;
-        }
-    }
-</style>

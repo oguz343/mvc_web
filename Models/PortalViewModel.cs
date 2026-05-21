@@ -30,9 +30,12 @@ namespace mvc_web.Models
 
         public string Title { get; set; } = "";
         public string Description { get; set; } = "";
+        public string LessonName { get; set; } = "";
         public string ClassName { get; set; } = "";
         public string TeacherName { get; set; } = "";
         public DateTime? DueDate { get; set; }
+        public string AttachmentFileName { get; set; } = "";
+        public string AttachmentFileUrl { get; set; } = "";
 
         public bool IsSubmitted { get; set; }
         public string SubmissionText { get; set; } = "";

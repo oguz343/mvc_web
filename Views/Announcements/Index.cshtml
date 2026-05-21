@@ -4,8 +4,59 @@
 @{
     Layout = "_AdminLayout";
     ViewData["Title"] = "Duyurular";
+    ViewData["PageTitle"] = "Duyurular";
+    ViewData["PageSubtitle"] = "Öğrenci, öğretmen ve velilere yayınlanan duyuruları koyu tema ile daha düzenli şekilde yönetin.";
 
     var announcements = Model ?? new List<mvc_web.Models.AnnouncementViewModel>();
+
+    var totalCount = announcements.Count;
+    var allSchoolCount = announcements.Count(x => (x.Target ?? "").Contains("Tüm", StringComparison.OrdinalIgnoreCase));
+    var studentCount = announcements.Count(x => (x.Target ?? "").Contains("Öğrenci", StringComparison.OrdinalIgnoreCase) || (x.Target ?? "").Contains("Ogrenci", StringComparison.OrdinalIgnoreCase));
+    var teacherCount = announcements.Count(x => (x.Target ?? "").Contains("Öğretmen", StringComparison.OrdinalIgnoreCase) || (x.Target ?? "").Contains("Ogretmen", StringComparison.OrdinalIgnoreCase));
+
+    string TargetClass(string target)
+    {
+        target = (target ?? "").Trim().ToLowerInvariant();
+
+        if (target.Contains("öğretmen") || target.Contains("ogretmen") || target.Contains("teacher"))
+        {
+            return "teacher";
+        }
+
+        if (target.Contains("öğrenci") || target.Contains("ogrenci") || target.Contains("student"))
+        {
+            return "student";
+        }
+
+        if (target.Contains("veli") || target.Contains("parent"))
+        {
+            return "parent";
+        }
+
+        return "all";
+    }
+
+    string TargetIcon(string target)
+    {
+        target = (target ?? "").Trim().ToLowerInvariant();
+
+        if (target.Contains("öğretmen") || target.Contains("ogretmen") || target.Contains("teacher"))
+        {
+            return "👨‍🏫";
+        }
+
+        if (target.Contains("öğrenci") || target.Contains("ogrenci") || target.Contains("student"))
+        {
+            return "🎒";
+        }
+
+        if (target.Contains("veli") || target.Contains("parent"))
+        {
+            return "👪";
+        }
+
+        return "🌐";
+    }
 }
 
 @functions {
@@ -95,40 +146,652 @@
     }
 }
 
-<div class="page-shell">
-    <section class="page-header-card">
-        <div>
-            <div class="eyebrow">Yönetim Paneli</div>
-            <h1>Duyurular</h1>
-            <p>Öğrenci, öğretmen ve velilere gönderilecek duyuruları buradan yönetin.</p>
+<style>
+    .announcements-v2 {
+        width: 100%;
+        max-width: none;
+        display: grid;
+        gap: 18px;
+    }
+
+    .announcements-v2-hero {
+        position: relative;
+        overflow: hidden;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 380px;
+        gap: 18px;
+        padding: 24px;
+        border-radius: 32px;
+        background:
+            radial-gradient(circle at 0% 0%, rgba(56, 189, 248, .15), transparent 34%),
+            radial-gradient(circle at 100% 0%, rgba(139, 92, 246, .18), transparent 34%),
+            linear-gradient(135deg, rgba(15, 23, 42, .94), rgba(17, 24, 39, .86));
+        border: 1px solid rgba(148, 163, 184, .20);
+        box-shadow: 0 24px 70px rgba(0, 0, 0, .28);
+        backdrop-filter: blur(18px);
+    }
+
+    .announcements-v2-hero::after {
+        content: "";
+        position: absolute;
+        width: 390px;
+        height: 390px;
+        right: -180px;
+        top: -190px;
+        border-radius: 999px;
+        background: rgba(99, 102, 241, .22);
+        pointer-events: none;
+    }
+
+    .announcements-v2-hero-main,
+    .announcements-v2-hero-side {
+        position: relative;
+        z-index: 1;
+    }
+
+    .announcements-v2-kicker {
+        width: fit-content;
+        min-height: 30px;
+        display: inline-flex;
+        align-items: center;
+        padding: 0 12px;
+        border-radius: 999px;
+        color: #67e8f9;
+        background: rgba(56, 189, 248, .10);
+        border: 1px solid rgba(103, 232, 249, .20);
+        font-size: 11px;
+        font-weight: 950;
+        letter-spacing: .16em;
+        text-transform: uppercase;
+    }
+
+    .announcements-v2-hero h2 {
+        max-width: 800px;
+        margin: 14px 0 0;
+        color: #ffffff;
+        font-size: clamp(34px, 3.8vw, 58px);
+        font-weight: 950;
+        line-height: 1;
+        letter-spacing: -.06em;
+    }
+
+    .announcements-v2-hero p {
+        max-width: 780px;
+        margin: 14px 0 0;
+        color: #aab8cf;
+        font-size: 15px;
+        font-weight: 700;
+        line-height: 1.65;
+    }
+
+    .announcements-v2-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 20px;
+    }
+
+    .announcements-v2-primary-action,
+    .announcements-v2-soft-action {
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 15px;
+        border-radius: 15px;
+        text-decoration: none;
+        font-size: 13px;
+        font-weight: 950;
+        transition: .16s ease;
+    }
+
+    .announcements-v2-primary-action {
+        color: #ffffff;
+        background: linear-gradient(135deg, #2563eb, #7c3aed);
+        border: 1px solid rgba(125, 211, 252, .22);
+        box-shadow: 0 14px 30px rgba(37, 99, 235, .24);
+    }
+
+    .announcements-v2-soft-action {
+        color: #dbeafe;
+        background: rgba(255, 255, 255, .060);
+        border: 1px solid rgba(148, 163, 184, .18);
+    }
+
+    .announcements-v2-primary-action:hover,
+    .announcements-v2-soft-action:hover {
+        transform: translateY(-1px);
+    }
+
+    .announcements-v2-hero-side {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    .announcements-v2-summary-card {
+        min-height: 106px;
+        padding: 16px;
+        border-radius: 22px;
+        background: rgba(255, 255, 255, .055);
+        border: 1px solid rgba(148, 163, 184, .16);
+    }
+
+    .announcements-v2-summary-card strong {
+        display: block;
+        color: #ffffff;
+        font-size: 30px;
+        font-weight: 950;
+        line-height: 1;
+        letter-spacing: -.04em;
+    }
+
+    .announcements-v2-summary-card span {
+        display: block;
+        margin-top: 7px;
+        color: #94a3b8;
+        font-size: 12px;
+        font-weight: 850;
+    }
+
+    .announcements-v2-alert {
+        padding: 15px 17px;
+        border-radius: 18px;
+        font-weight: 850;
+        line-height: 1.5;
+        border: 1px solid rgba(148, 163, 184, .16);
+    }
+
+    .announcements-v2-alert.success {
+        color: #bbf7d0;
+        background: rgba(34, 197, 94, .12);
+        border-color: rgba(74, 222, 128, .20);
+    }
+
+    .announcements-v2-alert.error {
+        color: #fecaca;
+        background: rgba(239, 68, 68, .12);
+        border-color: rgba(248, 113, 113, .20);
+    }
+
+    .announcements-v2-toolbar {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 14px;
+        padding: 16px;
+        border-radius: 28px;
+        background:
+            radial-gradient(circle at 0% 0%, rgba(56, 189, 248, .08), transparent 34%),
+            linear-gradient(135deg, rgba(17, 25, 46, .94), rgba(15, 23, 42, .84));
+        border: 1px solid rgba(148, 163, 184, .18);
+        box-shadow: 0 16px 44px rgba(0, 0, 0, .20);
+        backdrop-filter: blur(16px);
+    }
+
+    .announcements-v2-search {
+        min-height: 54px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 0 15px;
+        border-radius: 18px;
+        background: rgba(7, 17, 31, .58);
+        border: 1px solid rgba(148, 163, 184, .18);
+        transition: .15s ease;
+    }
+
+    .announcements-v2-search:focus-within {
+        border-color: rgba(103, 232, 249, .45);
+        box-shadow: 0 0 0 4px rgba(56, 189, 248, .09);
+    }
+
+    .announcements-v2-search span {
+        font-size: 20px;
+    }
+
+    .announcements-v2-search input {
+        width: 100%;
+        border: 0;
+        outline: 0;
+        color: #ffffff;
+        background: transparent;
+        font-size: 14px;
+        font-weight: 800;
+    }
+
+    .announcements-v2-search input::placeholder {
+        color: #64748b;
+    }
+
+    .announcements-v2-visible-box {
+        min-width: 170px;
+        min-height: 54px;
+        display: grid;
+        align-content: center;
+        padding: 0 15px;
+        border-radius: 18px;
+        color: #dbeafe;
+        background: rgba(255, 255, 255, .055);
+        border: 1px solid rgba(148, 163, 184, .16);
+    }
+
+    .announcements-v2-visible-box strong {
+        color: #ffffff;
+        font-size: 24px;
+        font-weight: 950;
+        line-height: 1;
+    }
+
+    .announcements-v2-visible-box span {
+        margin-top: 4px;
+        color: #94a3b8;
+        font-size: 12px;
+        font-weight: 850;
+    }
+
+    .announcements-v2-empty {
+        min-height: 320px;
+        display: grid;
+        place-items: center;
+        padding: 42px 24px;
+        border-radius: 30px;
+        color: #94a3b8;
+        background:
+            radial-gradient(circle at 0% 0%, rgba(56, 189, 248, .08), transparent 34%),
+            linear-gradient(135deg, rgba(17, 25, 46, .94), rgba(15, 23, 42, .84));
+        border: 1px dashed rgba(148, 163, 184, .20);
+        box-shadow: 0 18px 46px rgba(0, 0, 0, .22);
+        text-align: center;
+        font-size: 15px;
+        font-weight: 850;
+    }
+
+    .announcements-v2-empty-icon {
+        width: 76px;
+        height: 76px;
+        display: grid;
+        place-items: center;
+        margin: 0 auto 15px;
+        border-radius: 26px;
+        color: #ffffff;
+        background: linear-gradient(135deg, #2563eb, #7c3aed);
+        font-size: 34px;
+    }
+
+    .announcements-v2-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+        gap: 16px;
+    }
+
+    .announcements-v2-card {
+        position: relative;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+        min-height: 100%;
+        padding: 20px;
+        border-radius: 28px;
+        background:
+            radial-gradient(circle at 100% 0%, rgba(56, 189, 248, .075), transparent 36%),
+            linear-gradient(135deg, rgba(17, 25, 46, .94), rgba(15, 23, 42, .86));
+        border: 1px solid rgba(148, 163, 184, .18);
+        box-shadow: 0 16px 44px rgba(0, 0, 0, .22);
+        backdrop-filter: blur(16px);
+        transition: .16s ease;
+    }
+
+    .announcements-v2-card:hover {
+        transform: translateY(-2px);
+        border-color: rgba(125, 211, 252, .28);
+        box-shadow: 0 22px 54px rgba(0, 0, 0, .27);
+    }
+
+    .announcements-v2-card::after {
+        content: "";
+        position: absolute;
+        width: 180px;
+        height: 180px;
+        right: -92px;
+        top: -104px;
+        border-radius: 999px;
+        background: rgba(99, 102, 241, .13);
+        pointer-events: none;
+    }
+
+    .announcements-v2-top {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        grid-template-columns: 60px minmax(0, 1fr);
+        gap: 14px;
+        align-items: center;
+    }
+
+    .announcements-v2-icon {
+        width: 60px;
+        height: 60px;
+        display: grid;
+        place-items: center;
+        border-radius: 21px;
+        color: #ffffff;
+        background:
+            radial-gradient(circle at 28% 20%, rgba(255, 255, 255, .28), transparent 28%),
+            linear-gradient(135deg, #2563eb, #7c3aed 58%, #06b6d4);
+        box-shadow: 0 16px 34px rgba(37, 99, 235, .22);
+        font-size: 28px;
+    }
+
+    .announcements-v2-title {
+        min-width: 0;
+    }
+
+    .announcements-v2-title h3 {
+        margin: 0;
+        color: #ffffff;
+        font-size: 21px;
+        font-weight: 950;
+        line-height: 1.18;
+        letter-spacing: -.03em;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .announcements-v2-title p {
+        margin: 6px 0 0;
+        color: #94a3b8;
+        font-size: 13px;
+        font-weight: 850;
+    }
+
+    .announcements-v2-tags {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .announcements-v2-tag {
+        min-height: 31px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 0 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 950;
+        border: 1px solid transparent;
+        white-space: nowrap;
+    }
+
+    .announcements-v2-tag.all {
+        color: #bfdbfe;
+        background: rgba(37, 99, 235, .14);
+        border-color: rgba(96, 165, 250, .20);
+    }
+
+    .announcements-v2-tag.teacher {
+        color: #a5f3fc;
+        background: rgba(6, 182, 212, .13);
+        border-color: rgba(103, 232, 249, .18);
+    }
+
+    .announcements-v2-tag.student {
+        color: #bbf7d0;
+        background: rgba(34, 197, 94, .13);
+        border-color: rgba(74, 222, 128, .20);
+    }
+
+    .announcements-v2-tag.parent {
+        color: #fde68a;
+        background: rgba(245, 158, 11, .13);
+        border-color: rgba(251, 191, 36, .18);
+    }
+
+    .announcements-v2-tag.author {
+        color: #e9d5ff;
+        background: rgba(124, 58, 237, .14);
+        border-color: rgba(167, 139, 250, .20);
+    }
+
+    .announcements-v2-content-box {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        gap: 8px;
+        padding: 14px;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, .045);
+        border: 1px solid rgba(148, 163, 184, .12);
+    }
+
+    .announcements-v2-content-box strong {
+        color: #dbeafe;
+        font-size: 12px;
+        font-weight: 950;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+    }
+
+    .announcements-v2-content-box p {
+        max-height: 150px;
+        margin: 0;
+        overflow: auto;
+        color: #cbd5e1;
+        font-size: 13px;
+        font-weight: 750;
+        line-height: 1.6;
+        overflow-wrap: anywhere;
+        padding-right: 4px;
+    }
+
+    .announcements-v2-content-box p::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    .announcements-v2-content-box p::-webkit-scrollbar-thumb {
+        border-radius: 999px;
+        background: rgba(148, 163, 184, .25);
+    }
+
+    .announcements-v2-actions-row {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-top: auto;
+    }
+
+    .announcements-v2-edit,
+    .announcements-v2-delete {
+        min-height: 45px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        border-radius: 15px;
+        border: 1px solid transparent;
+        text-decoration: none;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 950;
+        transition: .15s ease;
+    }
+
+    .announcements-v2-edit {
+        color: #ffffff;
+        background: rgba(56, 189, 248, .11);
+        border-color: rgba(125, 211, 252, .22);
+    }
+
+    .announcements-v2-delete {
+        width: 100%;
+        color: #ffffff;
+        background: rgba(239, 68, 68, .82);
+        border-color: rgba(248, 113, 113, .24);
+    }
+
+    .announcements-v2-edit:hover,
+    .announcements-v2-delete:hover {
+        transform: translateY(-1px);
+    }
+
+    @@media (max-width: 1200px) {
+        .announcements-v2-hero,
+        .announcements-v2-toolbar {
+            grid-template-columns: 1fr;
+        }
+
+        .announcements-v2-visible-box {
+            min-width: 0;
+        }
+    }
+
+    @@media (max-width: 760px) {
+        .announcements-v2-hero {
+            border-radius: 22px;
+            padding: 16px;
+        }
+
+        .announcements-v2-hero-side {
+            grid-template-columns: 1fr;
+        }
+
+        .announcements-v2-actions {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .announcements-v2-primary-action,
+        .announcements-v2-soft-action {
+            width: 100%;
+        }
+
+        .announcements-v2-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .announcements-v2-card {
+            border-radius: 22px;
+            padding: 16px;
+        }
+
+        .announcements-v2-top {
+            grid-template-columns: 54px minmax(0, 1fr);
+        }
+
+        .announcements-v2-icon {
+            width: 54px;
+            height: 54px;
+            font-size: 25px;
+        }
+
+        .announcements-v2-actions-row {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+<div class="announcements-v2">
+    <section class="announcements-v2-hero">
+        <div class="announcements-v2-hero-main">
+            <div class="announcements-v2-kicker">
+                Duyuru Merkezi
+            </div>
+
+            <h2>Okul duyuruları artık daha görünür.</h2>
+
+            <p>
+                Öğrenci, öğretmen, veli veya tüm okula yayınladığınız duyuruları koyu panel içinde
+                daha okunabilir ve daha düzenli şekilde yönetin.
+            </p>
+
+            <div class="announcements-v2-actions">
+                <a asp-controller="Announcements"
+                   asp-action="Create"
+                   class="announcements-v2-primary-action">
+                    📣 Yeni Duyuru
+                </a>
+
+                <a asp-controller="Dashboard"
+                   asp-action="Index"
+                   class="announcements-v2-soft-action">
+                    📊 Kontrol Paneli
+                </a>
+            </div>
         </div>
 
-        <div class="page-actions">
-            <a asp-controller="Announcements" asp-action="Create" class="btn-primary">
-                📣 Yeni Duyuru
-            </a>
+        <div class="announcements-v2-hero-side">
+            <div class="announcements-v2-summary-card">
+                <strong>@totalCount</strong>
+                <span>Toplam Duyuru</span>
+            </div>
+
+            <div class="announcements-v2-summary-card">
+                <strong>@allSchoolCount</strong>
+                <span>Tüm Okul</span>
+            </div>
+
+            <div class="announcements-v2-summary-card">
+                <strong>@studentCount</strong>
+                <span>Öğrenci Hedefli</span>
+            </div>
+
+            <div class="announcements-v2-summary-card">
+                <strong>@teacherCount</strong>
+                <span>Öğretmen Hedefli</span>
+            </div>
         </div>
     </section>
 
     @if (TempData["Success"] != null)
     {
-        <div class="alert alert-success">@TempData["Success"]</div>
+        <div class="announcements-v2-alert success">
+            @TempData["Success"]
+        </div>
     }
 
     @if (TempData["Error"] != null)
     {
-        <div class="alert alert-danger">@TempData["Error"]</div>
+        <div class="announcements-v2-alert error">
+            @TempData["Error"]
+        </div>
     }
+
+    <section class="announcements-v2-toolbar">
+        <div class="announcements-v2-search">
+            <span>🔍</span>
+
+            <input id="announcementSearchInput"
+                   type="search"
+                   placeholder="Duyuru başlığı, içerik, hedef veya yayınlayan ara..."
+                   autocomplete="off" />
+        </div>
+
+        <div class="announcements-v2-visible-box">
+            <strong id="visibleAnnouncementCount">@announcements.Count</strong>
+            <span>duyuru gösteriliyor</span>
+        </div>
+    </section>
 
     @if (!announcements.Any())
     {
-        <div class="empty-state">
-            Henüz duyuru eklenmedi.
+        <div class="announcements-v2-empty">
+            <div>
+                <div class="announcements-v2-empty-icon">📣</div>
+                Henüz duyuru eklenmedi.
+            </div>
         </div>
     }
     else
     {
-        <section class="entity-grid">
+        <section id="announcementsGrid" class="announcements-v2-grid">
             @foreach (var item in announcements)
             {
                 var id = GetText(item, "Id");
@@ -143,46 +806,140 @@
                 );
                 var author = FirstNonEmpty(GetText(item, "Author"), GetText(item, "CreatedBy"), "Admin");
                 var createdText = GetDateText(item, "CreatedAt", "CreatedDate", "Date", "PublishedAt");
+                var targetClass = TargetClass(target);
+                var targetIcon = TargetIcon(target);
 
-                <article class="entity-card">
-                    <div class="entity-head">
-                        <div class="entity-icon warning">📢</div>
+                <article class="announcements-v2-card"
+                         data-title="@title"
+                         data-content="@content"
+                         data-target="@target"
+                         data-author="@author">
 
-                        <div class="entity-title">
+                    <div class="announcements-v2-top">
+                        <div class="announcements-v2-icon">
+                            📢
+                        </div>
+
+                        <div class="announcements-v2-title">
                             <h3>@title</h3>
                             <p>@createdText tarihinde yayınlandı</p>
                         </div>
                     </div>
 
-                    <div class="badge-row">
-                        <span class="badge-pill badge-warning">@target</span>
-                        <span class="badge-pill badge-primary">Yayınlayan: @author</span>
+                    <div class="announcements-v2-tags">
+                        <span class="announcements-v2-tag @targetClass">
+                            @targetIcon @target
+                        </span>
+
+                        <span class="announcements-v2-tag author">
+                            ✍️ @author
+                        </span>
                     </div>
 
-                    <div class="meta-list">
-                        <div class="meta-item">
-                            <span>📝</span>
-                            <span>@content</span>
-                        </div>
+                    <div class="announcements-v2-content-box">
+                        <strong>Duyuru İçeriği</strong>
+                        <p>@content</p>
                     </div>
 
-                    <div class="card-actions">
-                        <a asp-controller="Announcements" asp-action="Edit" asp-route-id="@id" class="btn-secondary">
+                    <div class="announcements-v2-actions-row">
+                        <a asp-controller="Announcements"
+                           asp-action="Edit"
+                           asp-route-id="@id"
+                           class="announcements-v2-edit">
                             ✏️ Düzenle
                         </a>
 
                         <form asp-controller="Announcements"
                               asp-action="Delete"
                               method="post"
-                              class="inline-form js-delete-form"
+                              data-delete="true"
                               data-delete-name="@title">
+
                             @Html.AntiForgeryToken()
+
                             <input type="hidden" name="id" value="@id" />
-                            <button type="submit" class="btn-danger">🗑️ Sil</button>
+
+                            <button type="submit" class="announcements-v2-delete">
+                                🗑️ Sil
+                            </button>
                         </form>
                     </div>
                 </article>
             }
         </section>
+
+        <div id="noAnnouncementResult" class="announcements-v2-empty" style="display:none;">
+            <div>
+                <div class="announcements-v2-empty-icon">🔍</div>
+                Aradığınız kritere uygun duyuru bulunamadı.
+            </div>
+        </div>
     }
 </div>
+
+@section Scripts {
+    <script>
+        const announcementSearchInput = document.getElementById("announcementSearchInput");
+        const announcementCards = Array.from(document.querySelectorAll(".announcements-v2-card"));
+        const visibleAnnouncementCount = document.getElementById("visibleAnnouncementCount");
+        const noAnnouncementResult = document.getElementById("noAnnouncementResult");
+
+        function normalizeAnnouncementText(value) {
+            return (value || "")
+                .toString()
+                .toLocaleLowerCase("tr-TR")
+                .replaceAll("ı", "i")
+                .replaceAll("ğ", "g")
+                .replaceAll("ü", "u")
+                .replaceAll("ş", "s")
+                .replaceAll("ö", "o")
+                .replaceAll("ç", "c")
+                .replaceAll("İ", "i")
+                .trim();
+        }
+
+        function filterAnnouncements() {
+            const query = normalizeAnnouncementText(announcementSearchInput?.value || "");
+            let count = 0;
+
+            announcementCards.forEach(card => {
+                const title = normalizeAnnouncementText(card.dataset.title || "");
+                const content = normalizeAnnouncementText(card.dataset.content || "");
+                const target = normalizeAnnouncementText(card.dataset.target || "");
+                const author = normalizeAnnouncementText(card.dataset.author || "");
+
+                const searchable = `${title} ${content} ${target} ${author}`;
+                const show = query === "" || searchable.includes(query);
+
+                card.style.display = show ? "" : "none";
+
+                if (show) {
+                    count++;
+                }
+            });
+
+            if (visibleAnnouncementCount) {
+                visibleAnnouncementCount.textContent = count;
+            }
+
+            if (noAnnouncementResult) {
+                noAnnouncementResult.style.display = count === 0 ? "grid" : "none";
+            }
+        }
+
+        if (announcementSearchInput) {
+            announcementSearchInput.addEventListener("input", function (event) {
+                event.preventDefault();
+                filterAnnouncements();
+            });
+
+            announcementSearchInput.addEventListener("keydown", function (event) {
+                if (event.key === "Enter") {
+                    event.preventDefault();
+                }
+            });
+        }
+
+        filterAnnouncements();
+    </script>
+}

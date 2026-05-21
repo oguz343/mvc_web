@@ -3,45 +3,577 @@
 @{
     Layout = "_AdminLayout";
     ViewData["Title"] = "Raporlama";
+    ViewData["PageTitle"] = "Raporlama";
+    ViewData["PageSubtitle"] = "Ödev teslim durumlarını, sınıfları, tarih aralıklarını ve notlandırmaları koyu tema ile daha net takip edin.";
+
+    var reportModel = Model ?? new HomeworkReportsViewModel();
+    var reportFilter = reportModel.Filter ?? new ReportFilterViewModel();
+    var reportClasses = reportModel.Classes ?? new List<ReportOptionViewModel>();
+    var reportAssignments = reportModel.Assignments ?? new List<ReportOptionViewModel>();
+    var rows = reportModel.Rows ?? new List<HomeworkReportRowViewModel>();
+    var submittedCount = reportModel.SubmittedCount;
+    var missingCount = reportModel.MissingCount;
+    var gradedCount = reportModel.GradedCount;
+    var totalCount = rows.Count;
+    var successRate = totalCount == 0 ? 0 : Math.Round((double)submittedCount * 100 / totalCount);
+
+    string SafeText(string value, string fallback = "-")
+    {
+        return string.IsNullOrWhiteSpace(value) ? fallback : value;
+    }
+
+    string DateText(DateTime? date)
+    {
+        return date?.ToString("dd.MM.yyyy HH:mm") ?? "-";
+    }
+
+    string StatusClass(HomeworkReportRowViewModel row)
+    {
+        if (row.IsGraded)
+        {
+            return "graded";
+        }
+
+        if (row.IsSubmitted)
+        {
+            return "submitted";
+        }
+
+        if (row.DueDate != null && row.DueDate.Value < DateTime.Now)
+        {
+            return "late";
+        }
+
+        return "missing";
+    }
+
+    string StatusText(HomeworkReportRowViewModel row)
+    {
+        if (row.IsGraded)
+        {
+            return "Not Verildi";
+        }
+
+        if (row.IsSubmitted)
+        {
+            return "Teslim Edildi";
+        }
+
+        if (row.DueDate != null && row.DueDate.Value < DateTime.Now)
+        {
+            return "Geç Kaldı";
+        }
+
+        return "Teslim Yok";
+    }
 }
 
-<div class="reports-page">
-    <section class="report-hero no-print">
-        <div>
-            <p>Raporlama</p>
-            <h2>Ödev teslim durumları</h2>
-            <span>Teslim edenleri, etmeyenleri, tarih aralıklarını ve en yüksek notları tek ekranda filtreleyin.</span>
+<style>
+    .reports-v2 {
+        width: 100%;
+        max-width: none;
+        display: grid;
+        gap: 18px;
+    }
+
+    .reports-v2-hero {
+        position: relative;
+        overflow: hidden;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 380px;
+        gap: 18px;
+        padding: 24px;
+        border-radius: 32px;
+        background:
+            radial-gradient(circle at 0% 0%, rgba(56, 189, 248, .15), transparent 34%),
+            radial-gradient(circle at 100% 0%, rgba(139, 92, 246, .18), transparent 34%),
+            linear-gradient(135deg, rgba(15, 23, 42, .94), rgba(17, 24, 39, .86));
+        border: 1px solid rgba(148, 163, 184, .20);
+        box-shadow: 0 24px 70px rgba(0, 0, 0, .28);
+        backdrop-filter: blur(18px);
+    }
+
+    .reports-v2-hero::after {
+        content: "";
+        position: absolute;
+        width: 390px;
+        height: 390px;
+        right: -180px;
+        top: -190px;
+        border-radius: 999px;
+        background: rgba(99, 102, 241, .22);
+        pointer-events: none;
+    }
+
+    .reports-v2-hero-main,
+    .reports-v2-hero-side {
+        position: relative;
+        z-index: 1;
+    }
+
+    .reports-v2-kicker {
+        width: fit-content;
+        min-height: 30px;
+        display: inline-flex;
+        align-items: center;
+        padding: 0 12px;
+        border-radius: 999px;
+        color: #67e8f9;
+        background: rgba(56, 189, 248, .10);
+        border: 1px solid rgba(103, 232, 249, .20);
+        font-size: 11px;
+        font-weight: 950;
+        letter-spacing: .16em;
+        text-transform: uppercase;
+    }
+
+    .reports-v2-hero h2 {
+        max-width: 800px;
+        margin: 14px 0 0;
+        color: #ffffff;
+        font-size: clamp(34px, 3.8vw, 58px);
+        font-weight: 950;
+        line-height: 1;
+        letter-spacing: -.06em;
+    }
+
+    .reports-v2-hero p {
+        max-width: 780px;
+        margin: 14px 0 0;
+        color: #aab8cf;
+        font-size: 15px;
+        font-weight: 700;
+        line-height: 1.65;
+    }
+
+    .reports-v2-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 20px;
+    }
+
+    .reports-v2-print,
+    .reports-v2-soft-action {
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 15px;
+        border-radius: 15px;
+        border: 1px solid rgba(125, 211, 252, .22);
+        text-decoration: none;
+        cursor: pointer;
+        color: #ffffff;
+        background: linear-gradient(135deg, #2563eb, #7c3aed);
+        box-shadow: 0 14px 30px rgba(37, 99, 235, .24);
+        font-size: 13px;
+        font-weight: 950;
+        transition: .16s ease;
+    }
+
+    .reports-v2-soft-action {
+        color: #dbeafe;
+        background: rgba(255, 255, 255, .060);
+        border-color: rgba(148, 163, 184, .18);
+        box-shadow: none;
+    }
+
+    .reports-v2-print:hover,
+    .reports-v2-soft-action:hover {
+        transform: translateY(-1px);
+    }
+
+    .reports-v2-hero-side {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    .reports-v2-summary-card {
+        min-height: 106px;
+        padding: 16px;
+        border-radius: 22px;
+        background: rgba(255, 255, 255, .055);
+        border: 1px solid rgba(148, 163, 184, .16);
+    }
+
+    .reports-v2-summary-card strong {
+        display: block;
+        color: #ffffff;
+        font-size: 30px;
+        font-weight: 950;
+        line-height: 1;
+        letter-spacing: -.04em;
+    }
+
+    .reports-v2-summary-card span {
+        display: block;
+        margin-top: 7px;
+        color: #94a3b8;
+        font-size: 12px;
+        font-weight: 850;
+    }
+
+    .reports-v2-filter {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        gap: 12px;
+        padding: 18px;
+        border-radius: 28px;
+        background:
+            radial-gradient(circle at 0% 0%, rgba(56, 189, 248, .08), transparent 34%),
+            linear-gradient(135deg, rgba(17, 25, 46, .94), rgba(15, 23, 42, .84));
+        border: 1px solid rgba(148, 163, 184, .18);
+        box-shadow: 0 16px 44px rgba(0, 0, 0, .20);
+        backdrop-filter: blur(16px);
+    }
+
+    .reports-v2-field {
+        display: grid;
+        gap: 7px;
+    }
+
+    .reports-v2-field label {
+        color: #dbeafe;
+        font-size: 12px;
+        font-weight: 950;
+    }
+
+    .reports-v2-field select,
+    .reports-v2-field input {
+        width: 100%;
+        min-height: 45px;
+        padding: 0 12px;
+        border-radius: 14px;
+        color: #ffffff;
+        background: rgba(7, 17, 31, .58);
+        border: 1px solid rgba(148, 163, 184, .18);
+        outline: none;
+        font-size: 13px;
+        font-weight: 800;
+    }
+
+    .reports-v2-field select:focus,
+    .reports-v2-field input:focus {
+        border-color: rgba(103, 232, 249, .45);
+        box-shadow: 0 0 0 4px rgba(56, 189, 248, .09);
+    }
+
+    .reports-v2-field option {
+        color: #0f172a;
+        background: #ffffff;
+    }
+
+    .reports-v2-filter-button {
+        min-height: 45px;
+        align-self: end;
+        border: 0;
+        border-radius: 14px;
+        color: #ffffff;
+        cursor: pointer;
+        background: linear-gradient(135deg, #2563eb, #7c3aed);
+        font-size: 13px;
+        font-weight: 950;
+    }
+
+    .reports-v2-table-card {
+        overflow: hidden;
+        border-radius: 30px;
+        background:
+            radial-gradient(circle at 0% 0%, rgba(56, 189, 248, .07), transparent 34%),
+            linear-gradient(135deg, rgba(17, 25, 46, .94), rgba(15, 23, 42, .84));
+        border: 1px solid rgba(148, 163, 184, .18);
+        box-shadow: 0 16px 44px rgba(0, 0, 0, .20);
+        backdrop-filter: blur(16px);
+    }
+
+    .reports-v2-table-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        padding: 20px;
+        border-bottom: 1px solid rgba(148, 163, 184, .14);
+    }
+
+    .reports-v2-table-head h3 {
+        margin: 0;
+        color: #ffffff;
+        font-size: 20px;
+        font-weight: 950;
+        letter-spacing: -.025em;
+    }
+
+    .reports-v2-table-head p {
+        margin: 5px 0 0;
+        color: #94a3b8;
+        font-size: 13px;
+        font-weight: 750;
+    }
+
+    .reports-v2-table-wrap {
+        width: 100%;
+        overflow-x: auto;
+    }
+
+    .reports-v2-table {
+        width: 100%;
+        min-width: 1180px;
+        border-collapse: collapse;
+    }
+
+    .reports-v2-table th,
+    .reports-v2-table td {
+        padding: 15px 16px;
+        text-align: left;
+        vertical-align: middle;
+        border-bottom: 1px solid rgba(148, 163, 184, .10);
+    }
+
+    .reports-v2-table th {
+        color: #bfdbfe;
+        background: rgba(255, 255, 255, .055);
+        font-size: 12px;
+        font-weight: 950;
+        letter-spacing: .045em;
+        text-transform: uppercase;
+        white-space: nowrap;
+    }
+
+    .reports-v2-table td {
+        color: #dbeafe;
+        font-size: 13px;
+        font-weight: 750;
+    }
+
+    .reports-v2-table tbody tr:hover {
+        background: rgba(255, 255, 255, .04);
+    }
+
+    .reports-v2-student {
+        display: grid;
+        gap: 4px;
+    }
+
+    .reports-v2-student strong {
+        color: #ffffff;
+        font-size: 14px;
+        font-weight: 950;
+    }
+
+    .reports-v2-student span {
+        color: #94a3b8;
+        font-size: 12px;
+        font-weight: 800;
+    }
+
+    .reports-v2-status {
+        min-height: 31px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 950;
+        white-space: nowrap;
+        border: 1px solid transparent;
+    }
+
+    .reports-v2-status.graded {
+        color: #bfdbfe;
+        background: rgba(37, 99, 235, .14);
+        border-color: rgba(96, 165, 250, .20);
+    }
+
+    .reports-v2-status.submitted {
+        color: #bbf7d0;
+        background: rgba(34, 197, 94, .13);
+        border-color: rgba(74, 222, 128, .20);
+    }
+
+    .reports-v2-status.missing {
+        color: #fde68a;
+        background: rgba(245, 158, 11, .13);
+        border-color: rgba(251, 191, 36, .18);
+    }
+
+    .reports-v2-status.late {
+        color: #fecaca;
+        background: rgba(239, 68, 68, .13);
+        border-color: rgba(248, 113, 113, .20);
+    }
+
+    .reports-v2-empty {
+        min-height: 300px;
+        display: grid;
+        place-items: center;
+        text-align: center;
+        padding: 42px 24px;
+        color: #94a3b8;
+        font-size: 15px;
+        font-weight: 850;
+    }
+
+    .reports-v2-empty-icon {
+        width: 76px;
+        height: 76px;
+        display: grid;
+        place-items: center;
+        margin: 0 auto 15px;
+        border-radius: 26px;
+        color: #ffffff;
+        background: linear-gradient(135deg, #2563eb, #7c3aed);
+        font-size: 34px;
+    }
+
+    @@media print {
+        .no-print,
+        .topbar,
+        .sidebar {
+            display: none !important;
+        }
+
+        body {
+            background: #ffffff !important;
+            color: #000000 !important;
+        }
+
+        .app-shell {
+            display: block !important;
+            padding: 0 !important;
+        }
+
+        .reports-v2-hero,
+        .reports-v2-table-card {
+            box-shadow: none !important;
+            background: #ffffff !important;
+            color: #000000 !important;
+            border: 1px solid #cbd5e1 !important;
+        }
+
+        .reports-v2-table th,
+        .reports-v2-table td,
+        .reports-v2-table-head h3,
+        .reports-v2-student strong {
+            color: #000000 !important;
+        }
+    }
+
+    @@media (max-width: 1300px) {
+        .reports-v2-hero {
+            grid-template-columns: 1fr;
+        }
+
+        .reports-v2-filter {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+    }
+
+    @@media (max-width: 760px) {
+        .reports-v2-hero,
+        .reports-v2-table-card,
+        .reports-v2-filter {
+            border-radius: 22px;
+        }
+
+        .reports-v2-hero {
+            padding: 16px;
+        }
+
+        .reports-v2-hero-side,
+        .reports-v2-filter {
+            grid-template-columns: 1fr;
+        }
+
+        .reports-v2-actions {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .reports-v2-print,
+        .reports-v2-soft-action {
+            width: 100%;
+        }
+    }
+</style>
+
+<div class="reports-v2">
+    <section class="reports-v2-hero no-print">
+        <div class="reports-v2-hero-main">
+            <div class="reports-v2-kicker">Rapor Merkezi</div>
+
+            <h2>Ödev teslim raporları daha okunabilir.</h2>
+
+            <p>
+                Teslim edenleri, etmeyenleri, not verilenleri ve sınıf bazlı durumu tek ekranda
+                koyu tema ile daha net inceleyin.
+            </p>
+
+            <div class="reports-v2-actions">
+                <button type="button" class="reports-v2-print" onclick="window.print()">
+                    🖨️ Yazdır
+                </button>
+
+                <a asp-controller="Dashboard" asp-action="Index" class="reports-v2-soft-action">
+                    📊 Kontrol Paneli
+                </a>
+            </div>
         </div>
 
-        <button type="button" class="print-btn" onclick="window.print()">
-            Yazdır
-        </button>
+        <div class="reports-v2-hero-side">
+            <div class="reports-v2-summary-card">
+                <strong>@totalCount</strong>
+                <span>Toplam Kayıt</span>
+            </div>
+
+            <div class="reports-v2-summary-card">
+                <strong>@submittedCount</strong>
+                <span>Teslim Eden</span>
+            </div>
+
+            <div class="reports-v2-summary-card">
+                <strong>@missingCount</strong>
+                <span>Teslim Etmeyen</span>
+            </div>
+
+            <div class="reports-v2-summary-card">
+                <strong>%@successRate</strong>
+                <span>Teslim Oranı</span>
+            </div>
+        </div>
     </section>
 
-    <form method="get" class="report-filter no-print">
-        <div>
+    <form method="get" class="reports-v2-filter no-print">
+        <div class="reports-v2-field">
             <label>Sınıf</label>
             <select asp-for="Filter.ClassName" name="ClassName">
                 <option value="">Tüm sınıflar</option>
-                @foreach (var item in Model.Classes)
+                @foreach (var item in reportClasses)
                 {
-                    <option value="@item.Value" selected="@(Model.Filter.ClassName == item.Value ? "selected" : null)">@item.Text</option>
+                    <option value="@item.Value" selected="@(reportFilter.ClassName == item.Value ? "selected" : null)">
+                        @item.Text
+                    </option>
                 }
             </select>
         </div>
 
-        <div>
+        <div class="reports-v2-field">
             <label>Ödev</label>
             <select asp-for="Filter.AssignmentId" name="AssignmentId">
                 <option value="">Tüm ödevler</option>
-                @foreach (var item in Model.Assignments)
+                @foreach (var item in reportAssignments)
                 {
-                    <option value="@item.Value" selected="@(Model.Filter.AssignmentId == item.Value ? "selected" : null)">@item.Text</option>
+                    <option value="@item.Value" selected="@(reportFilter.AssignmentId == item.Value ? "selected" : null)">
+                        @item.Text
+                    </option>
                 }
             </select>
         </div>
 
-        <div>
+        <div class="reports-v2-field">
             <label>Durum</label>
             <select asp-for="Filter.Status" name="Status">
                 <option value="all">Tüm kayıtlar</option>
@@ -52,99 +584,93 @@
             </select>
         </div>
 
-        <div>
+        <div class="reports-v2-field">
             <label>Başlangıç</label>
-            <input type="date" name="FromDate" value="@Model.Filter.FromDate" />
+            <input type="date" name="FromDate" value="@reportFilter.FromDate" />
         </div>
 
-        <div>
+        <div class="reports-v2-field">
             <label>Bitiş</label>
-            <input type="date" name="ToDate" value="@Model.Filter.ToDate" />
+            <input type="date" name="ToDate" value="@reportFilter.ToDate" />
         </div>
 
-        <div>
+        <div class="reports-v2-field">
             <label>Sıralama</label>
             <select asp-for="Filter.Sort" name="Sort">
                 <option value="date_desc">Tarih yeni-eski</option>
                 <option value="student">Öğrenci</option>
                 <option value="assignment">Ödev</option>
                 <option value="score_desc">Not yüksek-düşük</option>
-                <option value="score_asc">Not düşük-yüksek</option>
             </select>
         </div>
 
-        <button type="submit">Raporu Getir</button>
+        <button type="submit" class="reports-v2-filter-button">
+            Filtrele
+        </button>
     </form>
 
-    <section class="report-summary">
-        <div>
-            <span>Toplam satır</span>
-            <strong>@Model.Rows.Count</strong>
+    <section class="reports-v2-table-card">
+        <div class="reports-v2-table-head">
+            <div>
+                <h3>Rapor Kayıtları</h3>
+                <p>@totalCount kayıt listeleniyor. @gradedCount kayıt notlandırılmış.</p>
+            </div>
         </div>
-        <div>
-            <span>Teslim eden</span>
-            <strong>@Model.SubmittedCount</strong>
-        </div>
-        <div>
-            <span>Teslim etmeyen</span>
-            <strong>@Model.MissingCount</strong>
-        </div>
-        <div>
-            <span>Not verilen</span>
-            <strong>@Model.GradedCount</strong>
-        </div>
-    </section>
 
-    <section class="print-title">
-        <h1>Ödev Raporu</h1>
-        <p>@DateTime.Now.ToString("dd.MM.yyyy HH:mm") tarihinde oluşturuldu.</p>
-    </section>
-
-    <section class="report-table-card">
-        @if (!Model.Rows.Any())
+        @if (!rows.Any())
         {
-            <div class="empty-report">
-                Seçilen filtrelere uygun kayıt bulunamadı.
+            <div class="reports-v2-empty">
+                <div>
+                    <div class="reports-v2-empty-icon">📈</div>
+                    Filtreye uygun rapor kaydı bulunamadı.
+                </div>
             </div>
         }
         else
         {
-            <div class="table-responsive">
-                <table class="report-table">
+            <div class="reports-v2-table-wrap">
+                <table class="reports-v2-table">
                     <thead>
                         <tr>
                             <th>Öğrenci</th>
-                            <th>No</th>
                             <th>Sınıf</th>
                             <th>Ödev</th>
                             <th>Ders</th>
                             <th>Öğretmen</th>
-                            <th>Son tarih</th>
+                            <th>Son Tarih</th>
                             <th>Teslim</th>
-                            <th>Durum</th>
                             <th>Not</th>
-                            <th>Geri dönüş</th>
+                            <th>Durum</th>
                         </tr>
                     </thead>
+
                     <tbody>
-                        @foreach (var row in Model.Rows)
+                        @foreach (var row in rows)
                         {
+                            var statusClass = StatusClass(row);
+                            var statusText = StatusText(row);
+
                             <tr>
-                                <td>@row.StudentName</td>
-                                <td>@row.StudentNo</td>
-                                <td>@row.ClassName</td>
-                                <td>@row.AssignmentTitle</td>
-                                <td>@row.LessonName</td>
-                                <td>@row.TeacherName</td>
-                                <td>@(row.DueDate?.ToString("dd.MM.yyyy HH:mm") ?? "-")</td>
-                                <td>@(row.SubmittedAt?.ToString("dd.MM.yyyy HH:mm") ?? "-")</td>
                                 <td>
-                                    <span class="status-pill @(row.IsSubmitted ? "ok" : "warn")">
-                                        @(row.IsSubmitted ? "Teslim edildi" : "Teslim edilmedi")
+                                    <div class="reports-v2-student">
+                                        <strong>@SafeText(row.StudentName, "İsimsiz Öğrenci")</strong>
+                                        <span>No: @SafeText(row.StudentNo)</span>
+                                    </div>
+                                </td>
+
+                                <td>@SafeText(row.ClassName)</td>
+                                <td>@SafeText(row.AssignmentTitle)</td>
+                                <td>@SafeText(row.LessonName)</td>
+                                <td>@SafeText(row.TeacherName)</td>
+                                <td>@DateText(row.DueDate)</td>
+                                <td>@DateText(row.SubmittedAt)</td>
+                                <td>@SafeText(row.Score)</td>
+
+                                <td>
+                                    <span class="reports-v2-status @statusClass">
+                                        @statusText
                                     </span>
                                 </td>
-                                <td>@(string.IsNullOrWhiteSpace(row.Score) ? "-" : row.Score)</td>
-                                <td>@(string.IsNullOrWhiteSpace(row.Feedback) ? "-" : row.Feedback)</td>
                             </tr>
                         }
                     </tbody>
@@ -153,258 +679,3 @@
         }
     </section>
 </div>
-
-<style>
-    .reports-page {
-        display: grid;
-        gap: 18px;
-    }
-
-    .report-hero {
-        border-radius: 28px;
-        padding: 24px;
-        background: linear-gradient(135deg, #0f172a, #2563eb 58%, #06b6d4);
-        color: #fff;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 18px;
-        box-shadow: 0 24px 56px rgba(15, 23, 42, .18);
-    }
-
-    .report-hero p,
-    .report-hero h2,
-    .report-hero span {
-        margin: 0;
-    }
-
-    .report-hero p {
-        opacity: .74;
-        font-weight: 900;
-        margin-bottom: 6px;
-    }
-
-    .report-hero h2 {
-        font-size: 31px;
-        font-weight: 950;
-        letter-spacing: 0;
-    }
-
-    .report-hero span {
-        display: block;
-        margin-top: 7px;
-        opacity: .82;
-        font-weight: 750;
-    }
-
-    .print-btn,
-    .report-filter button {
-        border: 0;
-        border-radius: 16px;
-        min-height: 48px;
-        padding: 0 18px;
-        font-weight: 950;
-        cursor: pointer;
-    }
-
-    .print-btn {
-        background: #fff;
-        color: #1d4ed8;
-    }
-
-    .report-filter {
-        display: grid;
-        grid-template-columns: repeat(6, minmax(0, 1fr)) auto;
-        gap: 12px;
-        padding: 18px;
-        border: 1px solid #dbe3ef;
-        border-radius: 24px;
-        background: #fff;
-        box-shadow: 0 16px 42px rgba(15, 23, 42, .08);
-    }
-
-    .report-filter div {
-        display: grid;
-        gap: 7px;
-    }
-
-    .report-filter label {
-        color: #475569;
-        font-weight: 900;
-        font-size: 12px;
-    }
-
-    .report-filter select,
-    .report-filter input {
-        width: 100%;
-        border: 1px solid #dbe3ef;
-        border-radius: 14px;
-        min-height: 44px;
-        padding: 0 12px;
-        color: #0f172a;
-        font-weight: 800;
-        background: #f8fafc;
-    }
-
-    .report-filter button {
-        align-self: end;
-        background: #2563eb;
-        color: #fff;
-    }
-
-    .report-summary {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 12px;
-    }
-
-    .report-summary div {
-        border-radius: 22px;
-        padding: 18px;
-        background: #fff;
-        border: 1px solid #dbe3ef;
-        box-shadow: 0 14px 34px rgba(15, 23, 42, .07);
-    }
-
-    .report-summary span {
-        display: block;
-        color: #64748b;
-        font-weight: 850;
-        margin-bottom: 6px;
-    }
-
-    .report-summary strong {
-        color: #0f172a;
-        font-size: 28px;
-        font-weight: 950;
-    }
-
-    .print-title {
-        display: none;
-    }
-
-    .report-table-card {
-        overflow: hidden;
-        border-radius: 24px;
-        background: #fff;
-        border: 1px solid #dbe3ef;
-        box-shadow: 0 18px 46px rgba(15, 23, 42, .08);
-    }
-
-    .table-responsive {
-        overflow-x: auto;
-    }
-
-    .report-table {
-        width: 100%;
-        border-collapse: collapse;
-        min-width: 1040px;
-    }
-
-    .report-table th {
-        background: #eef2f7;
-        color: #334155;
-        font-size: 12px;
-        text-align: left;
-        padding: 13px;
-        font-weight: 950;
-        border-bottom: 1px solid #dbe3ef;
-    }
-
-    .report-table td {
-        padding: 13px;
-        border-bottom: 1px solid #edf2f7;
-        color: #0f172a;
-        font-weight: 750;
-        vertical-align: top;
-    }
-
-    .status-pill {
-        display: inline-flex;
-        border-radius: 999px;
-        padding: 7px 10px;
-        font-size: 12px;
-        font-weight: 950;
-        white-space: nowrap;
-    }
-
-    .status-pill.ok {
-        background: #dcfce7;
-        color: #166534;
-    }
-
-    .status-pill.warn {
-        background: #ffedd5;
-        color: #9a3412;
-    }
-
-    .empty-report {
-        padding: 34px;
-        text-align: center;
-        color: #64748b;
-        font-weight: 900;
-    }
-
-    @@media (max-width: 1100px) {
-        .report-filter {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-    }
-
-    @@media print {
-        body {
-            background: #fff !important;
-        }
-
-        .sidebar,
-        .topbar,
-        .no-print,
-        .delete-modal-backdrop {
-            display: none !important;
-        }
-
-        .app-shell,
-        .main-content,
-        .content-area {
-            display: block !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            width: 100% !important;
-        }
-
-        .print-title {
-            display: block;
-            margin-bottom: 12px;
-        }
-
-        .print-title h1 {
-            margin: 0;
-            font-size: 22px;
-        }
-
-        .print-title p {
-            margin: 4px 0 0;
-            color: #475569;
-        }
-
-        .report-summary {
-            grid-template-columns: repeat(4, 1fr);
-        }
-
-        .report-summary div,
-        .report-table-card {
-            box-shadow: none !important;
-            border-color: #cbd5e1 !important;
-        }
-
-        .report-table {
-            min-width: 0;
-            font-size: 11px;
-        }
-
-        .report-table th,
-        .report-table td {
-            padding: 7px;
-        }
-    }
-</style>

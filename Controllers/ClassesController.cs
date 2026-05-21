@@ -19,12 +19,17 @@ namespace mvc_web.Controllers
 
         public async Task<IActionResult> Index()
         {
-            var snapshot = await _firestore
+            var classesTask = _firestore
                 .Collection("classes")
                 .OrderBy("grade")
                 .GetSnapshotAsync();
+            var studentCountsTask = LoadStudentCountsByClass();
+
+            await Task.WhenAll(classesTask, studentCountsTask);
 
             var classes = new List<ClassViewModel>();
+            var snapshot = classesTask.Result;
+            var studentCounts = studentCountsTask.Result;
 
             foreach (var doc in snapshot.Documents)
             {
@@ -53,7 +58,7 @@ namespace mvc_web.Controllers
                     TeacherId = GetString(data, "teacherId", "TeacherId"),
                     TeacherName = GetString(data, "teacherName", "TeacherName"),
                     Capacity = GetInt(data, 30, "capacity", "Capacity"),
-                    StudentCount = await CountStudentsByClass(name)
+                    StudentCount = studentCounts.GetValueOrDefault(name)
                 };
 
                 classes.Add(model);
@@ -270,17 +275,28 @@ namespace mvc_web.Controllers
                 }
             };
 
-            var snapshot = await _firestore
-                .Collection("users")
-                .WhereEqualTo("role", "Öğretmen")
-                .GetSnapshotAsync();
+            var teacherDocs = await LoadUserDocsByRole("ogretmen");
 
-            foreach (var doc in snapshot.Documents)
+            foreach (var doc in teacherDocs)
             {
                 var data = doc.ToDictionary();
 
-                var name = GetString(data, "name", "Name");
-                var branch = GetString(data, "branch", "Branch");
+                var name = FirstNonEmpty(
+                    GetString(data, "name", "Name"),
+                    GetString(data, "fullName", "FullName"),
+                    GetString(data, "userName", "UserName"),
+                    GetString(data, "teacherName", "TeacherName")
+                );
+
+                if (string.IsNullOrWhiteSpace(name))
+                {
+                    continue;
+                }
+
+                var branch = FirstNonEmpty(
+                    GetString(data, "branch", "Branch"),
+                    GetString(data, "teacherBranch", "TeacherBranch")
+                );
 
                 result.Add(new SelectListItem
                 {
@@ -322,14 +338,17 @@ namespace mvc_web.Controllers
                 return 0;
             }
 
-            var snapshot = await _firestore
-                .Collection("users")
-                .WhereEqualTo("role", "Öğrenci")
-                .GetSnapshotAsync();
+            var counts = await LoadStudentCountsByClass();
 
-            int count = 0;
+            return counts.GetValueOrDefault(target);
+        }
 
-            foreach (var doc in snapshot.Documents)
+        private async Task<Dictionary<string, int>> LoadStudentCountsByClass()
+        {
+            var counts = new Dictionary<string, int>();
+            var studentDocs = await LoadUserDocsByRole("ogrenci");
+
+            foreach (var doc in studentDocs)
             {
                 var data = doc.ToDictionary();
 
@@ -337,13 +356,15 @@ namespace mvc_web.Controllers
                     GetString(data, "className", "ClassName", "class", "Class")
                 );
 
-                if (userClass == target)
+                if (string.IsNullOrWhiteSpace(userClass))
                 {
-                    count++;
+                    continue;
                 }
+
+                counts[userClass] = counts.GetValueOrDefault(userClass) + 1;
             }
 
-            return count;
+            return counts;
         }
 
         private async Task<bool> ClassExists(string className, string? excludedId = null)
@@ -414,6 +435,179 @@ namespace mvc_web.Controllers
             if (match.Success)
             {
                 return $"{match.Groups[2].Value}-{match.Groups[1].Value}";
+            }
+
+            return "";
+        }
+
+        private async Task<List<DocumentSnapshot>> LoadUserDocsByRole(string roleKey)
+        {
+            var roleFields = new[] { "role", "Role", "userRole", "UserRole" };
+            var roleValues = RoleQueryValues(roleKey);
+
+            async Task<QuerySnapshot?> ReadRoleQuery(string field, string value)
+            {
+                try
+                {
+                    return await _firestore
+                        .Collection("users")
+                        .WhereEqualTo(field, value)
+                        .GetSnapshotAsync();
+                }
+                catch
+                {
+                    return null;
+                }
+            }
+
+            var snapshots = await Task.WhenAll(
+                roleFields.SelectMany(field =>
+                    roleValues.Select(value => ReadRoleQuery(field, value)))
+            );
+
+            var docs = new Dictionary<string, DocumentSnapshot>();
+
+            foreach (var snapshot in snapshots)
+            {
+                if (snapshot == null)
+                {
+                    continue;
+                }
+
+                AddMatchingUsers(snapshot.Documents, roleKey, docs);
+            }
+
+            if (docs.Count == 0)
+            {
+                try
+                {
+                    var fallback = await _firestore.Collection("users").GetSnapshotAsync();
+                    AddMatchingUsers(fallback.Documents, roleKey, docs);
+                }
+                catch
+                {
+                }
+            }
+
+            return docs.Values.ToList();
+        }
+
+        private static void AddMatchingUsers(
+            IEnumerable<DocumentSnapshot> source,
+            string roleKey,
+            Dictionary<string, DocumentSnapshot> target)
+        {
+            foreach (var doc in source)
+            {
+                var data = doc.ToDictionary();
+
+                if (IsDeletedUser(data))
+                {
+                    continue;
+                }
+
+                var currentRole = NormalizeKey(GetString(data, "role", "Role", "userRole", "UserRole"));
+
+                if (currentRole != roleKey)
+                {
+                    continue;
+                }
+
+                target.TryAdd(doc.Id, doc);
+            }
+        }
+
+        private static string[] RoleQueryValues(string roleKey)
+        {
+            return roleKey switch
+            {
+                "ogretmen" => new[]
+                {
+                    "\u00d6\u011fretmen",
+                    "\u00f6\u011fretmen",
+                    "Ogretmen",
+                    "ogretmen",
+                    "Teacher",
+                    "teacher"
+                },
+                "ogrenci" => new[]
+                {
+                    "\u00d6\u011frenci",
+                    "\u00f6\u011frenci",
+                    "Ogrenci",
+                    "ogrenci",
+                    "Student",
+                    "student"
+                },
+                _ => new[] { roleKey }
+            };
+        }
+
+        private static bool IsDeletedUser(Dictionary<string, object> data)
+        {
+            if (data == null || data.Count == 0)
+            {
+                return true;
+            }
+
+            if (GetBool(data, "isDeleted", "IsDeleted", "deleted", "Deleted") ||
+                GetBool(data, "isArchived", "IsArchived", "archived", "Archived") ||
+                GetBool(data, "isHidden", "IsHidden", "hidden", "Hidden"))
+            {
+                return true;
+            }
+
+            var status = NormalizeKey(GetString(data, "status", "Status"));
+
+            return status is "silindi" or "deleted" or "pasif" or "inactive" or "arsivlendi" or "archived";
+        }
+
+        private static bool GetBool(Dictionary<string, object> data, params string[] keys)
+        {
+            foreach (var key in keys)
+            {
+                if (!data.TryGetValue(key, out var value) || value == null)
+                {
+                    continue;
+                }
+
+                if (value is bool boolValue)
+                {
+                    return boolValue;
+                }
+
+                if (bool.TryParse(value.ToString(), out var parsed))
+                {
+                    return parsed;
+                }
+            }
+
+            return false;
+        }
+
+        private static string NormalizeKey(string value)
+        {
+            var text = (value ?? "")
+                .Trim()
+                .ToLowerInvariant()
+                .Replace("\u00f6", "o")
+                .Replace("\u011f", "g")
+                .Replace("\u00fc", "u")
+                .Replace("\u015f", "s")
+                .Replace("\u0131", "i")
+                .Replace("\u00e7", "c");
+
+            return Regex.Replace(text, @"\s+", "");
+        }
+
+        private static string FirstNonEmpty(params string[] values)
+        {
+            foreach (var value in values)
+            {
+                if (!string.IsNullOrWhiteSpace(value))
+                {
+                    return value;
+                }
             }
 
             return "";

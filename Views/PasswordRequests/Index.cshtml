@@ -3,36 +3,639 @@
 @{
     Layout = "_AdminLayout";
     ViewData["Title"] = "Şifre Talepleri";
+    ViewData["PageTitle"] = "Şifre Talepleri";
+    ViewData["PageSubtitle"] = "Şifresini unutan öğrencilerin, öğretmenlerin ve velilerin taleplerini onaylayın. Onaylanan talebin aktivasyon kodu kartın içinde kalıcı görünür.";
+
+    var pendingCount = Model?.Count(x => x.Status == "Bekliyor") ?? 0;
+    var approvedCount = Model?.Count(x => x.Status == "Onaylandı") ?? 0;
+    var rejectedCount = Model?.Count(x => x.Status == "Reddedildi") ?? 0;
+    var totalCount = Model?.Count ?? 0;
+
+    string RoleIcon(string role)
+    {
+        return role switch
+        {
+            "Öğretmen" => "👨‍🏫",
+            "Veli" => "👪",
+            "Admin" => "🛡️",
+            _ => "🎒"
+        };
+    }
+
+    string RoleClass(string role)
+    {
+        return role switch
+        {
+            "Öğretmen" => "teacher",
+            "Veli" => "parent",
+            "Admin" => "admin",
+            _ => "student"
+        };
+    }
+
+    string StatusClass(string status)
+    {
+        return status switch
+        {
+            "Onaylandı" => "approved",
+            "Reddedildi" => "rejected",
+            "Tamamlandı" => "completed",
+            _ => "pending"
+        };
+    }
 }
 
+<style>
+    .request-page {
+        width: 100%;
+        max-width: none;
+        display: grid;
+        gap: 18px;
+    }
+
+    .request-hero {
+        position: relative;
+        overflow: hidden;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 360px;
+        gap: 18px;
+        padding: 24px;
+        border-radius: 30px;
+        background:
+            radial-gradient(circle at 0% 0%, rgba(56, 189, 248, .14), transparent 34%),
+            radial-gradient(circle at 100% 0%, rgba(139, 92, 246, .16), transparent 34%),
+            linear-gradient(135deg, rgba(15, 23, 42, .94), rgba(17, 24, 39, .86));
+        border: 1px solid rgba(148, 163, 184, .20);
+        box-shadow: 0 24px 70px rgba(0, 0, 0, .28);
+        backdrop-filter: blur(18px);
+    }
+
+    .request-hero::after {
+        content: "";
+        position: absolute;
+        width: 340px;
+        height: 340px;
+        right: -150px;
+        top: -170px;
+        border-radius: 999px;
+        background: rgba(99, 102, 241, .22);
+        pointer-events: none;
+    }
+
+    .request-hero-main,
+    .request-hero-side {
+        position: relative;
+        z-index: 1;
+    }
+
+    .request-kicker {
+        width: fit-content;
+        display: inline-flex;
+        align-items: center;
+        min-height: 30px;
+        padding: 0 12px;
+        border-radius: 999px;
+        color: #67e8f9;
+        background: rgba(56, 189, 248, .10);
+        border: 1px solid rgba(103, 232, 249, .20);
+        font-size: 11px;
+        font-weight: 950;
+        letter-spacing: .16em;
+        text-transform: uppercase;
+    }
+
+    .request-hero h2 {
+        max-width: 800px;
+        margin: 14px 0 0;
+        color: #ffffff;
+        font-size: clamp(32px, 3.6vw, 56px);
+        font-weight: 950;
+        line-height: 1;
+        letter-spacing: -.06em;
+    }
+
+    .request-hero p {
+        max-width: 760px;
+        margin: 14px 0 0;
+        color: #aab8cf;
+        font-size: 15px;
+        font-weight: 700;
+        line-height: 1.65;
+    }
+
+    .request-hero-side {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    .request-summary-card {
+        min-height: 106px;
+        padding: 16px;
+        border-radius: 22px;
+        background: rgba(255, 255, 255, .055);
+        border: 1px solid rgba(148, 163, 184, .16);
+    }
+
+    .request-summary-card strong {
+        display: block;
+        color: #ffffff;
+        font-size: 30px;
+        font-weight: 950;
+        line-height: 1;
+        letter-spacing: -.04em;
+    }
+
+    .request-summary-card span {
+        display: block;
+        margin-top: 7px;
+        color: #94a3b8;
+        font-size: 12px;
+        font-weight: 850;
+    }
+
+    .request-summary-card.pending strong {
+        color: #fde68a;
+    }
+
+    .request-summary-card.approved strong {
+        color: #bbf7d0;
+    }
+
+    .request-summary-card.rejected strong {
+        color: #fecaca;
+    }
+
+    .request-alert {
+        padding: 15px 17px;
+        border-radius: 18px;
+        font-weight: 850;
+        line-height: 1.5;
+        border: 1px solid rgba(148, 163, 184, .16);
+    }
+
+    .request-alert.success {
+        color: #bbf7d0;
+        background: rgba(34, 197, 94, .12);
+        border-color: rgba(74, 222, 128, .20);
+    }
+
+    .request-alert.error {
+        color: #fecaca;
+        background: rgba(239, 68, 68, .12);
+        border-color: rgba(248, 113, 113, .20);
+    }
+
+    .request-empty {
+        min-height: 320px;
+        display: grid;
+        place-items: center;
+        text-align: center;
+        padding: 42px 24px;
+        border-radius: 30px;
+        background:
+            radial-gradient(circle at 0% 0%, rgba(56, 189, 248, .08), transparent 34%),
+            linear-gradient(135deg, rgba(17, 25, 46, .94), rgba(15, 23, 42, .84));
+        border: 1px solid rgba(148, 163, 184, .18);
+        box-shadow: 0 18px 46px rgba(0, 0, 0, .22);
+    }
+
+    .request-empty-icon {
+        width: 78px;
+        height: 78px;
+        display: grid;
+        place-items: center;
+        margin: 0 auto 16px;
+        border-radius: 26px;
+        color: #ffffff;
+        background: linear-gradient(135deg, #2563eb, #7c3aed);
+        font-size: 34px;
+    }
+
+    .request-empty h3 {
+        margin: 0;
+        color: #ffffff;
+        font-size: 25px;
+        font-weight: 950;
+        letter-spacing: -.03em;
+    }
+
+    .request-empty p {
+        max-width: 560px;
+        margin: 9px auto 0;
+        color: #94a3b8;
+        font-size: 14px;
+        font-weight: 700;
+        line-height: 1.55;
+    }
+
+    .request-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+        gap: 16px;
+    }
+
+    .request-card {
+        position: relative;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+        min-height: 100%;
+        padding: 20px;
+        border-radius: 28px;
+        background:
+            radial-gradient(circle at 100% 0%, rgba(56, 189, 248, .075), transparent 36%),
+            linear-gradient(135deg, rgba(17, 25, 46, .94), rgba(15, 23, 42, .86));
+        border: 1px solid rgba(148, 163, 184, .18);
+        box-shadow: 0 16px 44px rgba(0, 0, 0, .22);
+        backdrop-filter: blur(16px);
+    }
+
+    .request-card::after {
+        content: "";
+        position: absolute;
+        width: 180px;
+        height: 180px;
+        right: -92px;
+        top: -104px;
+        border-radius: 999px;
+        background: rgba(99, 102, 241, .13);
+        pointer-events: none;
+    }
+
+    .request-card.pending {
+        border-color: rgba(245, 158, 11, .26);
+    }
+
+    .request-card.approved {
+        border-color: rgba(34, 197, 94, .24);
+    }
+
+    .request-card.rejected {
+        border-color: rgba(239, 68, 68, .24);
+    }
+
+    .request-top {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        grid-template-columns: 54px minmax(0, 1fr) auto;
+        gap: 13px;
+        align-items: center;
+    }
+
+    .request-avatar {
+        width: 54px;
+        height: 54px;
+        display: grid;
+        place-items: center;
+        border-radius: 19px;
+        color: #ffffff;
+        font-size: 24px;
+        background: linear-gradient(135deg, #2563eb, #7c3aed);
+        box-shadow: 0 14px 30px rgba(37, 99, 235, .20);
+    }
+
+    .request-avatar.teacher {
+        background: linear-gradient(135deg, #0891b2, #2563eb);
+    }
+
+    .request-avatar.parent {
+        background: linear-gradient(135deg, #f97316, #7c3aed);
+    }
+
+    .request-avatar.admin {
+        background: linear-gradient(135deg, #64748b, #2563eb);
+    }
+
+    .request-title {
+        min-width: 0;
+    }
+
+    .request-title h3 {
+        margin: 0;
+        color: #ffffff;
+        font-size: 18px;
+        font-weight: 950;
+        line-height: 1.2;
+        letter-spacing: -.025em;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .request-title span {
+        display: block;
+        margin-top: 5px;
+        color: #94a3b8;
+        font-size: 13px;
+        font-weight: 800;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .request-status {
+        min-height: 31px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 11px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 950;
+        white-space: nowrap;
+        border: 1px solid transparent;
+    }
+
+    .request-status.pending {
+        color: #fde68a;
+        background: rgba(245, 158, 11, .13);
+        border-color: rgba(251, 191, 36, .20);
+    }
+
+    .request-status.approved {
+        color: #bbf7d0;
+        background: rgba(34, 197, 94, .13);
+        border-color: rgba(74, 222, 128, .20);
+    }
+
+    .request-status.rejected {
+        color: #fecaca;
+        background: rgba(239, 68, 68, .13);
+        border-color: rgba(248, 113, 113, .20);
+    }
+
+    .request-status.completed {
+        color: #bfdbfe;
+        background: rgba(37, 99, 235, .14);
+        border-color: rgba(96, 165, 250, .20);
+    }
+
+    .request-info {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        gap: 9px;
+    }
+
+    .request-info-row {
+        display: grid;
+        gap: 4px;
+        padding: 11px 12px;
+        border-radius: 16px;
+        background: rgba(255, 255, 255, .045);
+        border: 1px solid rgba(148, 163, 184, .12);
+    }
+
+    .request-info-row strong {
+        color: #dbeafe;
+        font-size: 12px;
+        font-weight: 950;
+    }
+
+    .request-info-row span {
+        color: #94a3b8;
+        font-size: 13px;
+        font-weight: 750;
+        line-height: 1.45;
+        overflow-wrap: anywhere;
+    }
+
+    .activation-box {
+        position: relative;
+        overflow: hidden;
+        display: grid;
+        gap: 10px;
+        padding: 15px;
+        border-radius: 18px;
+        background:
+            radial-gradient(circle at 100% 0%, rgba(56, 189, 248, .15), transparent 34%),
+            linear-gradient(135deg, rgba(37, 99, 235, .16), rgba(124, 58, 237, .16));
+        border: 1px solid rgba(125, 211, 252, .24);
+    }
+
+    .activation-box strong {
+        color: #bfdbfe;
+        font-size: 12px;
+        font-weight: 950;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+    }
+
+    .activation-code-line {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+    }
+
+    .activation-code-line span {
+        color: #ffffff;
+        font-size: 26px;
+        font-weight: 950;
+        letter-spacing: .14em;
+    }
+
+    .copy-code-btn {
+        min-height: 38px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 12px;
+        border: 1px solid rgba(125, 211, 252, .24);
+        border-radius: 13px;
+        color: #ffffff;
+        background: rgba(255, 255, 255, .075);
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 900;
+    }
+
+    .locked-info {
+        padding: 12px 14px;
+        border-radius: 16px;
+        font-size: 13px;
+        font-weight: 850;
+        line-height: 1.45;
+    }
+
+    .locked-info.approved {
+        color: #bbf7d0;
+        background: rgba(34, 197, 94, .12);
+        border: 1px solid rgba(74, 222, 128, .18);
+    }
+
+    .locked-info.rejected {
+        color: #fecaca;
+        background: rgba(239, 68, 68, .12);
+        border: 1px solid rgba(248, 113, 113, .18);
+    }
+
+    .request-actions {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 9px;
+        margin-top: auto;
+        padding-top: 2px;
+    }
+
+    .request-actions.two {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .request-actions.one {
+        grid-template-columns: 1fr;
+    }
+
+    .request-actions form {
+        margin: 0;
+        min-width: 0;
+    }
+
+    .request-actions button {
+        width: 100%;
+        min-height: 44px;
+        border: 0;
+        border-radius: 15px;
+        color: #ffffff;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 950;
+        transition: .15s ease;
+    }
+
+    .request-actions button:hover {
+        transform: translateY(-1px);
+    }
+
+    .btn-approve {
+        background: linear-gradient(135deg, #16a34a, #22c55e);
+    }
+
+    .btn-reject {
+        background: linear-gradient(135deg, #f59e0b, #f97316);
+    }
+
+    .btn-delete {
+        background: linear-gradient(135deg, #ef4444, #dc2626);
+    }
+
+    @@media (max-width: 1200px) {
+        .request-hero {
+            grid-template-columns: 1fr;
+        }
+
+        .request-grid {
+            grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+        }
+    }
+
+    @@media (max-width: 680px) {
+        .request-hero,
+        .request-card {
+            border-radius: 22px;
+            padding: 16px;
+        }
+
+        .request-hero-side {
+            grid-template-columns: 1fr;
+        }
+
+        .request-top {
+            grid-template-columns: 50px minmax(0, 1fr);
+        }
+
+        .request-status {
+            grid-column: 1 / -1;
+            justify-self: start;
+        }
+
+        .request-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .request-actions,
+        .request-actions.two {
+            grid-template-columns: 1fr;
+        }
+
+        .activation-code-line {
+            align-items: stretch;
+            flex-direction: column;
+        }
+
+        .copy-code-btn {
+            width: 100%;
+        }
+    }
+</style>
+
 <div class="request-page">
-    <div class="page-header">
-        <div>
-            <h1>Şifre Talepleri</h1>
-            <p>Şifresini unutan kullanıcıların taleplerini yönetin.</p>
+    <section class="request-hero">
+        <div class="request-hero-main">
+            <div class="request-kicker">
+                Güvenlik Merkezi
+            </div>
+
+            <h2>Şifre talepleri artık tek karttan yönetiliyor.</h2>
+
+            <p>
+                Kullanıcı talebini onayladığınızda yeni aktivasyon kodu artık üstte kaybolan mesaj olarak değil,
+                doğrudan ilgili talep kartının içinde kalıcı şekilde görünür.
+            </p>
         </div>
-    </div>
+
+        <div class="request-hero-side">
+            <div class="request-summary-card pending">
+                <strong>@pendingCount</strong>
+                <span>Bekleyen Talep</span>
+            </div>
+
+            <div class="request-summary-card approved">
+                <strong>@approvedCount</strong>
+                <span>Onaylanan</span>
+            </div>
+
+            <div class="request-summary-card rejected">
+                <strong>@rejectedCount</strong>
+                <span>Reddedilen</span>
+            </div>
+
+            <div class="request-summary-card">
+                <strong>@totalCount</strong>
+                <span>Toplam Kayıt</span>
+            </div>
+        </div>
+    </section>
 
     @if (TempData["Success"] != null)
     {
-        <div class="alert alert-success">
+        <div class="request-alert success">
             @TempData["Success"]
         </div>
     }
 
     @if (TempData["Error"] != null)
     {
-        <div class="alert alert-danger">
+        <div class="request-alert error">
             @TempData["Error"]
         </div>
     }
 
     @if (Model == null || !Model.Any())
     {
-        <div class="empty-panel">
-            <div class="empty-icon">🔐</div>
-            <h3>Henüz şifre talebi yok</h3>
-            <p>Kullanıcılar Şifremi Unuttum formunu gönderince burada görünür.</p>
+        <div class="request-empty">
+            <div>
+                <div class="request-empty-icon">🔐</div>
+                <h3>Henüz şifre talebi yok</h3>
+                <p>
+                    Öğrenci, öğretmen veya veli Şifremi Unuttum formunu gönderdiğinde talepler burada koyu tema ile listelenir.
+                </p>
+            </div>
         </div>
     }
     else
@@ -43,79 +646,108 @@
                 var isPending = item.Status == "Bekliyor";
                 var isApproved = item.Status == "Onaylandı";
                 var isRejected = item.Status == "Reddedildi";
+                var statusClass = StatusClass(item.Status);
+                var roleClass = RoleClass(item.Role);
 
-                <div class="request-card">
+                <div class="request-card @statusClass">
                     <div class="request-top">
-                        <div class="avatar">
-                            @(item.Role == "Öğretmen" ? "👨‍🏫" : item.Role == "Veli" ? "👪" : "🎒")
+                        <div class="request-avatar @roleClass">
+                            @RoleIcon(item.Role)
                         </div>
 
                         <div class="request-title">
                             <h3>@(string.IsNullOrWhiteSpace(item.Name) ? "-" : item.Name)</h3>
-                            <span>@item.Role • No: @item.Number</span>
+                            <span>@item.Role • No: @(string.IsNullOrWhiteSpace(item.Number) ? "-" : item.Number)</span>
                         </div>
 
-                        <span class="status @(isApproved ? "approved" : isRejected ? "rejected" : "pending")">
+                        <span class="request-status @statusClass">
                             @item.Status
                         </span>
                     </div>
 
                     <div class="request-info">
-                        <div>
-                            <strong>Açıklama:</strong>
-                            <span>@(string.IsNullOrWhiteSpace(item.Note) ? "-" : item.Note)</span>
+                        <div class="request-info-row">
+                            <strong>Açıklama</strong>
+                            <span>@(string.IsNullOrWhiteSpace(item.Note) ? "Kullanıcı açıklama yazmadı." : item.Note)</span>
                         </div>
 
-                        <div>
-                            <strong>Talep:</strong>
+                        <div class="request-info-row">
+                            <strong>Talep Tarihi</strong>
                             <span>@(item.CreatedAt?.ToString("dd.MM.yyyy HH:mm") ?? "-")</span>
                         </div>
 
                         @if (item.ApprovedAt != null)
                         {
-                            <div>
-                                <strong>Onay:</strong>
+                            <div class="request-info-row">
+                                <strong>Onay Tarihi</strong>
                                 <span>@item.ApprovedAt?.ToString("dd.MM.yyyy HH:mm")</span>
+                            </div>
+                        }
+
+                        @if (item.RejectedAt != null)
+                        {
+                            <div class="request-info-row">
+                                <strong>Red Tarihi</strong>
+                                <span>@item.RejectedAt?.ToString("dd.MM.yyyy HH:mm")</span>
                             </div>
                         }
 
                         @if (!string.IsNullOrWhiteSpace(item.ActivationCode))
                         {
                             <div class="activation-box">
-                                <strong>Yeni Aktivasyon Kodu:</strong>
-                                <span>@item.ActivationCode</span>
+                                <strong>Yeni Aktivasyon Kodu</strong>
+
+                                <div class="activation-code-line">
+                                    <span>@item.ActivationCode</span>
+
+                                    <button type="button"
+                                            class="copy-code-btn"
+                                            data-copy-code="@item.ActivationCode">
+                                        Kopyala
+                                    </button>
+                                </div>
                             </div>
                         }
 
                         @if (isApproved)
                         {
-                            <div class="locked-info approved-text">
-                                Bu talep onaylandı. Tekrar işlem yapılamaz.
+                            <div class="locked-info approved">
+                                Bu talep onaylandı. Kullanıcı bu aktivasyon koduyla giriş yaptıktan sonra yeni şifresini oluşturabilir.
                             </div>
                         }
 
                         @if (isRejected)
                         {
-                            <div class="locked-info rejected-text">
-                                Bu talep reddedildi. Tekrar işlem yapılamaz.
+                            <div class="locked-info rejected">
+                                Bu talep reddedildi. Aynı talep üzerinde tekrar onay işlemi yapılamaz.
                             </div>
                         }
                     </div>
 
-                    <div class="actions">
+                    <div class="request-actions @(isPending ? "" : "one")">
                         @if (isPending)
                         {
-                            <form asp-controller="PasswordRequests" asp-action="Approve" method="post">
+                            <form asp-controller="PasswordRequests"
+                                  asp-action="Approve"
+                                  method="post">
                                 @Html.AntiForgeryToken()
+
                                 <input type="hidden" name="id" value="@item.Id" />
+                                <input type="hidden" name="collectionName" value="@item.CollectionName" />
+
                                 <button type="submit" class="btn-approve">
                                     ✅ Onayla
                                 </button>
                             </form>
 
-                            <form asp-controller="PasswordRequests" asp-action="Reject" method="post">
+                            <form asp-controller="PasswordRequests"
+                                  asp-action="Reject"
+                                  method="post">
                                 @Html.AntiForgeryToken()
+
                                 <input type="hidden" name="id" value="@item.Id" />
+                                <input type="hidden" name="collectionName" value="@item.CollectionName" />
+
                                 <button type="submit" class="btn-reject">
                                     ❌ Reddet
                                 </button>
@@ -125,11 +757,12 @@
                         <form asp-controller="PasswordRequests"
                               asp-action="Delete"
                               method="post"
-                              onsubmit="return confirm('Bu talep silinsin mi?');">
-
+                              data-delete="true"
+                              data-delete-name="@(string.IsNullOrWhiteSpace(item.Name) ? "Şifre talebi" : item.Name)">
                             @Html.AntiForgeryToken()
 
                             <input type="hidden" name="id" value="@item.Id" />
+                            <input type="hidden" name="collectionName" value="@item.CollectionName" />
 
                             <button type="submit" class="btn-delete">
                                 🗑️ Sil
@@ -142,220 +775,29 @@
     }
 </div>
 
-<style>
-    .page-header {
-        background: #fff;
-        border-radius: 28px;
-        padding: 24px;
-        margin-bottom: 20px;
-        box-shadow: 0 18px 40px rgba(15, 23, 42, .06);
-    }
+@section Scripts {
+    <script>
+        document.addEventListener("click", async function (event) {
+            const button = event.target.closest("[data-copy-code]");
 
-    .page-header h1 {
-        margin: 0;
-        color: #111827;
-        font-size: 32px;
-        font-weight: 900;
-    }
+            if (!button) {
+                return;
+            }
 
-    .page-header p {
-        margin: 8px 0 0;
-        color: #64748b;
-        font-weight: 700;
-    }
+            const code = button.getAttribute("data-copy-code") || "";
 
-    .alert {
-        padding: 14px 18px;
-        border-radius: 18px;
-        margin-bottom: 18px;
-        font-weight: 800;
-    }
+            try {
+                await navigator.clipboard.writeText(code);
 
-    .alert-success {
-        background: #dcfce7;
-        color: #166534;
-    }
+                const oldText = button.textContent;
+                button.textContent = "Kopyalandı";
 
-    .alert-danger {
-        background: #fee2e2;
-        color: #991b1b;
-    }
-
-    .empty-panel {
-        background: #fff;
-        border-radius: 28px;
-        padding: 40px;
-        text-align: center;
-        box-shadow: 0 18px 40px rgba(15, 23, 42, .06);
-    }
-
-    .empty-icon {
-        font-size: 48px;
-        margin-bottom: 12px;
-    }
-
-    .empty-panel h3 {
-        margin: 0;
-        color: #111827;
-        font-size: 24px;
-        font-weight: 900;
-    }
-
-    .empty-panel p {
-        color: #64748b;
-        font-weight: 700;
-    }
-
-    .request-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-        gap: 20px;
-    }
-
-    .request-card {
-        background: #fff;
-        border-radius: 28px;
-        padding: 24px;
-        box-shadow: 0 18px 40px rgba(15, 23, 42, .06);
-    }
-
-    .request-top {
-        display: flex;
-        align-items: center;
-        gap: 14px;
-        margin-bottom: 18px;
-    }
-
-    .avatar {
-        width: 56px;
-        height: 56px;
-        border-radius: 18px;
-        background: #eef2ff;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 26px;
-    }
-
-    .request-title {
-        flex: 1;
-        min-width: 0;
-    }
-
-    .request-title h3 {
-        margin: 0;
-        color: #111827;
-        font-size: 20px;
-        font-weight: 900;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-    .request-title span {
-        color: #64748b;
-        font-weight: 800;
-    }
-
-    .status {
-        border-radius: 999px;
-        padding: 8px 12px;
-        font-size: 12px;
-        font-weight: 900;
-        white-space: nowrap;
-    }
-
-    .status.pending {
-        background: #ffedd5;
-        color: #c2410c;
-    }
-
-    .status.approved {
-        background: #dcfce7;
-        color: #166534;
-    }
-
-    .status.rejected {
-        background: #fee2e2;
-        color: #991b1b;
-    }
-
-    .request-info {
-        display: grid;
-        gap: 10px;
-        color: #334155;
-        font-weight: 700;
-        margin-bottom: 18px;
-    }
-
-    .request-info strong {
-        color: #111827;
-    }
-
-    .activation-box {
-        background: #eef2ff;
-        color: #3730a3;
-        padding: 14px;
-        border-radius: 18px;
-        display: flex;
-        justify-content: space-between;
-        gap: 12px;
-        align-items: center;
-    }
-
-    .activation-box span {
-        font-size: 18px;
-        font-weight: 900;
-        letter-spacing: 1px;
-    }
-
-    .locked-info {
-        padding: 12px 14px;
-        border-radius: 16px;
-        font-weight: 900;
-    }
-
-    .approved-text {
-        background: #dcfce7;
-        color: #166534;
-    }
-
-    .rejected-text {
-        background: #fee2e2;
-        color: #991b1b;
-    }
-
-    .actions {
-        display: flex;
-        gap: 10px;
-        flex-wrap: wrap;
-    }
-
-    .actions form {
-        flex: 1;
-        min-width: 100px;
-        margin: 0;
-    }
-
-    .actions button {
-        width: 100%;
-        border: 0;
-        border-radius: 16px;
-        padding: 13px;
-        color: #fff;
-        font-weight: 900;
-        cursor: pointer;
-    }
-
-    .btn-approve {
-        background: #10b981;
-    }
-
-    .btn-reject {
-        background: #f59e0b;
-    }
-
-    .btn-delete {
-        background: #ef4444;
-    }
-</style>
+                setTimeout(function () {
+                    button.textContent = oldText;
+                }, 1400);
+            } catch {
+                button.textContent = "Kod: " + code;
+            }
+        });
+    </script>
+}

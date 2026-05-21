@@ -68,12 +68,14 @@ public class UsersController : Controller
     }
 
     [HttpGet]
-    public IActionResult Create()
+    public async Task<IActionResult> Create()
     {
+        await PrepareUserFormOptionsAsync();
+
         return View(new UserViewModel
         {
             Role = "Öğrenci",
-            ClassName = "9-A"
+            ClassName = ""
         });
     }
 
@@ -94,6 +96,7 @@ public class UsersController : Controller
         if (!ModelState.IsValid)
         {
             model.Phone = FormatPhoneForView(model.Phone);
+            await PrepareUserFormOptionsAsync();
             return View(model);
         }
 
@@ -199,9 +202,10 @@ public class UsersController : Controller
 
         if (string.IsNullOrWhiteSpace(model.ClassName))
         {
-            model.ClassName = "9-A";
+            model.ClassName = "";
         }
 
+        await PrepareUserFormOptionsAsync();
         return View(model);
     }
 
@@ -228,6 +232,7 @@ public class UsersController : Controller
         if (!ModelState.IsValid)
         {
             model.Phone = FormatPhoneForView(model.Phone);
+            await PrepareUserFormOptionsAsync();
             return View(model);
         }
 
@@ -565,9 +570,9 @@ public class UsersController : Controller
 
             return RedirectToAction(nameof(Index));
         }
-        catch (Exception ex)
+        catch
         {
-            TempData["Error"] = $"Excel aktarımı sırasında hata oluştu: {ex.Message}";
+            TempData["Error"] = "Excel aktarımı sırasında hata oluştu. Dosya biçimini kontrol edip tekrar deneyin.";
             return RedirectToAction(nameof(Index));
         }
     }
@@ -589,6 +594,11 @@ public class UsersController : Controller
         if (string.IsNullOrWhiteSpace(model.Role))
         {
             ModelState.AddModelError(nameof(model.Role), "Rol seçilmelidir.");
+        }
+
+        if (Normalize(model.Role) == "admin")
+        {
+            ModelState.AddModelError(nameof(model.Role), "Admin hesabi bu ekrandan olusturulamaz veya role cevrilemez.");
         }
 
         if (string.IsNullOrWhiteSpace(model.Name))
@@ -663,6 +673,12 @@ public class UsersController : Controller
         }
 
         return false;
+    }
+
+    private async Task PrepareUserFormOptionsAsync()
+    {
+        var integrity = new DataIntegrityService(_firestore);
+        ViewBag.Classes = await integrity.LoadActiveClassesAsync();
     }
 
     private static bool IsDeleted(Dictionary<string, object> data)

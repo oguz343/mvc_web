@@ -2,366 +2,458 @@
 
 @{
     Layout = "_AdminLayout";
-    ViewData["Title"] = "Kullanıcıyı Düzenle";
+    ViewData["Title"] = "Kullanıcı Düzenle";
+    ViewData["PageTitle"] = "Kullanıcı Düzenle";
+    ViewData["PageSubtitle"] = "Kullanıcı bilgilerini, rolünü, sınıf/branş/veli bağlantısını ve iletişim bilgisini güncelleyin.";
+
+    var classes = ViewBag.Classes as IEnumerable<dynamic> ?? Enumerable.Empty<dynamic>();
+    var userId = Model?.Id ?? "";
+    var userName = Model?.Name ?? "";
+    var selectedClassName = Model?.ClassName ?? "";
+    var userRole = Model?.Role ?? "";
+    var userSchoolNo = Model?.SchoolNo ?? "";
+    var userActivationCode = Model?.ActivationCode ?? "";
+    var userMustChangePassword = Model?.MustChangePassword ?? true;
 }
 
-<div class="form-page">
-    <div class="form-card">
-        <div class="form-header">
-            <h1>Kullanıcıyı Düzenle</h1>
-            <p>Kullanıcı bilgilerini güncelleyin.</p>
-        </div>
+<style>
+    .user-edit-v2 {
+        width: 100%;
+        display: grid;
+        gap: 18px;
+    }
 
-        @if (!ViewData.ModelState.IsValid)
-        {
-            <div class="alert alert-danger">
-                @foreach (var error in ViewData.ModelState.Values.SelectMany(v => v.Errors))
-                {
-                    <div>@error.ErrorMessage</div>
-                }
-            </div>
+    .user-edit-hero,
+    .user-edit-card,
+    .user-edit-side {
+        border: 1px solid rgba(148, 163, 184, .18);
+        background:
+            radial-gradient(circle at 0% 0%, rgba(56, 189, 248, .10), transparent 34%),
+            linear-gradient(135deg, rgba(17, 25, 46, .94), rgba(15, 23, 42, .86));
+        box-shadow: 0 18px 48px rgba(0, 0, 0, .24);
+        backdrop-filter: blur(16px);
+    }
+
+    .user-edit-hero {
+        padding: 24px;
+        border-radius: 32px;
+    }
+
+    .user-edit-kicker {
+        width: fit-content;
+        min-height: 30px;
+        display: inline-flex;
+        align-items: center;
+        padding: 0 12px;
+        border-radius: 999px;
+        color: #67e8f9;
+        background: rgba(56, 189, 248, .10);
+        border: 1px solid rgba(103, 232, 249, .20);
+        font-size: 11px;
+        font-weight: 950;
+        letter-spacing: .16em;
+        text-transform: uppercase;
+    }
+
+    .user-edit-hero h1 {
+        margin: 14px 0 0;
+        color: #ffffff;
+        font-size: clamp(34px, 3.8vw, 58px);
+        font-weight: 950;
+        line-height: 1;
+        letter-spacing: -.06em;
+    }
+
+    .user-edit-hero p {
+        max-width: 780px;
+        margin: 14px 0 0;
+        color: #aab8cf;
+        font-size: 15px;
+        font-weight: 700;
+        line-height: 1.65;
+    }
+
+    .user-edit-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 360px;
+        gap: 18px;
+        align-items: start;
+    }
+
+    .user-edit-card,
+    .user-edit-side {
+        padding: 22px;
+        border-radius: 30px;
+    }
+
+    .user-edit-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+    }
+
+    .user-edit-field {
+        display: grid;
+        gap: 8px;
+    }
+
+    .user-edit-field.full {
+        grid-column: 1 / -1;
+    }
+
+    .user-edit-field label {
+        color: #dbeafe;
+        font-size: 13px;
+        font-weight: 950;
+    }
+
+    .user-edit-field input,
+    .user-edit-field select {
+        width: 100%;
+        min-height: 48px;
+        padding: 0 13px;
+        border-radius: 15px;
+        border: 1px solid rgba(148, 163, 184, .18);
+        outline: none;
+        color: #ffffff;
+        background: rgba(7, 17, 31, .58);
+        font-size: 14px;
+        font-weight: 750;
+    }
+
+    .user-edit-field input:focus,
+    .user-edit-field select:focus {
+        border-color: rgba(103, 232, 249, .45);
+        box-shadow: 0 0 0 4px rgba(56, 189, 248, .09);
+    }
+
+    .user-edit-field option {
+        color: #0f172a;
+        background: #ffffff;
+    }
+
+    .role-fields {
+        display: none;
+        grid-column: 1 / -1;
+        gap: 14px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .role-fields.show {
+        display: grid;
+    }
+
+    .user-edit-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 16px;
+    }
+
+    .user-edit-save,
+    .user-edit-back {
+        min-height: 46px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 16px;
+        border-radius: 15px;
+        border: 1px solid transparent;
+        text-decoration: none;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 950;
+    }
+
+    .user-edit-save {
+        color: #ffffff;
+        background: linear-gradient(135deg, #2563eb, #7c3aed);
+        border-color: rgba(125, 211, 252, .22);
+        box-shadow: 0 14px 30px rgba(37, 99, 235, .24);
+    }
+
+    .user-edit-back {
+        color: #dbeafe;
+        background: rgba(255, 255, 255, .060);
+        border-color: rgba(148, 163, 184, .18);
+    }
+
+    .user-edit-side h3 {
+        margin: 0;
+        color: #ffffff;
+        font-size: 20px;
+        font-weight: 950;
+    }
+
+    .user-edit-side p {
+        margin: 8px 0 0;
+        color: #94a3b8;
+        font-size: 13px;
+        font-weight: 750;
+        line-height: 1.55;
+    }
+
+    .user-edit-info-list {
+        display: grid;
+        gap: 10px;
+        margin-top: 16px;
+    }
+
+    .user-edit-info {
+        padding: 12px;
+        border-radius: 16px;
+        color: #dbeafe;
+        background: rgba(255, 255, 255, .045);
+        border: 1px solid rgba(148, 163, 184, .12);
+        font-size: 13px;
+        font-weight: 800;
+        line-height: 1.45;
+        overflow-wrap: anywhere;
+    }
+
+    @@media (max-width: 1100px) {
+        .user-edit-layout {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @@media (max-width: 700px) {
+        .user-edit-hero,
+        .user-edit-card,
+        .user-edit-side {
+            border-radius: 22px;
+            padding: 16px;
         }
 
-        <form asp-controller="Users" asp-action="Edit" method="post">
+        .user-edit-grid,
+        .role-fields {
+            grid-template-columns: 1fr;
+        }
+
+        .user-edit-actions {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .user-edit-save,
+        .user-edit-back {
+            width: 100%;
+        }
+    }
+</style>
+
+<div class="user-edit-v2">
+    <section class="user-edit-hero">
+        <div class="user-edit-kicker">Kullanıcı Düzenle</div>
+
+        <h1>@(string.IsNullOrWhiteSpace(userName) ? "Kullanıcı Düzenle" : userName)</h1>
+
+        <p>
+            Hesap bilgilerini güncelleyin. Rol değişirse ilgili öğrenci, öğretmen veya veli alanları otomatik gösterilir.
+        </p>
+    </section>
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success">@TempData["Success"]</div>
+    }
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger">@TempData["Error"]</div>
+    }
+
+    <section class="user-edit-layout">
+        <form asp-controller="Users"
+              asp-action="Edit"
+              asp-route-id="@userId"
+              method="post"
+              class="user-edit-card">
+
             @Html.AntiForgeryToken()
 
-            <input type="hidden" asp-for="Id" />
-            <input type="hidden" asp-for="ClassName" />
+            <input type="hidden" asp-for="Id" name="Id" />
 
-            <div class="form-grid">
-                <div class="form-group">
+            <div class="user-edit-grid">
+                <div class="user-edit-field">
+                    <label>Ad Soyad</label>
+                    <input asp-for="Name"
+                           name="Name"
+                           maxlength="80"
+                           required />
+                </div>
+
+                <div class="user-edit-field">
                     <label>Rol</label>
-                    <select asp-for="Role" id="roleSelect" class="form-control">
+                    <select asp-for="Role" name="Role" id="roleSelect" required>
                         <option value="Öğrenci">Öğrenci</option>
                         <option value="Öğretmen">Öğretmen</option>
                         <option value="Veli">Veli</option>
                     </select>
                 </div>
 
-                <div class="form-group">
-                    <label>Ad Soyad</label>
-                    <input asp-for="Name" class="form-control" placeholder="Ad Soyad" />
-                </div>
-
-                <div class="form-group">
-                    <label>T.C. Kimlik No</label>
-                    <input asp-for="Tc"
-                           class="form-control tc-input"
-                           placeholder="11 haneli T.C. kimlik no"
-                           inputmode="numeric"
-                           maxlength="11" />
-                </div>
-
-                <div class="form-group">
-                    <label id="numberLabel">Numara</label>
+                <div class="user-edit-field">
+                    <label>Okul / Kullanıcı No</label>
                     <input asp-for="SchoolNo"
-                           class="form-control number-input"
-                           placeholder="Numara"
+                           name="SchoolNo"
                            inputmode="numeric"
-                           maxlength="12" />
+                           maxlength="20"
+                           required />
                 </div>
 
-                <div class="form-group">
+                <div class="user-edit-field">
                     <label>Telefon</label>
                     <input asp-for="Phone"
-                           class="form-control phone-input"
-                           placeholder="0 555 123 45 67"
+                           name="Phone"
+                           class="phone-mask"
                            inputmode="numeric"
-                           maxlength="15" />
+                           maxlength="15"
+                           placeholder="Örn: (555) 123 45 67" />
                 </div>
 
-                <div class="form-group student-field">
-                    <label>Sınıf Seviyesi</label>
-                    <select id="gradeSelect" class="form-control">
-                        <option value="9">9</option>
-                        <option value="10">10</option>
-                        <option value="11">11</option>
-                        <option value="12">12</option>
-                    </select>
+                <div id="studentFields" class="role-fields">
+                    <div class="user-edit-field">
+                        <label>Sınıf</label>
+                        <select asp-for="ClassName" name="ClassName">
+                            <option value="">Sınıf seçin</option>
+
+                            @foreach (var item in classes)
+                            {
+                                <option value="@item.Name" selected="@(selectedClassName == item.Name ? "selected" : null)">
+                                    @item.Name
+                                </option>
+                            }
+                        </select>
+                    </div>
                 </div>
 
-                <div class="form-group student-field">
-                    <label>Şube</label>
-                    <select id="branchSelect" class="form-control">
-                        <option value="A">A</option>
-                        <option value="B">B</option>
-                        <option value="C">C</option>
-                        <option value="D">D</option>
-                        <option value="E">E</option>
-                        <option value="F">F</option>
-                    </select>
+                <div id="teacherFields" class="role-fields">
+                    <div class="user-edit-field">
+                        <label>Branş</label>
+                        <input asp-for="Branch"
+                               name="Branch"
+                               maxlength="60"
+                               placeholder="Örn: Matematik" />
+                    </div>
                 </div>
 
-                <div class="form-group teacher-field">
-                    <label>Branş</label>
-                    <input asp-for="Branch" class="form-control" placeholder="Örn: Matematik" />
-                </div>
-
-                <div class="form-group parent-field">
-                    <label>Bağlı Öğrenci Numarası</label>
-                    <input asp-for="LinkedStudentNo"
-                           class="form-control number-input"
-                           placeholder="Öğrenci numarası"
-                           inputmode="numeric"
-                           maxlength="12" />
+                <div id="parentFields" class="role-fields">
+                    <div class="user-edit-field">
+                        <label>Bağlı Öğrenci No</label>
+                        <input asp-for="LinkedStudentNo"
+                               name="LinkedStudentNo"
+                               maxlength="20"
+                               placeholder="Örn: 1001" />
+                    </div>
                 </div>
             </div>
 
-            <div class="class-preview student-field">
-                Sınıf otomatik oluşturulur:
-                <strong id="classPreview">9-A</strong>
-            </div>
+            <div class="user-edit-actions">
+                <a asp-controller="Users"
+                   asp-action="Index"
+                   class="user-edit-back">
+                    Vazgeç
+                </a>
 
-            <div class="actions">
-                <button type="submit" class="btn-save">
+                <button type="submit" class="user-edit-save">
                     💾 Değişiklikleri Kaydet
                 </button>
-
-                <a asp-controller="Users" asp-action="Index" class="btn-back">
-                    ← Geri Dön
-                </a>
             </div>
         </form>
-    </div>
+
+        <aside class="user-edit-side">
+            <h3>Hesap Özeti</h3>
+
+            <p>
+                Bu alan kullanıcının mevcut kayıt durumunu hızlıca görmeniz için hazırlanmıştır.
+            </p>
+
+            <div class="user-edit-info-list">
+                <div class="user-edit-info">👤 Rol: @(string.IsNullOrWhiteSpace(userRole) ? "-" : userRole)</div>
+                <div class="user-edit-info">🔢 No: @(string.IsNullOrWhiteSpace(userSchoolNo) ? "-" : userSchoolNo)</div>
+                <div class="user-edit-info">🔑 Aktivasyon: @(string.IsNullOrWhiteSpace(userActivationCode) ? "-" : userActivationCode)</div>
+                <div class="user-edit-info">🛡️ Durum: @(userMustChangePassword ? "Aktivasyon Bekliyor" : "Aktif")</div>
+            </div>
+        </aside>
+    </section>
 </div>
-
-<style>
-    .form-page {
-        max-width: 900px;
-    }
-
-    .form-card {
-        background: #fff;
-        border-radius: 30px;
-        padding: 28px;
-        box-shadow: 0 18px 40px rgba(15, 23, 42, .06);
-    }
-
-    .form-header h1 {
-        margin: 0;
-        color: #111827;
-        font-size: 32px;
-        font-weight: 900;
-    }
-
-    .form-header p {
-        margin: 8px 0 24px;
-        color: #64748b;
-        font-weight: 700;
-    }
-
-    .alert {
-        padding: 14px 18px;
-        border-radius: 18px;
-        margin-bottom: 18px;
-        font-weight: 800;
-    }
-
-    .alert-danger {
-        background: #fee2e2;
-        color: #991b1b;
-    }
-
-    .form-grid {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 18px;
-    }
-
-    .form-group label {
-        display: block;
-        color: #111827;
-        font-weight: 900;
-        margin-bottom: 8px;
-    }
-
-    .form-control {
-        width: 100%;
-        border: 1px solid #e5e7eb;
-        background: #f8fafc;
-        border-radius: 18px;
-        padding: 16px 18px;
-        font-weight: 700;
-        outline: none;
-        color: #111827;
-    }
-
-    .form-control:focus {
-        background: #fff;
-        border-color: #4f46e5;
-        box-shadow: 0 0 0 4px rgba(79, 70, 229, .12);
-    }
-
-    .class-preview {
-        margin-top: 20px;
-        background: #ffedd5;
-        color: #9a3412;
-        border-radius: 18px;
-        padding: 14px 16px;
-        font-weight: 900;
-    }
-
-    .actions {
-        display: flex;
-        gap: 12px;
-        flex-wrap: wrap;
-        margin-top: 26px;
-    }
-
-    .btn-save,
-    .btn-back {
-        min-height: 52px;
-        border: 0;
-        border-radius: 16px;
-        padding: 0 22px;
-        font-weight: 900;
-        text-decoration: none;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-    }
-
-    .btn-save {
-        background: #4f46e5;
-        color: #fff;
-    }
-
-    .btn-back {
-        background: #eef2ff;
-        color: #4338ca;
-    }
-
-    @@media (max-width: 720px) {
-        .form-grid {
-            grid-template-columns: 1fr;
-        }
-
-        .actions {
-            flex-direction: column;
-        }
-    }
-</style>
 
 @section Scripts {
     <script>
         const roleSelect = document.getElementById("roleSelect");
-        const gradeSelect = document.getElementById("gradeSelect");
-        const branchSelect = document.getElementById("branchSelect");
-        const classNameInput = document.getElementById("ClassName");
-        const classPreview = document.getElementById("classPreview");
+        const studentFields = document.getElementById("studentFields");
+        const teacherFields = document.getElementById("teacherFields");
+        const parentFields = document.getElementById("parentFields");
+        const phoneInputs = Array.from(document.querySelectorAll(".phone-mask"));
 
-        function parseExistingClassName() {
-            const value = (classNameInput.value || "").trim().toUpperCase().replace(/\s+/g, "");
+        function syncRoleFields() {
+            const role = roleSelect?.value || "";
 
-            const match = value.match(/^(\d{1,2})[-_]?([A-F])$/);
-
-            if (match) {
-                gradeSelect.value = match[1];
-                branchSelect.value = match[2];
-            }
+            studentFields?.classList.toggle("show", role === "Öğrenci");
+            teacherFields?.classList.toggle("show", role === "Öğretmen");
+            parentFields?.classList.toggle("show", role === "Veli");
         }
 
-        function updateClassName() {
-            const className = `${gradeSelect.value}-${branchSelect.value}`;
-            classNameInput.value = className;
-            classPreview.innerText = className;
+        if (roleSelect) {
+            roleSelect.addEventListener("change", syncRoleFields);
+            syncRoleFields();
         }
 
-        function updateRoleFields() {
-            const role = roleSelect.value;
-
-            document.querySelectorAll(".student-field").forEach(x => x.style.display = role === "Öğrenci" ? "block" : "none");
-            document.querySelectorAll(".teacher-field").forEach(x => x.style.display = role === "Öğretmen" ? "block" : "none");
-            document.querySelectorAll(".parent-field").forEach(x => x.style.display = role === "Veli" ? "block" : "none");
-
-            const numberLabel = document.getElementById("numberLabel");
-
-            if (role === "Öğrenci") {
-                numberLabel.innerText = "Okul Numarası";
-                updateClassName();
-            } else if (role === "Öğretmen") {
-                numberLabel.innerText = "Öğretmen Numarası";
-                classNameInput.value = "";
-            } else {
-                numberLabel.innerText = "Veli Numarası";
-                classNameInput.value = "";
-            }
+        function clearHiddenRoleFields() {
+            document.querySelectorAll(".role-fields:not(.show) input, .role-fields:not(.show) select, .role-fields:not(.show) textarea")
+                .forEach(input => {
+                    input.value = "";
+                });
         }
 
-        function onlyDigits(value) {
-            return (value || "").replace(/\D/g, "");
+        if (roleSelect) {
+            roleSelect.addEventListener("change", clearHiddenRoleFields);
         }
 
         function formatPhone(value) {
-            let digits = onlyDigits(value);
+            let digits = (value || "").replace(/\D/g, "");
 
-            if (digits.length === 0) {
-                return "";
+            if (digits.startsWith("90")) {
+                digits = digits.slice(2);
             }
 
-            if (!digits.startsWith("0")) {
-                digits = "0" + digits;
+            if (digits.startsWith("0")) {
+                digits = digits.slice(1);
             }
 
-            digits = digits.substring(0, 11);
+            digits = digits.slice(0, 10);
 
-            const zero = digits.substring(0, 1);
-            const p1 = digits.substring(1, 4);
-            const p2 = digits.substring(4, 7);
-            const p3 = digits.substring(7, 9);
-            const p4 = digits.substring(9, 11);
+            const p1 = digits.slice(0, 3);
+            const p2 = digits.slice(3, 6);
+            const p3 = digits.slice(6, 8);
+            const p4 = digits.slice(8, 10);
+            let text = "";
 
-            let result = zero;
+            if (p1) {
+                text = "(" + p1 + (p1.length === 3 ? ")" : "");
+            }
 
-            if (p1) result += " " + p1;
-            if (p2) result += " " + p2;
-            if (p3) result += " " + p3;
-            if (p4) result += " " + p4;
+            if (p2) {
+                text += " " + p2;
+            }
 
-            return result;
+            if (p3) {
+                text += " " + p3;
+            }
+
+            if (p4) {
+                text += " " + p4;
+            }
+
+            return text.trim();
         }
 
-        roleSelect.addEventListener("change", updateRoleFields);
-        gradeSelect.addEventListener("change", updateClassName);
-        branchSelect.addEventListener("change", updateClassName);
-
-        document.querySelectorAll(".tc-input").forEach(input => {
-            input.addEventListener("input", function () {
-                this.value = onlyDigits(this.value).substring(0, 11);
-            });
-        });
-
-        document.querySelectorAll(".number-input").forEach(input => {
-            input.addEventListener("input", function () {
-                this.value = onlyDigits(this.value).substring(0, 12);
-            });
-        });
-
-        document.querySelectorAll(".phone-input").forEach(input => {
-            input.addEventListener("focus", function () {
-                if (this.value.trim() === "") {
-                    this.value = "0";
-                }
-            });
-
-            input.addEventListener("input", function () {
-                this.value = formatPhone(this.value);
-            });
-
-            input.addEventListener("blur", function () {
-                if (this.value.trim() === "0") {
-                    this.value = "";
-                }
-            });
-
-            if (input.value.trim() !== "") {
+        phoneInputs.forEach(input => {
+            input.value = formatPhone(input.value);
+            input.addEventListener("input", () => {
                 input.value = formatPhone(input.value);
-            }
+            });
         });
-
-        parseExistingClassName();
-        updateClassName();
-        updateRoleFields();
     </script>
 }

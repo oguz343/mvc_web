@@ -186,59 +186,34 @@ public class AuthLoginService
 
     private async Task<DocumentSnapshot?> FindUserByRoleAndNumberQueryAsync(string roleKey, string number)
     {
-        var roleFields = new[] { "role", "Role", "userRole", "UserRole" };
         var numberFields = new[] { "number", "Number", "schoolNo", "SchoolNo", "studentNo", "StudentNo", "teacherNo", "TeacherNo", "parentNo", "ParentNo", "adminNo", "AdminNo" };
-        var roleValues = RoleQueryValues(roleKey);
         var numberKey = OnlyDigits(number);
 
-        foreach (var roleField in roleFields)
-        {
-            foreach (var roleValue in roleValues)
-            {
-                foreach (var numberField in numberFields)
-                {
-                    try
-                    {
-                        var snapshot = await _firestore
-                            .Collection("users")
-                            .WhereEqualTo(roleField, roleValue)
-                            .WhereEqualTo(numberField, numberKey)
-                            .Limit(10)
-                            .GetSnapshotAsync();
-
-                        var match = FirstMatchingUser(snapshot, roleKey, numberKey);
-
-                        if (match != null)
-                        {
-                            return match;
-                        }
-                    }
-                    catch
-                    {
-                    }
-                }
-            }
-        }
-
-        foreach (var numberField in numberFields)
+        async Task<QuerySnapshot?> ReadByNumberField(string numberField)
         {
             try
             {
-                var snapshot = await _firestore
+                return await _firestore
                     .Collection("users")
                     .WhereEqualTo(numberField, numberKey)
                     .Limit(25)
                     .GetSnapshotAsync();
-
-                var match = FirstMatchingUser(snapshot, roleKey, numberKey);
-
-                if (match != null)
-                {
-                    return match;
-                }
             }
             catch
             {
+                return null;
+            }
+        }
+
+        var snapshots = await Task.WhenAll(numberFields.Select(ReadByNumberField));
+
+        foreach (var snapshot in snapshots.Where(x => x != null))
+        {
+            var match = FirstMatchingUser(snapshot!, roleKey, numberKey);
+
+            if (match != null)
+            {
+                return match;
             }
         }
 
@@ -364,13 +339,6 @@ public class AuthLoginService
     private bool IsDevelopment()
     {
         return _environment.IsDevelopment();
-    }
-
-    private static string[] RoleQueryValues(string roleKey)
-    {
-        var display = NormalizeRoleToDisplay(roleKey);
-
-        return new[] { roleKey, display }.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
     }
 
     private static bool IsDeleted(Dictionary<string, object> data)

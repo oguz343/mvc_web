@@ -2,6 +2,7 @@ using Google.Cloud.Firestore;
 using Microsoft.AspNetCore.Mvc;
 using mvc_web.Models;
 using mvc_web.Services;
+using System.Globalization;
 using System.Text.RegularExpressions;
 
 namespace mvc_web.Controllers
@@ -36,21 +37,32 @@ namespace mvc_web.Controllers
             ViewBag.TeacherName = teacherName;
             ViewBag.TeacherNo = teacherNo;
 
-            var submissions = new List<TeacherSubmissionViewModel>();
+            var homeworkDocs = await LoadTeacherHomeworkDocs(teacherId, teacherName, teacherNo);
+            var homeworkById = homeworkDocs
+                .GroupBy(x => x.Id)
+                .ToDictionary(x => x.Key, x => x.First());
 
-            submissions.AddRange(await LoadSubmissionsFromCollection(
+            var canonicalTask = LoadSubmissionsFromCollection(
                 submissionCollection: "submissions",
                 teacherId: teacherId,
                 teacherName: teacherName,
-                teacherNo: teacherNo
-            ));
+                teacherNo: teacherNo,
+                homeworkById: homeworkById
+            );
 
-            submissions.AddRange(await LoadSubmissionsFromCollection(
+            var legacyTask = LoadSubmissionsFromCollection(
                 submissionCollection: "homework_submissions",
                 teacherId: teacherId,
                 teacherName: teacherName,
-                teacherNo: teacherNo
-            ));
+                teacherNo: teacherNo,
+                homeworkById: homeworkById
+            );
+
+            await Task.WhenAll(canonicalTask, legacyTask);
+
+            var submissions = canonicalTask.Result
+                .Concat(legacyTask.Result)
+                .ToList();
 
             submissions = submissions
                 .GroupBy(x => SubmissionGroupKey(x))
@@ -110,6 +122,12 @@ namespace mvc_web.Controllers
             if (string.IsNullOrWhiteSpace(grade))
             {
                 TempData["Error"] = "Not boş bırakılamaz.";
+                return RedirectToAction(nameof(Index));
+            }
+
+            if (!IsValidScore(grade))
+            {
+                TempData["Error"] = "Not 0 ile 100 arasında olmalı.";
                 return RedirectToAction(nameof(Index));
             }
 
@@ -178,15 +196,12 @@ namespace mvc_web.Controllers
             string submissionCollection,
             string teacherId,
             string teacherName,
-            string teacherNo
+            string teacherNo,
+            Dictionary<string, DocumentSnapshot> homeworkById
         )
         {
             var result = new List<TeacherSubmissionViewModel>();
 
-            var homeworkDocs = await LoadTeacherHomeworkDocs(teacherId, teacherName, teacherNo);
-            var homeworkById = homeworkDocs
-                .GroupBy(x => x.Id)
-                .ToDictionary(x => x.Key, x => x.First());
             var submissionDocs = await LoadTeacherSubmissionDocs(
                 submissionCollection,
                 homeworkById.Keys.ToHashSet(),
@@ -322,25 +337,19 @@ namespace mvc_web.Controllers
             var seen = new HashSet<string>();
             var teacherNoKey = OnlyDigits(teacherNo);
 
-            async Task AddQuery(Query query)
+            async Task<QuerySnapshot?> ReadQuery(Query query)
             {
                 try
                 {
-                    var snapshot = await query.GetSnapshotAsync();
-
-                    foreach (var doc in snapshot.Documents)
-                    {
-                        if (seen.Add(doc.Id) &&
-                            HomeworkBelongsToTeacher(doc.ToDictionary(), teacherId, teacherName, teacherNo))
-                        {
-                            result.Add(doc);
-                        }
-                    }
+                    return await query.GetSnapshotAsync();
                 }
                 catch
                 {
+                    return null;
                 }
             }
+
+            var queries = new List<Query>();
 
             foreach (var collection in new[] { "homeworks", "assignments" })
             {
@@ -348,24 +357,41 @@ namespace mvc_web.Controllers
 
                 if (!string.IsNullOrWhiteSpace(teacherId))
                 {
-                    await AddQuery(refCollection.WhereEqualTo("teacherId", teacherId));
-                    await AddQuery(refCollection.WhereEqualTo("TeacherId", teacherId));
+                    queries.Add(refCollection.WhereEqualTo("teacherId", teacherId));
+                    queries.Add(refCollection.WhereEqualTo("TeacherId", teacherId));
                 }
 
                 if (!string.IsNullOrWhiteSpace(teacherNoKey))
                 {
                     foreach (var field in new[] { "teacherNo", "TeacherNo", "teacherNumber", "TeacherNumber" })
                     {
-                        await AddQuery(refCollection.WhereEqualTo(field, teacherNoKey));
+                        queries.Add(refCollection.WhereEqualTo(field, teacherNoKey));
                     }
                 }
 
                 if (!string.IsNullOrWhiteSpace(teacherName))
                 {
-                    await AddQuery(refCollection.WhereEqualTo("teacherName", teacherName));
-                    await AddQuery(refCollection.WhereEqualTo("TeacherName", teacherName));
-                    await AddQuery(refCollection.WhereEqualTo("teacher", teacherName));
-                    await AddQuery(refCollection.WhereEqualTo("Teacher", teacherName));
+                    queries.Add(refCollection.WhereEqualTo("teacherName", teacherName));
+                    queries.Add(refCollection.WhereEqualTo("TeacherName", teacherName));
+                    queries.Add(refCollection.WhereEqualTo("teacher", teacherName));
+                    queries.Add(refCollection.WhereEqualTo("Teacher", teacherName));
+                }
+            }
+
+            foreach (var snapshot in await Task.WhenAll(queries.Select(ReadQuery)))
+            {
+                if (snapshot == null)
+                {
+                    continue;
+                }
+
+                foreach (var doc in snapshot.Documents)
+                {
+                    if (seen.Add(doc.Id) &&
+                        HomeworkBelongsToTeacher(doc.ToDictionary(), teacherId, teacherName, teacherNo))
+                    {
+                        result.Add(doc);
+                    }
                 }
             }
 
@@ -384,44 +410,55 @@ namespace mvc_web.Controllers
             var teacherNoKey = OnlyDigits(teacherNo);
             var refCollection = _firestore.Collection(submissionCollection);
 
-            async Task AddQuery(Query query)
+            async Task<QuerySnapshot?> ReadQuery(Query query)
             {
                 try
                 {
-                    var snapshot = await query.GetSnapshotAsync();
-
-                    foreach (var doc in snapshot.Documents)
-                    {
-                        if (seen.Add(doc.Id))
-                        {
-                            result.Add(doc);
-                        }
-                    }
+                    return await query.GetSnapshotAsync();
                 }
                 catch
                 {
+                    return null;
                 }
             }
 
+            var queries = new List<Query>();
+
             if (!string.IsNullOrWhiteSpace(teacherId))
             {
-                await AddQuery(refCollection.WhereEqualTo("teacherId", teacherId));
-                await AddQuery(refCollection.WhereEqualTo("TeacherId", teacherId));
+                queries.Add(refCollection.WhereEqualTo("teacherId", teacherId));
+                queries.Add(refCollection.WhereEqualTo("TeacherId", teacherId));
             }
 
             if (!string.IsNullOrWhiteSpace(teacherNoKey))
             {
                 foreach (var field in new[] { "teacherNo", "TeacherNo", "teacherNumber", "TeacherNumber" })
                 {
-                    await AddQuery(refCollection.WhereEqualTo(field, teacherNoKey));
+                    queries.Add(refCollection.WhereEqualTo(field, teacherNoKey));
                 }
             }
 
-            foreach (var homeworkId in homeworkIds.Where(x => !string.IsNullOrWhiteSpace(x)))
+            foreach (var chunk in ChunkValues(homeworkIds.Where(x => !string.IsNullOrWhiteSpace(x)).ToList(), 10))
             {
                 foreach (var field in new[] { "homeworkId", "HomeworkId", "assignmentId", "AssignmentId" })
                 {
-                    await AddQuery(refCollection.WhereEqualTo(field, homeworkId));
+                    queries.Add(refCollection.WhereIn(field, chunk.Cast<object>().ToArray()));
+                }
+            }
+
+            foreach (var snapshot in await Task.WhenAll(queries.Select(ReadQuery)))
+            {
+                if (snapshot == null)
+                {
+                    continue;
+                }
+
+                foreach (var doc in snapshot.Documents)
+                {
+                    if (seen.Add(doc.Id))
+                    {
+                        result.Add(doc);
+                    }
                 }
             }
 
@@ -576,9 +613,39 @@ namespace mvc_web.Controllers
                 .Trim();
         }
 
+        private static bool IsValidScore(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return true;
+            }
+
+            var normalized = value.Trim().Replace(',', '.');
+
+            return decimal.TryParse(
+                       normalized,
+                       NumberStyles.AllowDecimalPoint | NumberStyles.AllowLeadingSign,
+                       CultureInfo.InvariantCulture,
+                       out var score
+                   ) &&
+                   score >= 0 &&
+                   score <= 100;
+        }
+
         private static string OnlyDigits(string value)
         {
             return new string((value ?? "").Where(char.IsDigit).ToArray());
+        }
+
+        private static IEnumerable<List<string>> ChunkValues(List<string> values, int size)
+        {
+            for (var i = 0; i < values.Count; i += size)
+            {
+                yield return values
+                    .Skip(i)
+                    .Take(size)
+                    .ToList();
+            }
         }
 
         private static string NormalizeText(string value)

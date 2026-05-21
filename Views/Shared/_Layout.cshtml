@@ -2,6 +2,54 @@
 
 @{
     var title = ViewData["Title"]?.ToString() ?? "Ödev Sistemi";
+
+    var name =
+        Context.Session.GetString("UserName") ??
+        Context.Session.GetString("Name") ??
+        "Kullanıcı";
+
+    var number =
+        Context.Session.GetString("UserNumber") ??
+        Context.Session.GetString("Number") ??
+        "-";
+
+    var role =
+        Context.Session.GetString("UserRole") ??
+        Context.Session.GetString("Role") ??
+        "";
+
+    string RoleLabel(string value)
+    {
+        value = (value ?? "").Trim().ToLowerInvariant();
+
+        return value switch
+        {
+            "student" or "öğrenci" or "ogrenci" => "Öğrenci",
+            "parent" or "veli" => "Veli",
+            "teacher" or "öğretmen" or "ogretmen" => "Öğretmen",
+            "admin" or "yönetici" or "yonetici" => "Yönetici",
+            _ => "Portal"
+        };
+    }
+
+    string Initials(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "K";
+        }
+
+        var parts = value
+            .Trim()
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        if (parts.Length >= 2)
+        {
+            return $"{parts[0][0]}{parts[1][0]}".ToUpperInvariant();
+        }
+
+        return parts[0][0].ToString().ToUpperInvariant();
+    }
 }
 
 <!DOCTYPE html>
@@ -16,35 +64,66 @@
     <link rel="stylesheet" href="~/css/dashboard.css" asp-append-version="true" />
 </head>
 
-<body>
-    <main class="public-main">
-        @RenderBody()
+<body class="midnight-body public-midnight-body">
+    <div class="midnight-background">
+        <div class="midnight-orb orb-a"></div>
+        <div class="midnight-orb orb-b"></div>
+        <div class="midnight-orb orb-c"></div>
+    </div>
+
+    <main class="public-main midnight-public-main">
+        <header class="portal-shell-header">
+            <div class="portal-brand">
+                <div class="brand-icon">
+                    🎓
+                </div>
+
+                <div>
+                    <div class="brand-title">
+                        Ödev Sistemi
+                    </div>
+
+                    <div class="brand-subtitle">
+                        @RoleLabel(role) Paneli
+                    </div>
+                </div>
+            </div>
+
+            <div class="portal-header-actions">
+                <div class="system-pill">
+                    <span></span>
+                    Sistem Aktif
+                </div>
+
+                <div class="user-chip">
+                    <div class="user-avatar">
+                        @Initials(name)
+                    </div>
+
+                    <div>
+                        <div class="user-name">
+                            @name
+                        </div>
+
+                        <div class="user-role">
+                            @RoleLabel(role) · No: @number
+                        </div>
+                    </div>
+                </div>
+
+                <a class="logout-link public-logout"
+                   asp-controller="Auth"
+                   asp-action="Logout">
+                    <span>🚪</span>
+                    <strong>Çıkış</strong>
+                </a>
+            </div>
+        </header>
+
+        <section class="public-content-area">
+            @RenderBody()
+        </section>
     </main>
-
-    <style>
-        :where(.portal-header, .stat-card, .announcement-card, .homework-card, .form-card, .lessons-card, .teacher-card, .selected-lesson-preview, .lesson-mini-card, .empty-box, .submission-box, .grade-box) {
-            background:
-                radial-gradient(circle at 10% 0%, rgba(79, 70, 229, .13), transparent 34%),
-                radial-gradient(circle at 96% 10%, rgba(6, 182, 212, .11), transparent 30%),
-                linear-gradient(135deg, rgba(255,255,255,.98), rgba(248,250,252,.92)) !important;
-            border-color: rgba(148, 163, 184, .44) !important;
-            box-shadow:
-                0 22px 58px rgba(15, 23, 42, .12),
-                inset 0 1px 0 rgba(255,255,255,.88) !important;
-        }
-
-        :where(.announcement-card, .homework-card, .stat-card, .lesson-mini-card, .selected-lesson-preview) {
-            transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
-        }
-
-        :where(.announcement-card, .homework-card, .stat-card, .lesson-mini-card):hover {
-            transform: translateY(-2px);
-            border-color: rgba(99, 102, 241, .42) !important;
-            box-shadow:
-                0 28px 70px rgba(15, 23, 42, .15),
-                0 0 0 1px rgba(99, 102, 241, .08) !important;
-        }
-    </style>
 
     <script src="~/js/site.js" asp-append-version="true"></script>
 

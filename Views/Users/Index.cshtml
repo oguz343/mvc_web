@@ -3,76 +3,740 @@
 @{
     Layout = "_AdminLayout";
     ViewData["Title"] = "Kullanıcılar";
+    ViewData["PageTitle"] = "Kullanıcılar";
+    ViewData["PageSubtitle"] = "Öğrenci, öğretmen, veli ve yönetici hesaplarını koyu tema ile daha düzenli şekilde yönetin.";
 
     var users = Model ?? new List<mvc_web.Models.UserViewModel>();
+
+    var studentCount = users.Count(x => x.Role == "Öğrenci");
+    var teacherCount = users.Count(x => x.Role == "Öğretmen");
+    var parentCount = users.Count(x => x.Role == "Veli");
+    var activationWaitingCount = users.Count(x => x.MustChangePassword);
+
+    string RoleIcon(string role)
+    {
+        return role switch
+        {
+            "Öğretmen" => "👨‍🏫",
+            "Veli" => "👪",
+            "Admin" => "🛡️",
+            _ => "🎒"
+        };
+    }
+
+    string RoleClass(string role)
+    {
+        return role switch
+        {
+            "Öğretmen" => "teacher",
+            "Veli" => "parent",
+            "Admin" => "admin",
+            _ => "student"
+        };
+    }
+
+    string SafeText(string value, string fallback = "-")
+    {
+        return string.IsNullOrWhiteSpace(value) ? fallback : value;
+    }
 }
 
-<div class="users-page">
-    <div class="users-toolbar">
-        <div>
-            <h2>Kullanıcılar</h2>
-            <p>Öğrenci, öğretmen ve veli hesaplarını yönetin.</p>
+<style>
+    .users-v2 {
+        width: 100%;
+        max-width: none;
+        display: grid;
+        gap: 18px;
+    }
+
+    .users-v2-hero {
+        position: relative;
+        overflow: hidden;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 380px;
+        gap: 18px;
+        padding: 24px;
+        border-radius: 32px;
+        background:
+            radial-gradient(circle at 0% 0%, rgba(56, 189, 248, .15), transparent 34%),
+            radial-gradient(circle at 100% 0%, rgba(139, 92, 246, .18), transparent 34%),
+            linear-gradient(135deg, rgba(15, 23, 42, .94), rgba(17, 24, 39, .86));
+        border: 1px solid rgba(148, 163, 184, .20);
+        box-shadow: 0 24px 70px rgba(0, 0, 0, .28);
+        backdrop-filter: blur(18px);
+    }
+
+    .users-v2-hero::after {
+        content: "";
+        position: absolute;
+        width: 390px;
+        height: 390px;
+        right: -180px;
+        top: -190px;
+        border-radius: 999px;
+        background: rgba(99, 102, 241, .22);
+        pointer-events: none;
+    }
+
+    .users-v2-hero-main,
+    .users-v2-hero-side {
+        position: relative;
+        z-index: 1;
+    }
+
+    .users-v2-kicker {
+        width: fit-content;
+        min-height: 30px;
+        display: inline-flex;
+        align-items: center;
+        padding: 0 12px;
+        border-radius: 999px;
+        color: #67e8f9;
+        background: rgba(56, 189, 248, .10);
+        border: 1px solid rgba(103, 232, 249, .20);
+        font-size: 11px;
+        font-weight: 950;
+        letter-spacing: .16em;
+        text-transform: uppercase;
+    }
+
+    .users-v2-hero h2 {
+        max-width: 760px;
+        margin: 14px 0 0;
+        color: #ffffff;
+        font-size: clamp(34px, 3.8vw, 58px);
+        font-weight: 950;
+        line-height: 1;
+        letter-spacing: -.06em;
+    }
+
+    .users-v2-hero p {
+        max-width: 760px;
+        margin: 14px 0 0;
+        color: #aab8cf;
+        font-size: 15px;
+        font-weight: 700;
+        line-height: 1.65;
+    }
+
+    .users-v2-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 20px;
+    }
+
+    .users-v2-primary-action,
+    .users-v2-excel-label {
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 15px;
+        border-radius: 15px;
+        border: 1px solid rgba(125, 211, 252, .22);
+        color: #ffffff;
+        text-decoration: none;
+        cursor: pointer;
+        background: linear-gradient(135deg, #2563eb, #7c3aed);
+        box-shadow: 0 14px 30px rgba(37, 99, 235, .24);
+        font-size: 13px;
+        font-weight: 950;
+        transition: .16s ease;
+    }
+
+    .users-v2-excel-label.student {
+        background: linear-gradient(135deg, #0891b2, #2563eb);
+    }
+
+    .users-v2-excel-label.teacher {
+        background: linear-gradient(135deg, #16a34a, #0891b2);
+    }
+
+    .users-v2-primary-action:hover,
+    .users-v2-excel-label:hover {
+        transform: translateY(-1px);
+    }
+
+    .users-v2-excel-form {
+        margin: 0;
+    }
+
+    .users-v2-hero-side {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    .users-v2-summary-card {
+        min-height: 106px;
+        padding: 16px;
+        border-radius: 22px;
+        background: rgba(255, 255, 255, .055);
+        border: 1px solid rgba(148, 163, 184, .16);
+    }
+
+    .users-v2-summary-card strong {
+        display: block;
+        color: #ffffff;
+        font-size: 30px;
+        font-weight: 950;
+        line-height: 1;
+        letter-spacing: -.04em;
+    }
+
+    .users-v2-summary-card span {
+        display: block;
+        margin-top: 7px;
+        color: #94a3b8;
+        font-size: 12px;
+        font-weight: 850;
+    }
+
+    .users-v2-alert {
+        padding: 15px 17px;
+        border-radius: 18px;
+        font-weight: 850;
+        line-height: 1.5;
+        border: 1px solid rgba(148, 163, 184, .16);
+    }
+
+    .users-v2-alert.success {
+        color: #bbf7d0;
+        background: rgba(34, 197, 94, .12);
+        border-color: rgba(74, 222, 128, .20);
+    }
+
+    .users-v2-alert.error {
+        color: #fecaca;
+        background: rgba(239, 68, 68, .12);
+        border-color: rgba(248, 113, 113, .20);
+    }
+
+    .users-v2-control-panel {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 14px;
+        padding: 16px;
+        border-radius: 28px;
+        background:
+            radial-gradient(circle at 0% 0%, rgba(56, 189, 248, .08), transparent 34%),
+            linear-gradient(135deg, rgba(17, 25, 46, .94), rgba(15, 23, 42, .84));
+        border: 1px solid rgba(148, 163, 184, .18);
+        box-shadow: 0 16px 44px rgba(0, 0, 0, .20);
+        backdrop-filter: blur(16px);
+    }
+
+    .users-v2-search {
+        min-height: 54px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 0 15px;
+        border-radius: 18px;
+        background: rgba(7, 17, 31, .58);
+        border: 1px solid rgba(148, 163, 184, .18);
+        transition: .15s ease;
+    }
+
+    .users-v2-search:focus-within {
+        border-color: rgba(103, 232, 249, .45);
+        box-shadow: 0 0 0 4px rgba(56, 189, 248, .09);
+    }
+
+    .users-v2-search span {
+        font-size: 20px;
+    }
+
+    .users-v2-search input {
+        width: 100%;
+        border: 0;
+        outline: 0;
+        color: #ffffff;
+        background: transparent;
+        font-size: 14px;
+        font-weight: 800;
+    }
+
+    .users-v2-search input::placeholder {
+        color: #64748b;
+    }
+
+    .users-v2-visible-box {
+        min-width: 170px;
+        min-height: 54px;
+        display: grid;
+        align-content: center;
+        padding: 0 15px;
+        border-radius: 18px;
+        color: #dbeafe;
+        background: rgba(255, 255, 255, .055);
+        border: 1px solid rgba(148, 163, 184, .16);
+    }
+
+    .users-v2-visible-box strong {
+        color: #ffffff;
+        font-size: 24px;
+        font-weight: 950;
+        line-height: 1;
+    }
+
+    .users-v2-visible-box span {
+        margin-top: 4px;
+        color: #94a3b8;
+        font-size: 12px;
+        font-weight: 850;
+    }
+
+    .users-v2-role-filter {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 9px;
+    }
+
+    .users-v2-role-btn {
+        min-height: 40px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        padding: 0 13px;
+        border-radius: 999px;
+        color: #dbeafe;
+        background: rgba(255, 255, 255, .055);
+        border: 1px solid rgba(148, 163, 184, .16);
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 900;
+        transition: .15s ease;
+    }
+
+    .users-v2-role-btn.active,
+    .users-v2-role-btn:hover {
+        color: #ffffff;
+        background: linear-gradient(135deg, #2563eb, #7c3aed);
+        border-color: rgba(125, 211, 252, .22);
+    }
+
+    .users-v2-empty {
+        min-height: 280px;
+        display: grid;
+        place-items: center;
+        padding: 36px 24px;
+        border-radius: 30px;
+        color: #94a3b8;
+        background:
+            radial-gradient(circle at 0% 0%, rgba(56, 189, 248, .08), transparent 34%),
+            linear-gradient(135deg, rgba(17, 25, 46, .94), rgba(15, 23, 42, .84));
+        border: 1px dashed rgba(148, 163, 184, .20);
+        text-align: center;
+        font-size: 15px;
+        font-weight: 850;
+    }
+
+    .users-v2-empty-icon {
+        width: 72px;
+        height: 72px;
+        display: grid;
+        place-items: center;
+        margin: 0 auto 14px;
+        border-radius: 24px;
+        color: #ffffff;
+        background: linear-gradient(135deg, #2563eb, #7c3aed);
+        font-size: 32px;
+    }
+
+    .users-v2-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+        gap: 16px;
+    }
+
+    .users-v2-card {
+        position: relative;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+        min-height: 100%;
+        padding: 20px;
+        border-radius: 28px;
+        background:
+            radial-gradient(circle at 100% 0%, rgba(56, 189, 248, .075), transparent 36%),
+            linear-gradient(135deg, rgba(17, 25, 46, .94), rgba(15, 23, 42, .86));
+        border: 1px solid rgba(148, 163, 184, .18);
+        box-shadow: 0 16px 44px rgba(0, 0, 0, .22);
+        backdrop-filter: blur(16px);
+        transition: .16s ease;
+    }
+
+    .users-v2-card:hover {
+        transform: translateY(-2px);
+        border-color: rgba(125, 211, 252, .28);
+        box-shadow: 0 22px 54px rgba(0, 0, 0, .27);
+    }
+
+    .users-v2-card::after {
+        content: "";
+        position: absolute;
+        width: 180px;
+        height: 180px;
+        right: -92px;
+        top: -104px;
+        border-radius: 999px;
+        background: rgba(99, 102, 241, .13);
+        pointer-events: none;
+    }
+
+    .users-v2-card-top {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        grid-template-columns: 58px minmax(0, 1fr);
+        gap: 13px;
+        align-items: center;
+    }
+
+    .users-v2-avatar {
+        width: 58px;
+        height: 58px;
+        display: grid;
+        place-items: center;
+        border-radius: 20px;
+        color: #ffffff;
+        font-size: 26px;
+        box-shadow: 0 14px 30px rgba(37, 99, 235, .20);
+    }
+
+    .users-v2-avatar.student {
+        background: linear-gradient(135deg, #2563eb, #7c3aed);
+    }
+
+    .users-v2-avatar.teacher {
+        background: linear-gradient(135deg, #0891b2, #2563eb);
+    }
+
+    .users-v2-avatar.parent {
+        background: linear-gradient(135deg, #f97316, #7c3aed);
+    }
+
+    .users-v2-avatar.admin {
+        background: linear-gradient(135deg, #64748b, #2563eb);
+    }
+
+    .users-v2-name {
+        min-width: 0;
+    }
+
+    .users-v2-name h3 {
+        margin: 0;
+        color: #ffffff;
+        font-size: 19px;
+        font-weight: 950;
+        line-height: 1.22;
+        letter-spacing: -.025em;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .users-v2-name p {
+        margin: 5px 0 0;
+        color: #94a3b8;
+        font-size: 13px;
+        font-weight: 850;
+    }
+
+    .users-v2-tags {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .users-v2-tag {
+        min-height: 31px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 950;
+        border: 1px solid transparent;
+        white-space: nowrap;
+    }
+
+    .users-v2-tag.student {
+        color: #bfdbfe;
+        background: rgba(37, 99, 235, .14);
+        border-color: rgba(96, 165, 250, .20);
+    }
+
+    .users-v2-tag.teacher {
+        color: #a5f3fc;
+        background: rgba(6, 182, 212, .13);
+        border-color: rgba(103, 232, 249, .18);
+    }
+
+    .users-v2-tag.parent {
+        color: #fde68a;
+        background: rgba(245, 158, 11, .13);
+        border-color: rgba(251, 191, 36, .18);
+    }
+
+    .users-v2-tag.admin {
+        color: #e2e8f0;
+        background: rgba(148, 163, 184, .13);
+        border-color: rgba(203, 213, 225, .18);
+    }
+
+    .users-v2-tag.active {
+        color: #bbf7d0;
+        background: rgba(34, 197, 94, .13);
+        border-color: rgba(74, 222, 128, .20);
+    }
+
+    .users-v2-tag.waiting {
+        color: #fde68a;
+        background: rgba(245, 158, 11, .13);
+        border-color: rgba(251, 191, 36, .18);
+    }
+
+    .users-v2-details {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        gap: 9px;
+    }
+
+    .users-v2-detail-row {
+        display: grid;
+        grid-template-columns: 28px minmax(90px, .65fr) minmax(0, 1fr);
+        gap: 9px;
+        align-items: center;
+        padding: 10px 11px;
+        border-radius: 16px;
+        color: #94a3b8;
+        background: rgba(255, 255, 255, .045);
+        border: 1px solid rgba(148, 163, 184, .12);
+        font-size: 13px;
+        font-weight: 750;
+    }
+
+    .users-v2-detail-row strong {
+        color: #dbeafe;
+        font-weight: 950;
+    }
+
+    .users-v2-detail-row b {
+        min-width: 0;
+        color: #ffffff;
+        font-weight: 900;
+        text-align: right;
+        overflow-wrap: anywhere;
+    }
+
+    .users-v2-actions-row {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-top: auto;
+    }
+
+    .users-v2-edit,
+    .users-v2-delete {
+        min-height: 45px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        border-radius: 15px;
+        border: 1px solid transparent;
+        text-decoration: none;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 950;
+        transition: .15s ease;
+    }
+
+    .users-v2-edit {
+        color: #ffffff;
+        background: rgba(56, 189, 248, .11);
+        border-color: rgba(125, 211, 252, .22);
+    }
+
+    .users-v2-delete {
+        width: 100%;
+        color: #ffffff;
+        background: rgba(239, 68, 68, .82);
+        border-color: rgba(248, 113, 113, .24);
+    }
+
+    .users-v2-edit:hover,
+    .users-v2-delete:hover {
+        transform: translateY(-1px);
+    }
+
+    @@media (max-width: 1200px) {
+        .users-v2-hero,
+        .users-v2-control-panel {
+            grid-template-columns: 1fr;
+        }
+
+        .users-v2-visible-box {
+            min-width: 0;
+        }
+    }
+
+    @@media (max-width: 760px) {
+        .users-v2-hero {
+            border-radius: 22px;
+            padding: 16px;
+        }
+
+        .users-v2-hero-side {
+            grid-template-columns: 1fr;
+        }
+
+        .users-v2-actions,
+        .users-v2-role-filter {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .users-v2-primary-action,
+        .users-v2-excel-label,
+        .users-v2-role-btn {
+            width: 100%;
+        }
+
+        .users-v2-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .users-v2-card {
+            border-radius: 22px;
+            padding: 16px;
+        }
+
+        .users-v2-detail-row {
+            grid-template-columns: 24px minmax(0, 1fr);
+        }
+
+        .users-v2-detail-row b {
+            grid-column: 1 / -1;
+            text-align: left;
+        }
+
+        .users-v2-actions-row {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+<div class="users-v2">
+    <section class="users-v2-hero">
+        <div class="users-v2-hero-main">
+            <div class="users-v2-kicker">
+                Kullanıcı Merkezi
+            </div>
+
+            <h2>Tüm hesaplar daha düzenli ve okunabilir.</h2>
+
+            <p>
+                Öğrenci, öğretmen, veli ve yönetici hesaplarını aynı koyu tema içinde arayın, filtreleyin,
+                Excel ile aktarın, düzenleyin veya güvenli şekilde silin.
+            </p>
+
+            <div class="users-v2-actions">
+                <a asp-controller="Users"
+                   asp-action="Create"
+                   class="users-v2-primary-action">
+                    👥 Yeni Kullanıcı
+                </a>
+
+                <form asp-controller="Users"
+                      asp-action="ImportStudentsExcel"
+                      method="post"
+                      enctype="multipart/form-data"
+                      class="users-v2-excel-form">
+
+                    @Html.AntiForgeryToken()
+
+                    <label class="users-v2-excel-label student">
+                        🎒 Öğrenci Excel
+                        <input type="file"
+                               name="excelFile"
+                               accept=".xlsx"
+                               class="users-v2-excel-input"
+                               hidden />
+                    </label>
+                </form>
+
+                <form asp-controller="Users"
+                      asp-action="ImportTeachersExcel"
+                      method="post"
+                      enctype="multipart/form-data"
+                      class="users-v2-excel-form">
+
+                    @Html.AntiForgeryToken()
+
+                    <label class="users-v2-excel-label teacher">
+                        👨‍🏫 Öğretmen Excel
+                        <input type="file"
+                               name="excelFile"
+                               accept=".xlsx"
+                               class="users-v2-excel-input"
+                               hidden />
+                    </label>
+                </form>
+            </div>
         </div>
 
-        <div class="toolbar-actions">
-            <a asp-controller="Users" asp-action="Create" class="btn-primary">
-                👥 Yeni Kullanıcı
-            </a>
+        <div class="users-v2-hero-side">
+            <div class="users-v2-summary-card">
+                <strong>@users.Count</strong>
+                <span>Toplam Kullanıcı</span>
+            </div>
 
-            <form asp-controller="Users"
-                  asp-action="ImportStudentsExcel"
-                  method="post"
-                  enctype="multipart/form-data"
-                  class="excel-form">
+            <div class="users-v2-summary-card">
+                <strong>@studentCount</strong>
+                <span>Öğrenci</span>
+            </div>
 
-                @Html.AntiForgeryToken()
+            <div class="users-v2-summary-card">
+                <strong>@teacherCount</strong>
+                <span>Öğretmen</span>
+            </div>
 
-                <label class="excel-btn">
-                    🎒 Öğrenci Excel
-                    <input type="file"
-                           name="excelFile"
-                           accept=".xlsx"
-                           onchange="this.form.submit()"
-                           hidden />
-                </label>
-            </form>
-
-            <form asp-controller="Users"
-                  asp-action="ImportTeachersExcel"
-                  method="post"
-                  enctype="multipart/form-data"
-                  class="excel-form">
-
-                @Html.AntiForgeryToken()
-
-                <label class="excel-btn teacher">
-                    👨‍🏫 Öğretmen Excel
-                    <input type="file"
-                           name="excelFile"
-                           accept=".xlsx"
-                           onchange="this.form.submit()"
-                           hidden />
-                </label>
-            </form>
+            <div class="users-v2-summary-card">
+                <strong>@activationWaitingCount</strong>
+                <span>Aktivasyon Bekleyen</span>
+            </div>
         </div>
-    </div>
+    </section>
 
     @if (TempData["Success"] != null)
     {
-        <div class="alert alert-success">
+        <div class="users-v2-alert success">
             @TempData["Success"]
         </div>
     }
 
     @if (TempData["Error"] != null)
     {
-        <div class="alert alert-danger">
+        <div class="users-v2-alert error">
             @TempData["Error"]
         </div>
     }
 
-    <div class="search-panel">
-        <div class="search-box">
+    <section class="users-v2-control-panel">
+        <div class="users-v2-search">
             <span>🔍</span>
 
             <input id="userSearchInput"
@@ -81,605 +745,172 @@
                    autocomplete="off" />
         </div>
 
-        <div class="search-info">
+        <div class="users-v2-visible-box">
             <strong id="visibleCount">@users.Count</strong>
             <span>kullanıcı gösteriliyor</span>
         </div>
-    </div>
+    </section>
 
-    <div class="role-filter">
-        <button type="button" class="role-filter-btn active" data-role="all">
-            Tümü
+    <section class="users-v2-role-filter">
+        <button type="button" class="users-v2-role-btn active" data-role="all">
+            🌐 Tümü
         </button>
 
-        <button type="button" class="role-filter-btn" data-role="Öğrenci">
-            Öğrenci
+        <button type="button" class="users-v2-role-btn" data-role="Öğrenci">
+            🎒 Öğrenci
         </button>
 
-        <button type="button" class="role-filter-btn" data-role="Öğretmen">
-            Öğretmen
+        <button type="button" class="users-v2-role-btn" data-role="Öğretmen">
+            👨‍🏫 Öğretmen
         </button>
 
-        <button type="button" class="role-filter-btn" data-role="Veli">
-            Veli
+        <button type="button" class="users-v2-role-btn" data-role="Veli">
+            👪 Veli
         </button>
-    </div>
+
+        <button type="button" class="users-v2-role-btn" data-role="Admin">
+            🛡️ Admin
+        </button>
+    </section>
 
     @if (!users.Any())
     {
-        <div class="empty-box">
-            Henüz kullanıcı eklenmedi.
+        <div class="users-v2-empty">
+            <div>
+                <div class="users-v2-empty-icon">👥</div>
+                Henüz kullanıcı eklenmedi.
+            </div>
         </div>
     }
     else
     {
-        <div id="usersGrid" class="users-grid">
+        <section id="usersGrid" class="users-v2-grid">
             @foreach (var user in users)
             {
-                var roleIcon = user.Role == "Öğretmen" ? "👨‍🏫" : user.Role == "Veli" ? "👪" : "🎒";
-                var roleClass = user.Role == "Öğretmen" ? "teacher" : user.Role == "Veli" ? "parent" : "student";
+                var roleClass = RoleClass(user.Role);
+                var roleIcon = RoleIcon(user.Role);
 
-                <div class="user-card"
-                     data-role="@user.Role"
-                     data-name="@user.Name"
-                     data-number="@user.SchoolNo">
+                <article class="users-v2-card"
+                         data-role="@user.Role"
+                         data-name="@user.Name"
+                         data-number="@user.SchoolNo">
 
-                    <div class="user-top">
-                        <div class="user-icon @roleClass">
+                    <div class="users-v2-card-top">
+                        <div class="users-v2-avatar @roleClass">
                             @roleIcon
                         </div>
 
-                        <div class="user-main">
-                            <h3>@user.Name</h3>
-                            <p>@user.SchoolNo</p>
+                        <div class="users-v2-name">
+                            <h3>@SafeText(user.Name, "İsimsiz Kullanıcı")</h3>
+                            <p>No: @SafeText(user.SchoolNo)</p>
                         </div>
                     </div>
 
-                    <div class="user-tags">
-                        <span class="tag @roleClass">
-                            @user.Role
+                    <div class="users-v2-tags">
+                        <span class="users-v2-tag @roleClass">
+                            @SafeText(user.Role, "Rol Yok")
                         </span>
 
                         @if (user.MustChangePassword)
                         {
-                            <span class="tag waiting">
+                            <span class="users-v2-tag waiting">
                                 Aktivasyon Bekliyor
                             </span>
                         }
                         else
                         {
-                            <span class="tag active">
+                            <span class="users-v2-tag active">
                                 Aktif
                             </span>
                         }
                     </div>
 
-                    <div class="user-details">
+                    <div class="users-v2-details">
                         @if (user.Role == "Öğrenci")
                         {
-                            <div>
-                                <span>ℹ️</span>
-                                <strong>Sınıf:</strong>
-                                <b>@(string.IsNullOrWhiteSpace(user.ClassName) ? "-" : user.ClassName)</b>
+                            <div class="users-v2-detail-row">
+                                <span>🏫</span>
+                                <strong>Sınıf</strong>
+                                <b>@SafeText(user.ClassName)</b>
                             </div>
                         }
 
                         @if (user.Role == "Öğretmen")
                         {
-                            <div>
+                            <div class="users-v2-detail-row">
                                 <span>📚</span>
-                                <strong>Branş:</strong>
-                                <b>@(string.IsNullOrWhiteSpace(user.Branch) ? "-" : user.Branch)</b>
+                                <strong>Branş</strong>
+                                <b>@SafeText(user.Branch)</b>
                             </div>
                         }
 
                         @if (user.Role == "Veli")
                         {
-                            <div>
+                            <div class="users-v2-detail-row">
                                 <span>👪</span>
-                                <strong>Bağlı Öğrenci:</strong>
-                                <b>@(string.IsNullOrWhiteSpace(user.LinkedStudentNo) ? "-" : user.LinkedStudentNo)</b>
+                                <strong>Bağlı Öğrenci</strong>
+                                <b>@SafeText(user.LinkedStudentNo)</b>
                             </div>
                         }
 
-                        <div>
+                        <div class="users-v2-detail-row">
                             <span>📞</span>
-                            <strong>Telefon:</strong>
-                            <b>@(string.IsNullOrWhiteSpace(user.Phone) ? "-" : user.Phone)</b>
+                            <strong>Telefon</strong>
+                            <b>@SafeText(user.Phone)</b>
                         </div>
 
-                        <div>
+                        <div class="users-v2-detail-row">
                             <span>🔑</span>
-                            <strong>Aktivasyon:</strong>
-                            <b>@(string.IsNullOrWhiteSpace(user.ActivationCode) ? "-" : user.ActivationCode)</b>
+                            <strong>Aktivasyon</strong>
+                            <b>@SafeText(user.ActivationCode)</b>
                         </div>
                     </div>
 
-                    <div class="card-actions">
+                    <div class="users-v2-actions-row">
                         <a asp-controller="Users"
                            asp-action="Edit"
                            asp-route-id="@user.Id"
-                           class="edit-btn">
+                           class="users-v2-edit">
                             ✏️ Düzenle
                         </a>
 
                         <form asp-controller="Users"
                               asp-action="Delete"
                               method="post"
-                              class="delete-user-form"
-                              data-user-name="@user.Name">
+                              data-delete="true"
+                              data-delete-name="@user.Name">
 
                             @Html.AntiForgeryToken()
 
                             <input type="hidden" name="id" value="@user.Id" />
 
-                            <button type="submit" class="delete-btn">
+                            <button type="submit" class="users-v2-delete">
                                 🗑️ Sil
                             </button>
                         </form>
                     </div>
-                </div>
+                </article>
             }
-        </div>
+        </section>
 
-        <div id="noSearchResult" class="empty-box" style="display:none;">
-            Aradığınız kritere uygun kullanıcı bulunamadı.
+        <div id="noSearchResult" class="users-v2-empty" style="display:none;">
+            <div>
+                <div class="users-v2-empty-icon">🔍</div>
+                Aradığınız kritere uygun kullanıcı bulunamadı.
+            </div>
         </div>
     }
 </div>
-
-<div id="deleteModal" class="delete-modal-backdrop">
-    <div class="delete-modal-card">
-        <div class="delete-modal-icon">
-            🗑️
-        </div>
-
-        <h3>Kullanıcı silinsin mi?</h3>
-
-        <p>
-            <strong id="deleteUserName">Bu kullanıcı</strong> kalıcı olarak silinecek.
-        </p>
-
-        <div class="delete-modal-actions">
-            <button type="button" id="cancelDeleteBtn" class="cancel-modal-btn">
-                Vazgeç
-            </button>
-
-            <button type="button" id="confirmDeleteBtn" class="confirm-modal-btn">
-                Sil
-            </button>
-        </div>
-    </div>
-</div>
-
-<style>
-    .users-page {
-        display: grid;
-        gap: 18px;
-    }
-
-    .users-toolbar {
-        background: #fff;
-        border-radius: 30px;
-        padding: 24px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 18px;
-        box-shadow: 0 18px 42px rgba(15, 23, 42, .07);
-    }
-
-    .users-toolbar h2 {
-        margin: 0;
-        color: #0f172a;
-        font-size: 30px;
-        font-weight: 950;
-    }
-
-    .users-toolbar p {
-        margin: 6px 0 0;
-        color: #64748b;
-        font-weight: 800;
-    }
-
-    .toolbar-actions {
-        display: flex;
-        gap: 10px;
-        flex-wrap: wrap;
-        justify-content: flex-end;
-    }
-
-    .btn-primary,
-    .excel-btn {
-        min-height: 48px;
-        border-radius: 16px;
-        padding: 0 16px;
-        border: 0;
-        background: #4f46e5;
-        color: #fff;
-        text-decoration: none;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: 950;
-        cursor: pointer;
-        white-space: nowrap;
-    }
-
-    .excel-btn {
-        background: #06b6d4;
-    }
-
-    .excel-btn.teacher {
-        background: #10b981;
-    }
-
-    .alert {
-        padding: 14px 18px;
-        border-radius: 18px;
-        font-weight: 900;
-    }
-
-    .alert-success {
-        background: #dcfce7;
-        color: #166534;
-    }
-
-    .alert-danger {
-        background: #fee2e2;
-        color: #991b1b;
-    }
-
-    .search-panel {
-        background: #fff;
-        border-radius: 26px;
-        padding: 16px;
-        display: flex;
-        align-items: center;
-        gap: 14px;
-        box-shadow: 0 18px 42px rgba(15, 23, 42, .07);
-    }
-
-    .search-box {
-        flex: 1;
-        min-height: 58px;
-        border-radius: 20px;
-        border: 1px solid #e5e7eb;
-        background: #f8fafc;
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        padding: 0 16px;
-    }
-
-    .search-box:focus-within {
-        background: #fff;
-        border-color: #4f46e5;
-        box-shadow: 0 0 0 5px rgba(79, 70, 229, .11);
-    }
-
-    .search-box span {
-        font-size: 20px;
-    }
-
-    .search-box input {
-        flex: 1;
-        border: 0;
-        outline: 0;
-        background: transparent;
-        color: #0f172a;
-        font-weight: 900;
-        font-size: 15px;
-    }
-
-    .search-info {
-        min-width: 150px;
-        background: #eef2ff;
-        color: #3730a3;
-        border-radius: 18px;
-        padding: 12px 14px;
-        display: grid;
-        gap: 2px;
-    }
-
-    .search-info strong {
-        font-size: 24px;
-        font-weight: 950;
-        line-height: 1;
-    }
-
-    .search-info span {
-        font-size: 12px;
-        font-weight: 900;
-    }
-
-    .role-filter {
-        display: flex;
-        gap: 10px;
-        flex-wrap: wrap;
-    }
-
-    .role-filter-btn {
-        border: 0;
-        background: #fff;
-        color: #334155;
-        border-radius: 999px;
-        padding: 12px 18px;
-        font-weight: 950;
-        cursor: pointer;
-        box-shadow: 0 12px 26px rgba(15, 23, 42, .06);
-    }
-
-    .role-filter-btn.active {
-        background: #4f46e5;
-        color: #fff;
-    }
-
-    .users-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
-        gap: 18px;
-    }
-
-    .user-card {
-        background: #fff;
-        border-radius: 28px;
-        padding: 20px;
-        box-shadow: 0 18px 42px rgba(15, 23, 42, .07);
-        display: grid;
-        gap: 16px;
-    }
-
-    .user-top {
-        display: flex;
-        align-items: center;
-        gap: 14px;
-    }
-
-    .user-icon {
-        width: 58px;
-        height: 58px;
-        border-radius: 20px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 28px;
-        flex: 0 0 auto;
-    }
-
-    .user-icon.student {
-        background: #eef2ff;
-    }
-
-    .user-icon.teacher {
-        background: #cffafe;
-    }
-
-    .user-icon.parent {
-        background: #ffedd5;
-    }
-
-    .user-main h3 {
-        margin: 0;
-        color: #0f172a;
-        font-size: 21px;
-        font-weight: 950;
-    }
-
-    .user-main p {
-        margin: 4px 0 0;
-        color: #64748b;
-        font-weight: 900;
-    }
-
-    .user-tags {
-        display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
-    }
-
-    .tag {
-        border-radius: 999px;
-        padding: 8px 12px;
-        font-size: 12px;
-        font-weight: 950;
-    }
-
-    .tag.student {
-        background: #eef2ff;
-        color: #3730a3;
-    }
-
-    .tag.teacher {
-        background: #cffafe;
-        color: #155e75;
-    }
-
-    .tag.parent {
-        background: #ffedd5;
-        color: #9a3412;
-    }
-
-    .tag.waiting {
-        background: #fef3c7;
-        color: #92400e;
-    }
-
-    .tag.active {
-        background: #dcfce7;
-        color: #166534;
-    }
-
-    .user-details {
-        display: grid;
-        gap: 10px;
-    }
-
-    .user-details div {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        color: #334155;
-        font-weight: 850;
-    }
-
-    .user-details strong {
-        color: #475569;
-    }
-
-    .user-details b {
-        margin-left: auto;
-        color: #0f172a;
-        font-weight: 950;
-    }
-
-    .card-actions {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 10px;
-    }
-
-    .edit-btn,
-    .delete-btn {
-        min-height: 48px;
-        border-radius: 16px;
-        border: 0;
-        text-decoration: none;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: 950;
-        cursor: pointer;
-    }
-
-    .edit-btn {
-        background: #eef2ff;
-        color: #4338ca;
-    }
-
-    .delete-btn {
-        width: 100%;
-        background: #fee2e2;
-        color: #991b1b;
-    }
-
-    .empty-box {
-        background: #fff;
-        border-radius: 26px;
-        padding: 28px;
-        text-align: center;
-        color: #64748b;
-        font-weight: 900;
-        box-shadow: 0 18px 42px rgba(15, 23, 42, .07);
-    }
-
-    .delete-modal-backdrop {
-        position: fixed;
-        inset: 0;
-        background: rgba(15, 23, 42, .62);
-        display: none;
-        align-items: center;
-        justify-content: center;
-        z-index: 99999;
-        padding: 18px;
-    }
-
-    .delete-modal-backdrop.show {
-        display: flex;
-    }
-
-    .delete-modal-card {
-        width: 100%;
-        max-width: 430px;
-        background: #fff;
-        border-radius: 30px;
-        padding: 28px;
-        text-align: center;
-        box-shadow: 0 30px 90px rgba(0,0,0,.35);
-    }
-
-    .delete-modal-icon {
-        width: 74px;
-        height: 74px;
-        border-radius: 24px;
-        background: #fee2e2;
-        color: #991b1b;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 34px;
-        margin: 0 auto 16px;
-    }
-
-    .delete-modal-card h3 {
-        margin: 0;
-        color: #0f172a;
-        font-size: 25px;
-        font-weight: 950;
-    }
-
-    .delete-modal-card p {
-        color: #64748b;
-        font-weight: 850;
-    }
-
-    .delete-modal-actions {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 12px;
-        margin-top: 18px;
-    }
-
-    .cancel-modal-btn,
-    .confirm-modal-btn {
-        min-height: 52px;
-        border: 0;
-        border-radius: 16px;
-        font-weight: 950;
-        cursor: pointer;
-    }
-
-    .cancel-modal-btn {
-        background: #eef2ff;
-        color: #4338ca;
-    }
-
-    .confirm-modal-btn {
-        background: #ef4444;
-        color: #fff;
-    }
-
-    @@media (max-width: 760px) {
-        .users-toolbar,
-        .search-panel {
-            flex-direction: column;
-            align-items: stretch;
-        }
-
-        .toolbar-actions {
-            justify-content: stretch;
-        }
-
-        .btn-primary,
-        .excel-btn {
-            width: 100%;
-        }
-
-        .card-actions {
-            grid-template-columns: 1fr;
-        }
-    }
-</style>
 
 @section Scripts {
     <script>
         let activeRole = "all";
 
         const searchInput = document.getElementById("userSearchInput");
-        const cards = Array.from(document.querySelectorAll(".user-card"));
+        const cards = Array.from(document.querySelectorAll(".users-v2-card"));
         const visibleCount = document.getElementById("visibleCount");
         const noSearchResult = document.getElementById("noSearchResult");
-        const roleButtons = document.querySelectorAll(".role-filter-btn");
+        const roleButtons = document.querySelectorAll(".users-v2-role-btn");
 
         function normalizeText(value) {
             return (value || "")
@@ -719,7 +950,7 @@
         }
 
         function filterUsers() {
-            const query = normalizeText(searchInput.value || "");
+            const query = normalizeText(searchInput?.value || "");
 
             let count = 0;
 
@@ -744,23 +975,27 @@
                 }
             });
 
-            visibleCount.textContent = count;
+            if (visibleCount) {
+                visibleCount.textContent = count;
+            }
 
             if (noSearchResult) {
-                noSearchResult.style.display = count === 0 ? "block" : "none";
+                noSearchResult.style.display = count === 0 ? "grid" : "none";
             }
         }
 
-        searchInput.addEventListener("input", function (event) {
-            event.preventDefault();
-            filterUsers();
-        });
-
-        searchInput.addEventListener("keydown", function (event) {
-            if (event.key === "Enter") {
+        if (searchInput) {
+            searchInput.addEventListener("input", function (event) {
                 event.preventDefault();
-            }
-        });
+                filterUsers();
+            });
+
+            searchInput.addEventListener("keydown", function (event) {
+                if (event.key === "Enter") {
+                    event.preventDefault();
+                }
+            });
+        }
 
         roleButtons.forEach(btn => {
             btn.addEventListener("click", function () {
@@ -771,41 +1006,14 @@
             });
         });
 
-        filterUsers();
-
-        let pendingDeleteForm = null;
-
-        const deleteModal = document.getElementById("deleteModal");
-        const deleteUserName = document.getElementById("deleteUserName");
-        const cancelDeleteBtn = document.getElementById("cancelDeleteBtn");
-        const confirmDeleteBtn = document.getElementById("confirmDeleteBtn");
-
-        document.querySelectorAll(".delete-user-form").forEach(form => {
-            form.addEventListener("submit", function (event) {
-                event.preventDefault();
-
-                pendingDeleteForm = this;
-                deleteUserName.textContent = this.dataset.userName || "Bu kullanıcı";
-                deleteModal.classList.add("show");
+        document.querySelectorAll(".users-v2-excel-input").forEach(input => {
+            input.addEventListener("change", function () {
+                if (this.files && this.files.length > 0) {
+                    this.closest("form")?.submit();
+                }
             });
         });
 
-        cancelDeleteBtn.addEventListener("click", function () {
-            pendingDeleteForm = null;
-            deleteModal.classList.remove("show");
-        });
-
-        confirmDeleteBtn.addEventListener("click", function () {
-            if (pendingDeleteForm) {
-                pendingDeleteForm.submit();
-            }
-        });
-
-        deleteModal.addEventListener("click", function (event) {
-            if (event.target === deleteModal) {
-                pendingDeleteForm = null;
-                deleteModal.classList.remove("show");
-            }
-        });
+        filterUsers();
     </script>
 }

@@ -97,6 +97,9 @@ namespace mvc_web.Controllers
                 { "number", model.Number },
                 { "schoolNo", model.Number },
                 { "studentNo", model.Number },
+                { "teacherNo", model.Number },
+                { "parentNo", model.Number },
+                { "userNumber", model.Number },
 
                 { "note", model.Note ?? "" },
                 { "message", model.Note ?? "" },
@@ -117,15 +120,16 @@ namespace mvc_web.Controllers
              * Admin paneli de bunları tek kayıt gibi gösterecek.
              */
 
-            await _firestore
-                .Collection("passwordRequests")
-                .Document(requestKey)
-                .SetAsync(requestData, SetOptions.MergeAll);
-
-            await _firestore
-                .Collection("password_requests")
-                .Document(requestKey)
-                .SetAsync(requestData, SetOptions.MergeAll);
+            await Task.WhenAll(
+                _firestore
+                    .Collection("passwordRequests")
+                    .Document(requestKey)
+                    .SetAsync(requestData, SetOptions.MergeAll),
+                _firestore
+                    .Collection("password_requests")
+                    .Document(requestKey)
+                    .SetAsync(requestData, SetOptions.MergeAll)
+            );
 
             TempData["Success"] = "Şifre talebiniz admin paneline gönderildi.";
             return RedirectToAction(nameof(Index));
@@ -137,104 +141,43 @@ namespace mvc_web.Controllers
             var searchedName = NormalizeKey(name);
             var searchedNumber = OnlyDigits(number);
 
-            var targeted = await FindMatchingUserByQuery(searchedRole, searchedName, searchedNumber);
-
-            if (targeted != null)
-            {
-                return targeted;
-            }
-
-            var snapshot = await _firestore
-                .Collection("users")
-                .GetSnapshotAsync();
-
-            foreach (var doc in snapshot.Documents)
-            {
-                var data = doc.ToDictionary();
-
-                if (IsDeletedUser(data))
-                {
-                    continue;
-                }
-
-                var userRole = NormalizeKey(GetString(data, "role", "Role"));
-
-                var userName = NormalizeKey(
-                    GetString(data, "name", "Name")
-                );
-
-                var userNumber = OnlyDigits(
-                    FirstNonEmpty(
-                        GetString(data, "schoolNo", "SchoolNo"),
-                        GetString(data, "number", "Number")
-                    )
-                );
-
-                if (userRole == searchedRole &&
-                    userName == searchedName &&
-                    userNumber == searchedNumber)
-                {
-                    return doc;
-                }
-            }
-
-            return null;
+            return await FindMatchingUserByQuery(searchedRole, searchedName, searchedNumber);
         }
 
         private async Task<DocumentSnapshot?> FindMatchingUserByQuery(string searchedRole, string searchedName, string searchedNumber)
         {
-            var roleFields = new[] { "role", "Role", "userRole", "UserRole" };
-            var numberFields = new[] { "number", "Number", "schoolNo", "SchoolNo", "studentNo", "StudentNo", "teacherNo", "TeacherNo" };
-            var roleValues = RoleQueryValues(searchedRole);
+            var numberFields = NumberQueryFields();
 
-            foreach (var roleField in roleFields)
-            {
-                foreach (var roleValue in roleValues)
-                {
-                    foreach (var numberField in numberFields)
-                    {
-                        try
-                        {
-                            var snapshot = await _firestore
-                                .Collection("users")
-                                .WhereEqualTo(roleField, roleValue)
-                                .WhereEqualTo(numberField, searchedNumber)
-                                .Limit(10)
-                                .GetSnapshotAsync();
-
-                            var match = FirstMatchingUser(snapshot, searchedRole, searchedName, searchedNumber);
-
-                            if (match != null)
-                            {
-                                return match;
-                            }
-                        }
-                        catch
-                        {
-                        }
-                    }
-                }
-            }
-
-            foreach (var numberField in numberFields)
+            async Task<QuerySnapshot?> ReadByNumberField(string numberField)
             {
                 try
                 {
-                    var snapshot = await _firestore
+                    return await _firestore
                         .Collection("users")
                         .WhereEqualTo(numberField, searchedNumber)
                         .Limit(25)
                         .GetSnapshotAsync();
-
-                    var match = FirstMatchingUser(snapshot, searchedRole, searchedName, searchedNumber);
-
-                    if (match != null)
-                    {
-                        return match;
-                    }
                 }
                 catch
                 {
+                    return null;
+                }
+            }
+
+            var snapshots = await Task.WhenAll(numberFields.Select(ReadByNumberField));
+
+            foreach (var snapshot in snapshots)
+            {
+                if (snapshot == null)
+                {
+                    continue;
+                }
+
+                var match = FirstMatchingUser(snapshot, searchedRole, searchedName, searchedNumber);
+
+                if (match != null)
+                {
+                    return match;
                 }
             }
 
@@ -274,6 +217,27 @@ namespace mvc_web.Controllers
             return null;
         }
 
+        private static string[] NumberQueryFields()
+        {
+            return new[]
+            {
+                "number",
+                "Number",
+                "schoolNo",
+                "SchoolNo",
+                "studentNo",
+                "StudentNo",
+                "teacherNo",
+                "TeacherNo",
+                "teacherNumber",
+                "TeacherNumber",
+                "parentNo",
+                "ParentNo",
+                "userNumber",
+                "UserNumber"
+            };
+        }
+
         private static string[] RoleQueryValues(string searchedRole)
         {
             var values = new List<string> { searchedRole };
@@ -301,61 +265,121 @@ namespace mvc_web.Controllers
         private async Task<bool> HasPendingRequest(string role, string number, string userId)
         {
             var collections = new[] { "passwordRequests", "password_requests" };
+            var roleKey = NormalizeKey(role);
+            var numberKey = OnlyDigits(number);
+            var requestKey = BuildRequestKey(roleKey, numberKey, userId);
 
-            foreach (var collection in collections)
+            async Task<DocumentSnapshot?> ReadDirectRequest(string collection)
             {
                 try
                 {
-                    var snapshot = await _firestore
+                    return await _firestore
                         .Collection(collection)
+                        .Document(requestKey)
                         .GetSnapshotAsync();
-
-                    foreach (var doc in snapshot.Documents)
-                    {
-                        var data = doc.ToDictionary();
-
-                        if (IsDeletedRequest(data))
-                        {
-                            continue;
-                        }
-
-                        var requestRole = NormalizeKey(GetString(data, "role", "Role"));
-
-                        var requestNumber = OnlyDigits(
-                            FirstNonEmpty(
-                                GetString(data, "number", "Number"),
-                                GetString(data, "schoolNo", "SchoolNo"),
-                                GetString(data, "studentNo", "StudentNo")
-                            )
-                        );
-
-                        var requestUserId = GetString(data, "userId", "UserId");
-
-                        var status = NormalizeKey(GetString(data, "status", "Status"));
-
-                        var isPending =
-                            status == "bekliyor" ||
-                            status == "pending" ||
-                            status == "onaybekliyor" ||
-                            status == "waiting" ||
-                            string.IsNullOrWhiteSpace(status);
-
-                        var sameUser =
-                            (!string.IsNullOrWhiteSpace(userId) && requestUserId == userId) ||
-                            (requestRole == NormalizeKey(role) && requestNumber == OnlyDigits(number));
-
-                        if (sameUser && isPending)
-                        {
-                            return true;
-                        }
-                    }
                 }
                 catch
                 {
+                    return null;
                 }
             }
 
-            return false;
+            var directDocs = await Task.WhenAll(collections.Select(ReadDirectRequest));
+
+            if (directDocs.Any(doc => RequestMatchesPendingUser(doc, roleKey, numberKey, userId)))
+            {
+                return true;
+            }
+
+            var queries = new List<Task<QuerySnapshot?>>();
+
+            foreach (var collection in collections)
+            {
+                if (!string.IsNullOrWhiteSpace(userId))
+                {
+                    queries.Add(ReadPendingQuery(collection, "userId", userId));
+                    queries.Add(ReadPendingQuery(collection, "UserId", userId));
+                }
+
+                foreach (var numberField in NumberQueryFields())
+                {
+                    queries.Add(ReadPendingQuery(collection, numberField, numberKey));
+                }
+            }
+
+            var snapshots = await Task.WhenAll(queries);
+
+            return snapshots
+                .Where(snapshot => snapshot != null)
+                .SelectMany(snapshot => snapshot!.Documents)
+                .Any(doc => RequestMatchesPendingUser(doc, roleKey, numberKey, userId));
+        }
+
+        private async Task<QuerySnapshot?> ReadPendingQuery(string collection, string field, string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return null;
+            }
+
+            try
+            {
+                return await _firestore
+                    .Collection(collection)
+                    .WhereEqualTo(field, value)
+                    .Limit(10)
+                    .GetSnapshotAsync();
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static bool RequestMatchesPendingUser(
+            DocumentSnapshot? doc,
+            string roleKey,
+            string numberKey,
+            string userId)
+        {
+            if (doc == null || !doc.Exists)
+            {
+                return false;
+            }
+
+            var data = doc.ToDictionary();
+
+            if (IsDeletedRequest(data))
+            {
+                return false;
+            }
+
+            var requestRole = NormalizeKey(GetString(data, "role", "Role"));
+            var requestNumber = OnlyDigits(
+                FirstNonEmpty(
+                    GetString(data, "number", "Number"),
+                    GetString(data, "schoolNo", "SchoolNo"),
+                    GetString(data, "studentNo", "StudentNo"),
+                    GetString(data, "teacherNo", "TeacherNo"),
+                    GetString(data, "parentNo", "ParentNo"),
+                    GetString(data, "userNumber", "UserNumber")
+                )
+            );
+            var requestUserId = GetString(data, "userId", "UserId");
+            var status = NormalizeKey(GetString(data, "status", "Status"));
+
+            var isPending =
+                status == "bekliyor" ||
+                status == "pending" ||
+                status == "onaybekliyor" ||
+                status == "waiting" ||
+                string.IsNullOrWhiteSpace(status);
+
+            var sameUser =
+                (!string.IsNullOrWhiteSpace(userId) && requestUserId == userId) ||
+                (requestRole == roleKey && requestNumber == numberKey);
+
+            return sameUser && isPending;
         }
 
         private static bool IsDeletedUser(Dictionary<string, object> data)

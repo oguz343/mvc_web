@@ -1,1123 +1,484 @@
-@using System.Globalization
+@using System.Collections
+@using System.Reflection
+
 @{
-    Layout = "_Layout";
+    Layout = "_TeacherLayout";
+    ViewData["Title"] = "Yeni Ödev";
+    ViewData["PageTitle"] = "Yeni Ödev Oluştur";
+    ViewData["PageSubtitle"] = "Size atanmış derslerden birini seçerek öğrencilere yeni ödev yayınlayın.";
 
-    ViewData["Title"] = "Yeni Ödev Oluştur";
-
-    var teacherName = GetText(ViewData["TeacherName"]);
-    var teacherNo = GetText(ViewData["TeacherNo"]);
-    var teacherBranch = GetText(ViewData["TeacherBranch"]);
-
-    var lessons = ReadLessons(ViewData["Lessons"]);
-
-    if (lessons.Count == 0)
-    {
-        lessons = ReadLessons(ViewData["TeacherLessons"]);
-    }
-
-    if (lessons.Count == 0)
-    {
-        lessons = ReadLessons(ViewData["MyLessons"]);
-    }
-
-    string error = TempData["Error"]?.ToString() ?? "";
-    string success = TempData["Success"]?.ToString() ?? "";
+    var lessons = ListFrom(ViewData["Lessons"] ?? ViewData["TeacherLessons"] ?? ViewData["MyLessons"]);
+    var teacherName = Text(ViewData["TeacherName"], "Öğretmen");
+    var teacherBranch = Text(ViewData["TeacherBranch"], "-");
 }
 
-<div class="teacher-create-page">
-    <section class="create-hero">
-        <div class="hero-glow hero-glow-one"></div>
-        <div class="hero-glow hero-glow-two"></div>
-
-        <div class="hero-content">
-            <div class="hero-icon">
-                <span>📝</span>
-            </div>
-
-            <div>
-                <p class="eyebrow">Öğretmen Paneli</p>
-                <h1>Yeni Ödev Oluştur</h1>
-                <p class="hero-subtitle">
-                    Size atanmış derslerden birini veya birkaçını seçerek öğrencilerinize ödev yayınlayın.
-                </p>
-            </div>
-        </div>
-
-        <div class="teacher-card">
-            <div class="teacher-avatar">👨‍🏫</div>
-            <div>
-                <strong>@(string.IsNullOrWhiteSpace(teacherName) ? "Öğretmen" : teacherName)</strong>
-                <span>No: @(string.IsNullOrWhiteSpace(teacherNo) ? "-" : teacherNo)</span>
-                <span>Branş: @(string.IsNullOrWhiteSpace(teacherBranch) ? "-" : teacherBranch)</span>
-            </div>
-        </div>
-    </section>
-
-    @if (!string.IsNullOrWhiteSpace(error))
-    {
-        <div class="alert-card alert-error">
-            <span>⚠️</span>
-            <strong>@error</strong>
-        </div>
-    }
-
-    @if (!string.IsNullOrWhiteSpace(success))
-    {
-        <div class="alert-card alert-success">
-            <span>✅</span>
-            <strong>@success</strong>
-        </div>
-    }
-
-    <section class="create-grid">
-        <div class="form-card">
-            <div class="section-title">
-                <div>
-                    <p class="eyebrow">Ödev Bilgileri</p>
-                    <h2>Ödev Detayları</h2>
-                </div>
-                <span class="lesson-count">@lessons.Count Ders</span>
-            </div>
-
-            @if (lessons.Count == 0)
-            {
-                <div class="empty-lessons">
-                    <div class="empty-icon">📚</div>
-                    <h3>Size atanmış ders bulunmuyor.</h3>
-                    <p>
-                        Admin panelinden önce öğretmene ders atanmalıdır.
-                    </p>
-                    <a class="ghost-link" asp-controller="Teacher" asp-action="Index">
-                        Panele Dön
-                    </a>
-                </div>
-            }
-            else
-            {
-                <form asp-controller="Teacher" asp-action="CreateAssignment" method="post" class="premium-form">
-                    @Html.AntiForgeryToken()
-
-                    <div class="field-group">
-                        <label for="lessonIds">Ders / Sınıf Seç</label>
-                        <div class="select-wrap lesson-picker-grid" id="lessonIds">
-                            <select class="legacy-lesson-select" name="lessonIds" multiple required>
-                                @foreach (var lesson in lessons)
-                                {
-                                    <option value="@lesson.Id"
-                                            data-name="@lesson.Name"
-                                            data-class="@lesson.ClassName"
-                                            data-branch="@lesson.Branch">
-                                        @lesson.Name • @lesson.ClassName @(string.IsNullOrWhiteSpace(lesson.Branch) ? "" : $"• {lesson.Branch}")
-                                    </option>
-                                }
-                            </select>
-                            <div class="lesson-card-picker" id="lessonCardPicker"></div>
-                        </div>
-                        <small>Birden fazla ders/sınıf seçerseniz her atama için ayrı ödev oluşturulur.</small>
-                    </div>
-
-                    <input type="hidden" id="lessonName" name="lessonName" />
-                    <input type="hidden" id="className" name="className" />
-
-                    <div class="selected-lesson-preview" id="lessonPreview">
-                        <div class="preview-icon">📘</div>
-                        <div>
-                            <strong>Ders seçilmedi</strong>
-                            <span>Ödev yayınlamak için önce ders seçin.</span>
-                        </div>
-                    </div>
-
-                    <div class="field-group">
-                        <label for="title">Ödev Başlığı</label>
-                        <input id="title"
-                               name="title"
-                               type="text"
-                               placeholder="Örn: Fonksiyonlar çalışma kağıdı"
-                               autocomplete="off"
-                               required />
-                    </div>
-
-                    <div class="field-group">
-                        <label for="description">Açıklama</label>
-                        <textarea id="description"
-                                  name="description"
-                                  rows="5"
-                                  placeholder="Ödev açıklamasını, yönergeleri veya yapılacakları yazın."></textarea>
-                    </div>
-
-                    <div class="two-col">
-                        <div class="field-group">
-                            <label for="dueDate">Son Teslim Tarihi</label>
-                            <input id="dueDate"
-                                   name="dueDate"
-                                   type="datetime-local" />
-                        </div>
-
-                        <div class="field-group">
-                            <label for="fileType">Teslim Türü</label>
-                            <select id="fileType" name="fileType">
-                                <option value="Metin / Link">Metin / Link</option>
-                                <option value="Dosya">Dosya</option>
-                                <option value="PDF">PDF</option>
-                                <option value="Sunum">Sunum</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <button type="submit" class="submit-btn">
-                        <span>🚀</span>
-                        Ödevi Yayınla
-                    </button>
-                </form>
-            }
-        </div>
-
-        <aside class="lessons-card">
-            <div class="section-title mini">
-                <div>
-                    <p class="eyebrow">Atanmış Dersler</p>
-                    <h2>Derslerim</h2>
-                </div>
-            </div>
-
-            @if (lessons.Count == 0)
-            {
-                <div class="side-empty">
-                    Henüz ders bulunmuyor.
-                </div>
-            }
-            else
-            {
-                <div class="lesson-list">
-                    @foreach (var lesson in lessons)
-                    {
-                        <div class="lesson-mini-card">
-                            <div class="lesson-mini-icon">📘</div>
-                            <div>
-                                <strong>@lesson.Name</strong>
-                                <span>@lesson.ClassName @(string.IsNullOrWhiteSpace(lesson.Branch) ? "" : $"• {lesson.Branch}")</span>
-                            </div>
-                        </div>
-                    }
-                </div>
-            }
-        </aside>
-    </section>
-</div>
-
-<style>
-    .teacher-create-page {
-        min-height: 100vh;
-        padding: 28px;
-        background:
-            radial-gradient(circle at top left, rgba(79, 70, 229, .14), transparent 32%),
-            radial-gradient(circle at bottom right, rgba(6, 182, 212, .16), transparent 35%),
-            #f8fafc;
-        color: #0f172a;
-    }
-
-    .create-hero {
-        position: relative;
-        overflow: hidden;
-        border-radius: 34px;
-        padding: 30px;
-        margin-bottom: 20px;
-        background: linear-gradient(135deg, #111827, #4f46e5 55%, #06b6d4);
-        box-shadow: 0 24px 60px rgba(15, 23, 42, .18);
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 18px;
-    }
-
-    .hero-glow {
-        position: absolute;
-        border-radius: 999px;
-        filter: blur(4px);
-        opacity: .34;
-        pointer-events: none;
-    }
-
-    .hero-glow-one {
-        width: 180px;
-        height: 180px;
-        right: -54px;
-        top: -64px;
-        background: rgba(255, 255, 255, .42);
-    }
-
-    .hero-glow-two {
-        width: 130px;
-        height: 130px;
-        left: 42%;
-        bottom: -74px;
-        background: rgba(16, 185, 129, .45);
-    }
-
-    .hero-content,
-    .teacher-card {
-        position: relative;
-        z-index: 1;
-    }
-
-    .hero-content {
-        display: flex;
-        align-items: center;
-        gap: 18px;
-    }
-
-    .hero-icon {
-        width: 74px;
-        height: 74px;
-        border-radius: 26px;
-        background: rgba(255, 255, 255, .16);
-        border: 1px solid rgba(255, 255, 255, .22);
-        display: grid;
-        place-items: center;
-        font-size: 34px;
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, .25);
-    }
-
-    .eyebrow {
-        margin: 0 0 6px;
-        color: rgba(255, 255, 255, .76);
-        font-weight: 900;
-        font-size: 13px;
-        letter-spacing: .3px;
-    }
-
-    .section-title .eyebrow,
-    .lessons-card .eyebrow {
-        color: #4f46e5;
-    }
-
-    .create-hero h1 {
-        margin: 0;
-        color: white;
-        font-size: clamp(30px, 4vw, 46px);
-        font-weight: 950;
-        letter-spacing: -1.8px;
-        line-height: .98;
-    }
-
-    .hero-subtitle {
-        margin: 9px 0 0;
-        color: rgba(255, 255, 255, .78);
-        font-weight: 750;
-        line-height: 1.45;
-    }
-
-    .teacher-card {
-        min-width: 230px;
-        padding: 14px;
-        border-radius: 26px;
-        background: rgba(255, 255, 255, .16);
-        border: 1px solid rgba(255, 255, 255, .22);
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        backdrop-filter: blur(16px);
-    }
-
-    .teacher-avatar {
-        width: 54px;
-        height: 54px;
-        border-radius: 20px;
-        background: rgba(255, 255, 255, .20);
-        display: grid;
-        place-items: center;
-        font-size: 27px;
-    }
-
-    .teacher-card strong,
-    .teacher-card span {
-        display: block;
-    }
-
-    .teacher-card strong {
-        color: white;
-        font-weight: 950;
-        margin-bottom: 3px;
-    }
-
-    .teacher-card span {
-        color: rgba(255, 255, 255, .76);
-        font-weight: 800;
-        font-size: 12px;
-    }
-
-    .alert-card {
-        border-radius: 22px;
-        padding: 15px 17px;
-        margin-bottom: 18px;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        font-weight: 900;
-    }
-
-    .alert-error {
-        background: #ffedd5;
-        color: #9a3412;
-        border: 1px solid #fed7aa;
-    }
-
-    .alert-success {
-        background: #dcfce7;
-        color: #166534;
-        border: 1px solid #bbf7d0;
-    }
-
-    .create-grid {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) 360px;
-        gap: 20px;
-        align-items: start;
-    }
-
-    .form-card,
-    .lessons-card {
-        background: rgba(255, 255, 255, .92);
-        border: 1px solid rgba(226, 232, 240, .92);
-        border-radius: 34px;
-        box-shadow: 0 22px 55px rgba(15, 23, 42, .08);
-        backdrop-filter: blur(18px);
-    }
-
-    .form-card {
-        padding: 24px;
-    }
-
-    .lessons-card {
-        padding: 20px;
-        position: sticky;
-        top: 24px;
-    }
-
-    .section-title {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 14px;
-        margin-bottom: 18px;
-    }
-
-    .section-title h2 {
-        margin: 0;
-        color: #0f172a;
-        font-size: 27px;
-        font-weight: 950;
-        letter-spacing: -1px;
-    }
-
-    .section-title.mini h2 {
-        font-size: 22px;
-    }
-
-    .lesson-count {
-        padding: 9px 13px;
-        border-radius: 999px;
-        background: #eef2ff;
-        color: #4f46e5;
-        font-weight: 950;
-        font-size: 13px;
-        white-space: nowrap;
-    }
-
-    .premium-form {
-        display: grid;
-        gap: 16px;
-    }
-
-    .field-group {
-        display: grid;
-        gap: 8px;
-    }
-
-    .field-group label {
-        color: #334155;
-        font-weight: 950;
-        font-size: 13px;
-    }
-
-    .field-group small {
-        color: #64748b;
-        font-weight: 750;
-    }
-
-    .field-group input,
-    .field-group textarea,
-    .field-group select,
-    .select-wrap select {
-        width: 100%;
-        border: 1px solid #e2e8f0;
-        background: #f8fafc;
-        color: #0f172a;
-        outline: none;
-        border-radius: 22px;
-        padding: 15px 16px;
-        font-weight: 850;
-        transition: .18s ease;
-    }
-
-    .field-group textarea {
-        resize: vertical;
-        min-height: 130px;
-        line-height: 1.5;
-    }
-
-    .field-group input:focus,
-    .field-group textarea:focus,
-    .field-group select:focus,
-    .select-wrap select:focus {
-        border-color: #4f46e5;
-        background: white;
-        box-shadow: 0 0 0 4px rgba(79, 70, 229, .10);
-    }
-
-    #lessonIds {
-        min-height: 0;
-    }
-
-    .legacy-lesson-select {
-        position: absolute;
-        width: 1px !important;
-        height: 1px !important;
-        opacity: 0;
-        pointer-events: none;
-    }
-
-    .lesson-card-picker {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-        gap: 8px;
-        max-height: 230px;
-        overflow-y: auto;
-        padding: 8px;
-        border: 1px solid #e2e8f0;
-        border-radius: 22px;
-        background: #fff;
-    }
-
-    .lesson-choice-card {
-        min-height: 62px;
-        border: 1px solid #e2e8f0;
-        border-radius: 18px;
-        background: #f8fafc;
-        padding: 10px;
-        display: grid;
-        grid-template-columns: 28px 1fr;
-        gap: 9px;
-        align-items: center;
-        cursor: pointer;
-        transition: .18s ease;
-    }
-
-    .lesson-choice-card.is-selected {
-        border-color: #4f46e5;
-        background: linear-gradient(135deg, #eef2ff, #ecfeff);
-        box-shadow: 0 14px 30px rgba(79, 70, 229, .12);
-    }
-
-    .lesson-choice-check {
-        width: 28px;
-        height: 28px;
-        border-radius: 11px;
-        background: white;
-        border: 1px solid #cbd5e1;
-        display: grid;
-        place-items: center;
-        color: transparent;
-        font-weight: 950;
-    }
-
-    .lesson-choice-card.is-selected .lesson-choice-check {
-        background: #4f46e5;
-        border-color: #4f46e5;
-        color: white;
-    }
-
-    .lesson-choice-card strong,
-    .lesson-choice-card span {
-        display: block;
-    }
-
-    .lesson-choice-card strong {
-        color: #0f172a;
-        font-weight: 950;
-        font-size: 13px;
-    }
-
-    .lesson-choice-card span {
-        color: #64748b;
-        font-size: 11px;
-        font-weight: 800;
-        margin-top: 2px;
-    }
-
-    .select-wrap {
-        position: relative;
-    }
-
-    .selected-lesson-preview {
-        padding: 15px;
-        border-radius: 24px;
-        background: linear-gradient(135deg, rgba(79, 70, 229, .10), rgba(6, 182, 212, .10));
-        border: 1px solid rgba(79, 70, 229, .12);
-        display: flex;
-        align-items: center;
-        gap: 12px;
-    }
-
-    .preview-icon {
-        width: 48px;
-        height: 48px;
-        border-radius: 18px;
-        background: white;
-        display: grid;
-        place-items: center;
-        box-shadow: 0 12px 26px rgba(15, 23, 42, .07);
-    }
-
-    .selected-lesson-preview strong,
-    .selected-lesson-preview span {
-        display: block;
-    }
-
-    .selected-lesson-preview strong {
-        color: #0f172a;
-        font-weight: 950;
-    }
-
-    .selected-lesson-preview span {
-        color: #64748b;
-        font-weight: 800;
-        font-size: 12px;
-        margin-top: 3px;
-    }
-
-    .two-col {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 14px;
-    }
-
-    .submit-btn,
-    .ghost-link {
-        border: none;
-        cursor: pointer;
-        text-decoration: none;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 9px;
-        border-radius: 22px;
-        font-weight: 950;
-        transition: .18s ease;
-    }
-
-    .submit-btn {
-        min-height: 58px;
-        background: linear-gradient(135deg, #4f46e5, #06b6d4);
-        color: white;
-        box-shadow: 0 18px 36px rgba(79, 70, 229, .24);
-    }
-
-    .submit-btn:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 22px 42px rgba(79, 70, 229, .30);
-    }
-
-    .empty-lessons {
-        padding: 34px 20px;
-        border-radius: 28px;
-        background: #fff7ed;
-        border: 1px dashed #fdba74;
-        text-align: center;
-    }
-
-    .empty-icon {
-        width: 72px;
-        height: 72px;
-        border-radius: 26px;
-        display: grid;
-        place-items: center;
-        background: white;
-        margin: 0 auto 15px;
-        font-size: 34px;
-        box-shadow: 0 14px 30px rgba(15, 23, 42, .08);
-    }
-
-    .empty-lessons h3 {
-        margin: 0;
-        color: #9a3412;
-        font-weight: 950;
-        font-size: 21px;
-    }
-
-    .empty-lessons p {
-        color: #9a3412;
-        font-weight: 800;
-        line-height: 1.45;
-    }
-
-    .ghost-link {
-        min-height: 46px;
-        padding: 0 18px;
-        color: #4f46e5;
-        background: #eef2ff;
-    }
-
-    .lesson-list {
-        display: grid;
-        gap: 9px;
-        max-height: 460px;
-        overflow-y: auto;
-        padding-right: 4px;
-    }
-
-    .lesson-mini-card {
-        padding: 11px;
-        border-radius: 18px;
-        background: #f8fafc;
-        border: 1px solid #e2e8f0;
-        display: flex;
-        align-items: center;
-        gap: 12px;
-    }
-
-    .lesson-mini-icon {
-        width: 36px;
-        height: 36px;
-        border-radius: 14px;
-        background: linear-gradient(135deg, rgba(79, 70, 229, .14), rgba(6, 182, 212, .14));
-        display: grid;
-        place-items: center;
-    }
-
-    .lesson-mini-card strong,
-    .lesson-mini-card span {
-        display: block;
-    }
-
-    .lesson-mini-card strong {
-        color: #0f172a;
-        font-weight: 950;
-        font-size: 13px;
-    }
-
-    .lesson-mini-card span {
-        color: #64748b;
-        font-weight: 800;
-        font-size: 11px;
-        margin-top: 3px;
-    }
-
-    .side-empty {
-        padding: 18px;
-        border-radius: 22px;
-        background: #f8fafc;
-        color: #64748b;
-        font-weight: 850;
-        text-align: center;
-    }
-
-    @@media (max-width: 980px) {
-        .create-grid {
-            grid-template-columns: 1fr;
-        }
-
-        .lessons-card {
-            position: static;
-        }
-    }
-
-    @@media (max-width: 620px) {
-        .teacher-create-page {
-            padding: 16px;
-        }
-
-        .create-hero {
-            flex-direction: column;
-            align-items: stretch;
-            padding: 22px;
-        }
-
-        .hero-content {
-            align-items: flex-start;
-        }
-
-        .teacher-card {
-            min-width: 0;
-        }
-
-        .two-col {
-            grid-template-columns: 1fr;
-        }
-
-        .form-card,
-        .lessons-card {
-            border-radius: 28px;
-            padding: 18px;
-        }
-    }
-</style>
-
-<script>
-    (function () {
-        const select = document.getElementById('lessonIds');
-        const realSelect = select ? select.querySelector('select') : null;
-        const cardPicker = document.getElementById('lessonCardPicker');
-        const lessonNameInput = document.getElementById('lessonName');
-        const classNameInput = document.getElementById('className');
-        const preview = document.getElementById('lessonPreview');
-
-        if (!select || !realSelect || !preview || !cardPicker) {
-            return;
-        }
-
-        Array.from(realSelect.options).forEach(option => {
-            const card = document.createElement('button');
-            card.type = 'button';
-            card.className = 'lesson-choice-card';
-            card.innerHTML = `
-                <span class="lesson-choice-check">✓</span>
-                <span>
-                    <strong>${escapeHtml(option.dataset.name || option.textContent || 'Ders')}</strong>
-                    <span>${escapeHtml(option.dataset.class || '-')}${option.dataset.branch ? ' • ' + escapeHtml(option.dataset.branch) : ''}</span>
-                </span>
-            `;
-
-            card.addEventListener('click', () => {
-                option.selected = !option.selected;
-                updatePreview();
-            });
-
-            cardPicker.appendChild(card);
-        });
-
-        function updatePreview() {
-            const options = Array.from(realSelect.options || []);
-            const selectedOptions = options.filter(option => option.selected);
-
-            Array.from(cardPicker.children).forEach((card, index) => {
-                card.classList.toggle('is-selected', options[index] && options[index].selected);
-            });
-
-            if (selectedOptions.length === 0) {
-                if (lessonNameInput) lessonNameInput.value = '';
-                if (classNameInput) classNameInput.value = '';
-
-                preview.innerHTML = `
-                    <div class="preview-icon">📘</div>
-                    <div>
-                        <strong>Ders seçilmedi</strong>
-                        <span>Ödev yayınlamak için önce ders seçin.</span>
-                    </div>
-                `;
-                return;
-            }
-
-            const first = selectedOptions[0];
-            const name = first.dataset.name || first.textContent || 'Ders';
-            const className = first.dataset.class || '-';
-
-            if (lessonNameInput) lessonNameInput.value = name;
-            if (classNameInput) classNameInput.value = className;
-
-            const summary = selectedOptions
-                .map(option => {
-                    const itemName = option.dataset.name || option.textContent || 'Ders';
-                    const itemClass = option.dataset.class || '-';
-                    const itemBranch = option.dataset.branch || '';
-                    return `${escapeHtml(itemName)} - ${escapeHtml(itemClass)}${itemBranch ? ' • ' + escapeHtml(itemBranch) : ''}`;
-                })
-                .join('<br>');
-
-            preview.innerHTML = `
-                <div class="preview-icon">📘</div>
-                <div>
-                    <strong>${selectedOptions.length} ders/sınıf seçildi</strong>
-                    <span>${summary}</span>
-                </div>
-            `;
-        }
-
-        function escapeHtml(value) {
-            return String(value)
-                .replaceAll('&', '&amp;')
-                .replaceAll('<', '&lt;')
-                .replaceAll('>', '&gt;')
-                .replaceAll('"', '&quot;')
-                .replaceAll("'", '&#039;');
-        }
-
-        realSelect.addEventListener('change', updatePreview);
-        updatePreview();
-    })();
-</script>
-
 @functions {
-    public class LessonOption
+    private List<object> ListFrom(object? raw)
     {
-        public string Id { get; set; } = "";
-        public string Name { get; set; } = "Ders";
-        public string ClassName { get; set; } = "-";
-        public string Branch { get; set; } = "";
-        public string TeacherName { get; set; } = "";
-        public string TeacherNo { get; set; } = "";
-    }
-
-    private static List<LessonOption> ReadLessons(object? source)
-    {
-        var result = new List<LessonOption>();
-
-        if (source == null)
+        if (raw == null || raw is string)
         {
-            return result;
+            return new List<object>();
         }
 
-        if (source is IEnumerable<Dictionary<string, object>> dictionaryList)
+        if (raw is IEnumerable enumerable)
         {
-            foreach (var item in dictionaryList)
-            {
-                var lesson = FromDictionary(item);
+            return enumerable.Cast<object>().ToList();
+        }
 
-                if (!string.IsNullOrWhiteSpace(lesson.Id))
+        return new List<object>();
+    }
+
+    private string Text(object? value, string fallback = "-")
+    {
+        var result = value?.ToString() ?? "";
+        return string.IsNullOrWhiteSpace(result) ? fallback : result;
+    }
+
+    private string Get(object? item, params string[] keys)
+    {
+        if (item == null)
+        {
+            return "";
+        }
+
+        if (item is IDictionary<string, object> dict)
+        {
+            foreach (var key in keys)
+            {
+                if (dict.TryGetValue(key, out var value) && value != null)
                 {
-                    result.Add(lesson);
+                    return value.ToString() ?? "";
                 }
             }
-
-            return DistinctLessons(result);
         }
 
-        if (source is IEnumerable<object> objectList)
-        {
-            foreach (var item in objectList)
-            {
-                if (item is Dictionary<string, object> dict)
-                {
-                    var lesson = FromDictionary(dict);
-
-                    if (!string.IsNullOrWhiteSpace(lesson.Id))
-                    {
-                        result.Add(lesson);
-                    }
-                }
-                else
-                {
-                    var lesson = FromObject(item);
-
-                    if (!string.IsNullOrWhiteSpace(lesson.Id))
-                    {
-                        result.Add(lesson);
-                    }
-                }
-            }
-
-            return DistinctLessons(result);
-        }
-
-        return result;
-    }
-
-    private static List<LessonOption> DistinctLessons(List<LessonOption> lessons)
-    {
-        return lessons
-            .GroupBy(x => Normalize($"{x.Id}_{x.Name}_{x.ClassName}"))
-            .Select(x => x.First())
-            .OrderBy(x => x.ClassName)
-            .ThenBy(x => x.Name)
-            .ToList();
-    }
-
-    private static LessonOption FromDictionary(Dictionary<string, object> data)
-    {
-        var id = FirstNonEmpty(
-            GetText(data, "Id"),
-            GetText(data, "id"),
-            GetText(data, "LessonId"),
-            GetText(data, "lessonId")
-        );
-
-        var name = FirstNonEmpty(
-            GetText(data, "Name"),
-            GetText(data, "name"),
-            GetText(data, "LessonName"),
-            GetText(data, "lessonName"),
-            GetText(data, "Title"),
-            GetText(data, "title"),
-            GetText(data, "CourseName"),
-            GetText(data, "courseName"),
-            "Ders"
-        );
-
-        var className = NormalizeClassName(FirstNonEmpty(
-            GetText(data, "ClassName"),
-            GetText(data, "className"),
-            GetText(data, "Class"),
-            GetText(data, "class"),
-            GetText(data, "TargetClass"),
-            GetText(data, "targetClass"),
-            "-"
-        ));
-
-        var branch = FirstNonEmpty(
-            GetText(data, "Branch"),
-            GetText(data, "branch"),
-            GetText(data, "TeacherBranch"),
-            GetText(data, "teacherBranch")
-        );
-
-        var teacherName = FirstNonEmpty(
-            GetText(data, "TeacherName"),
-            GetText(data, "teacherName"),
-            GetText(data, "Teacher"),
-            GetText(data, "teacher")
-        );
-
-        var teacherNo = FirstNonEmpty(
-            GetText(data, "TeacherNo"),
-            GetText(data, "teacherNo"),
-            GetText(data, "TeacherNumber"),
-            GetText(data, "teacherNumber")
-        );
-
-        return new LessonOption
-        {
-            Id = id,
-            Name = name,
-            ClassName = string.IsNullOrWhiteSpace(className) ? "-" : className,
-            Branch = branch,
-            TeacherName = teacherName,
-            TeacherNo = teacherNo
-        };
-    }
-
-    private static LessonOption FromObject(object item)
-    {
         var type = item.GetType();
 
-        string GetProperty(params string[] names)
+        foreach (var key in keys)
         {
-            foreach (var name in names)
+            var prop = type.GetProperty(key, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+
+            if (prop != null)
             {
-                var property = type.GetProperty(name);
-
-                if (property == null)
+                var value = prop.GetValue(item);
+                if (value != null)
                 {
-                    continue;
+                    return value.ToString() ?? "";
                 }
-
-                var value = property.GetValue(item)?.ToString();
-
-                if (!string.IsNullOrWhiteSpace(value))
-                {
-                    return value.Trim();
-                }
-            }
-
-            return "";
-        }
-
-        var id = FirstNonEmpty(
-            GetProperty("Id", "id", "LessonId", "lessonId")
-        );
-
-        var name = FirstNonEmpty(
-            GetProperty("Name", "name", "LessonName", "lessonName", "Title", "title", "CourseName", "courseName"),
-            "Ders"
-        );
-
-        var className = NormalizeClassName(FirstNonEmpty(
-            GetProperty("ClassName", "className", "Class", "class", "TargetClass", "targetClass"),
-            "-"
-        ));
-
-        var branch = GetProperty("Branch", "branch", "TeacherBranch", "teacherBranch");
-
-        return new LessonOption
-        {
-            Id = id,
-            Name = name,
-            ClassName = string.IsNullOrWhiteSpace(className) ? "-" : className,
-            Branch = branch,
-            TeacherName = GetProperty("TeacherName", "teacherName", "Teacher", "teacher"),
-            TeacherNo = GetProperty("TeacherNo", "teacherNo", "TeacherNumber", "teacherNumber")
-        };
-    }
-
-    private static string GetText(object? value)
-    {
-        return value?.ToString()?.Trim() ?? "";
-    }
-
-    private static string GetText(Dictionary<string, object> data, string key)
-    {
-        if (!data.TryGetValue(key, out var value) || value == null)
-        {
-            return "";
-        }
-
-        return value.ToString()?.Trim() ?? "";
-    }
-
-    private static string FirstNonEmpty(params string[] values)
-    {
-        foreach (var value in values)
-        {
-            if (!string.IsNullOrWhiteSpace(value))
-            {
-                return value.Trim();
             }
         }
 
         return "";
     }
 
-    private static string NormalizeClassName(string value)
+    private string First(params string[] values)
     {
-        var original = (value ?? "").Trim();
-
-        if (string.IsNullOrWhiteSpace(original))
+        foreach (var value in values)
         {
-            return "";
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return value;
+            }
         }
 
-        var text = original
-            .ToUpperInvariant()
-            .Replace("SINIF", "")
-            .Replace("SİNİF", "")
-            .Replace("ŞUBE", "")
-            .Replace("SUBE", "")
-            .Replace("_", "-")
-            .Replace("/", "-")
-            .Replace("\\", "-")
-            .Replace(".", "-")
-            .Replace(" ", "");
+        return "";
+    }
+}
 
-        var digits = new string(text.TakeWhile(char.IsDigit).ToArray());
-        var letters = text.Length > digits.Length ? text.Substring(digits.Length) : "";
+<style>
+    .teacher-form-v2 {
+        width: 100%;
+        max-width: none;
+        display: grid;
+        gap: 18px;
+    }
 
-        if (!string.IsNullOrWhiteSpace(digits) && !string.IsNullOrWhiteSpace(letters))
-        {
-            return $"{digits}-{letters[0]}";
+    .teacher-form-hero,
+    .teacher-form-card,
+    .teacher-form-side,
+    .teacher-form-empty {
+        border: 1px solid rgba(148, 163, 184, .18);
+        background:
+            radial-gradient(circle at 0% 0%, rgba(56, 189, 248, .10), transparent 34%),
+            linear-gradient(135deg, rgba(17, 25, 46, .94), rgba(15, 23, 42, .86));
+        box-shadow: 0 18px 48px rgba(0, 0, 0, .24);
+        backdrop-filter: blur(16px);
+    }
+
+    .teacher-form-hero {
+        padding: 24px;
+        border-radius: 32px;
+    }
+
+    .teacher-form-kicker {
+        width: fit-content;
+        min-height: 30px;
+        display: inline-flex;
+        align-items: center;
+        padding: 0 12px;
+        border-radius: 999px;
+        color: #67e8f9;
+        background: rgba(56, 189, 248, .10);
+        border: 1px solid rgba(103, 232, 249, .20);
+        font-size: 11px;
+        font-weight: 950;
+        letter-spacing: .16em;
+        text-transform: uppercase;
+    }
+
+    .teacher-form-hero h1 {
+        max-width: 840px;
+        margin: 14px 0 0;
+        color: #ffffff;
+        font-size: clamp(34px, 3.8vw, 58px);
+        font-weight: 950;
+        line-height: 1;
+        letter-spacing: -.06em;
+    }
+
+    .teacher-form-hero p {
+        max-width: 780px;
+        margin: 14px 0 0;
+        color: #aab8cf;
+        font-size: 15px;
+        font-weight: 700;
+        line-height: 1.65;
+    }
+
+    .teacher-form-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 360px;
+        gap: 18px;
+        align-items: start;
+    }
+
+    .teacher-form-card,
+    .teacher-form-side,
+    .teacher-form-empty {
+        padding: 22px;
+        border-radius: 30px;
+    }
+
+    .teacher-form-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+    }
+
+    .teacher-form-field {
+        display: grid;
+        gap: 8px;
+    }
+
+    .teacher-form-field.full {
+        grid-column: 1 / -1;
+    }
+
+    .teacher-form-field label {
+        color: #dbeafe;
+        font-size: 13px;
+        font-weight: 950;
+    }
+
+    .teacher-form-field input,
+    .teacher-form-field select,
+    .teacher-form-field textarea {
+        width: 100%;
+        min-height: 48px;
+        padding: 0 13px;
+        border-radius: 15px;
+        border: 1px solid rgba(148, 163, 184, .18);
+        outline: none;
+        color: #ffffff;
+        background: rgba(7, 17, 31, .58);
+        font-size: 14px;
+        font-weight: 750;
+    }
+
+    .teacher-form-field textarea {
+        min-height: 160px;
+        padding-top: 13px;
+        resize: vertical;
+        line-height: 1.55;
+    }
+
+    .teacher-form-field input:focus,
+    .teacher-form-field select:focus,
+    .teacher-form-field textarea:focus {
+        border-color: rgba(103, 232, 249, .45);
+        box-shadow: 0 0 0 4px rgba(56, 189, 248, .09);
+    }
+
+    .teacher-form-field option {
+        color: #0f172a;
+        background: #ffffff;
+    }
+
+    .teacher-form-submit-row {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 16px;
+    }
+
+    .teacher-form-submit,
+    .teacher-form-back {
+        min-height: 46px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 16px;
+        border-radius: 15px;
+        border: 1px solid transparent;
+        text-decoration: none;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 950;
+    }
+
+    .teacher-form-submit {
+        color: #ffffff;
+        background: linear-gradient(135deg, #2563eb, #7c3aed);
+        border-color: rgba(125, 211, 252, .22);
+        box-shadow: 0 14px 30px rgba(37, 99, 235, .24);
+    }
+
+    .teacher-form-back {
+        color: #dbeafe;
+        background: rgba(255, 255, 255, .060);
+        border-color: rgba(148, 163, 184, .18);
+    }
+
+    .teacher-form-side h3 {
+        margin: 0;
+        color: #ffffff;
+        font-size: 20px;
+        font-weight: 950;
+    }
+
+    .teacher-form-side p {
+        margin: 8px 0 0;
+        color: #94a3b8;
+        font-size: 13px;
+        font-weight: 750;
+        line-height: 1.55;
+    }
+
+    .teacher-form-side-list {
+        display: grid;
+        gap: 10px;
+        margin-top: 16px;
+    }
+
+    .teacher-form-side-item {
+        padding: 12px;
+        border-radius: 16px;
+        color: #dbeafe;
+        background: rgba(255, 255, 255, .045);
+        border: 1px solid rgba(148, 163, 184, .12);
+        font-size: 13px;
+        font-weight: 800;
+        line-height: 1.45;
+    }
+
+    .teacher-form-empty {
+        min-height: 260px;
+        display: grid;
+        place-items: center;
+        text-align: center;
+        color: #94a3b8;
+        font-weight: 850;
+        line-height: 1.55;
+    }
+
+    @@media (max-width: 1100px) {
+        .teacher-form-layout {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @@media (max-width: 700px) {
+        .teacher-form-hero,
+        .teacher-form-card,
+        .teacher-form-side,
+        .teacher-form-empty {
+            border-radius: 22px;
+            padding: 16px;
         }
 
-        return original.ToUpperInvariant();
+        .teacher-form-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .teacher-form-submit-row {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .teacher-form-submit,
+        .teacher-form-back {
+            width: 100%;
+        }
+    }
+</style>
+
+<div class="teacher-form-v2">
+    <section class="teacher-form-hero">
+        <div class="teacher-form-kicker">Yeni Ödev</div>
+
+        <h1>Öğrencileriniz için yeni ödev yayınlayın.</h1>
+
+        <p>
+            Ders atamanızı seçin, başlık ve açıklama girin. Sistem ödevi ilgili sınıf ve ders için yayınlar.
+        </p>
+    </section>
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success">@TempData["Success"]</div>
     }
 
-    private static string Normalize(string value)
+    @if (TempData["Error"] != null)
     {
-        return (value ?? "")
-            .Trim()
-            .ToLowerInvariant()
-            .Replace("ı", "i")
-            .Replace("ğ", "g")
-            .Replace("ü", "u")
-            .Replace("ş", "s")
-            .Replace("ö", "o")
-            .Replace("ç", "c");
+        <div class="alert alert-danger">@TempData["Error"]</div>
     }
+
+    @if (!lessons.Any())
+    {
+        <div class="teacher-form-empty">
+            Size atanmış ders bulunmuyor. Ödev oluşturmak için önce admin panelinden bu öğretmene ders ataması yapılmalı.
+        </div>
+    }
+    else
+    {
+        <section class="teacher-form-layout">
+            <form asp-controller="Teacher"
+                  asp-action="CreateAssignment"
+                  method="post"
+                  class="teacher-form-card">
+
+                @Html.AntiForgeryToken()
+
+                <div class="teacher-form-grid">
+                    <div class="teacher-form-field full">
+                        <label>Ders / Sınıf Seçimi</label>
+
+                        <select id="lessonSelect" name="lessonId" required>
+                            <option value="">Ders seçin</option>
+
+                            @foreach (var lesson in lessons)
+                            {
+                                var id = First(Get(lesson, "Id", "id"), Get(lesson, "lessonId", "LessonId"));
+                                var lessonName = First(Get(lesson, "Name", "name"), Get(lesson, "LessonName", "lessonName"), Get(lesson, "Title", "title"), "Ders");
+                                var className = First(Get(lesson, "ClassName", "className"), Get(lesson, "Class", "class"), Get(lesson, "TargetClass", "targetClass"), "-");
+
+                                <option value="@id"
+                                        data-lesson="@lessonName"
+                                        data-class="@className">
+                                    @lessonName · @className
+                                </option>
+                            }
+                        </select>
+
+                        <input type="hidden" id="lessonNameInput" name="lessonName" />
+                        <input type="hidden" id="classNameInput" name="className" />
+                    </div>
+
+                    <div class="teacher-form-field full">
+                        <label>Ödev Başlığı</label>
+                        <input type="text"
+                               name="title"
+                               maxlength="120"
+                               placeholder="Örn: Ünite 2 Problem Çözümü"
+                               required />
+                    </div>
+
+                    <div class="teacher-form-field">
+                        <label>Son Teslim Tarihi</label>
+                        <input type="datetime-local" name="dueDate" />
+                    </div>
+
+                    <div class="teacher-form-field">
+                        <label>Teslim Türü</label>
+                        <select name="fileType">
+                            <option value="Dosya">Dosya</option>
+                            <option value="Metin">Metin</option>
+                            <option value="Dosya veya Metin">Dosya veya Metin</option>
+                            <option value="Link">Link</option>
+                        </select>
+                    </div>
+
+                    <div class="teacher-form-field full">
+                        <label>Açıklama</label>
+                        <textarea name="description"
+                                  placeholder="Öğrencilerin yapması gerekenleri net şekilde yazın."></textarea>
+                    </div>
+                </div>
+
+                <div class="teacher-form-submit-row">
+                    <a asp-controller="Teacher"
+                       asp-action="Assignments"
+                       class="teacher-form-back">
+                        Vazgeç
+                    </a>
+
+                    <button type="submit" class="teacher-form-submit">
+                        📝 Ödevi Yayınla
+                    </button>
+                </div>
+            </form>
+
+            <aside class="teacher-form-side">
+                <h3>Öğretmen Bilgisi</h3>
+
+                <p>
+                    Ödev, giriş yapan öğretmen hesabına bağlı olarak oluşturulur.
+                </p>
+
+                <div class="teacher-form-side-list">
+                    <div class="teacher-form-side-item">
+                        👤 @teacherName
+                    </div>
+
+                    <div class="teacher-form-side-item">
+                        📚 @teacherBranch
+                    </div>
+
+                    <div class="teacher-form-side-item">
+                        🏫 @lessons.Count ders ataması mevcut
+                    </div>
+                </div>
+            </aside>
+        </section>
+    }
+</div>
+
+@section Scripts {
+    <script>
+        const lessonSelect = document.getElementById("lessonSelect");
+        const lessonNameInput = document.getElementById("lessonNameInput");
+        const classNameInput = document.getElementById("classNameInput");
+
+        function syncLessonFields() {
+            const option = lessonSelect?.selectedOptions?.[0];
+
+            if (!option) {
+                return;
+            }
+
+            if (lessonNameInput) {
+                lessonNameInput.value = option.dataset.lesson || "";
+            }
+
+            if (classNameInput) {
+                classNameInput.value = option.dataset.class || "";
+            }
+        }
+
+        if (lessonSelect) {
+            lessonSelect.addEventListener("change", syncLessonFields);
+            syncLessonFields();
+        }
+    </script>
 }

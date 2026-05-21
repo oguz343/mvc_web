@@ -263,23 +263,11 @@ public class DataIntegrityService
         var result = new List<TeacherOption>();
         var seen = new HashSet<string>();
 
-        var snapshot = await _firestore.Collection("users").GetSnapshotAsync();
+        var teacherDocs = await LoadUserDocsByRoleAsync("ogretmen");
 
-        foreach (var doc in snapshot.Documents)
+        foreach (var doc in teacherDocs)
         {
             var data = doc.ToDictionary();
-
-            if (IsDeleted(data))
-            {
-                continue;
-            }
-
-            var role = NormalizeKey(GetString(data, "role", "Role", "userRole", "UserRole"));
-
-            if (role != "ogretmen")
-            {
-                continue;
-            }
 
             var number = OnlyDigits(FirstNonEmpty(
                 GetString(data, "number", "Number"),
@@ -322,6 +310,100 @@ public class DataIntegrityService
         return result
             .OrderBy(x => x.Name)
             .ToList();
+    }
+
+    private async Task<List<DocumentSnapshot>> LoadUserDocsByRoleAsync(string roleKey)
+    {
+        var roleFields = new[] { "role", "Role", "userRole", "UserRole" };
+        var roleValues = RoleQueryValues(roleKey);
+
+        async Task<QuerySnapshot?> ReadRoleQuery(string field, string value)
+        {
+            try
+            {
+                return await _firestore
+                    .Collection("users")
+                    .WhereEqualTo(field, value)
+                    .GetSnapshotAsync();
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        var snapshots = await Task.WhenAll(
+            roleFields.SelectMany(field =>
+                roleValues.Select(value => ReadRoleQuery(field, value)))
+        );
+
+        var docs = new Dictionary<string, DocumentSnapshot>();
+
+        foreach (var snapshot in snapshots)
+        {
+            if (snapshot == null)
+            {
+                continue;
+            }
+
+            AddMatchingUserDocs(snapshot.Documents, roleKey, docs);
+        }
+
+        if (docs.Count == 0)
+        {
+            try
+            {
+                var fallback = await _firestore.Collection("users").GetSnapshotAsync();
+                AddMatchingUserDocs(fallback.Documents, roleKey, docs);
+            }
+            catch
+            {
+            }
+        }
+
+        return docs.Values.ToList();
+    }
+
+    private static void AddMatchingUserDocs(
+        IEnumerable<DocumentSnapshot> source,
+        string roleKey,
+        Dictionary<string, DocumentSnapshot> target)
+    {
+        foreach (var doc in source)
+        {
+            var data = doc.ToDictionary();
+
+            if (IsDeleted(data))
+            {
+                continue;
+            }
+
+            var role = NormalizeKey(GetString(data, "role", "Role", "userRole", "UserRole"));
+
+            if (role != roleKey)
+            {
+                continue;
+            }
+
+            target.TryAdd(doc.Id, doc);
+        }
+    }
+
+    private static string[] RoleQueryValues(string roleKey)
+    {
+        return roleKey switch
+        {
+            "ogretmen" => new[]
+            {
+                "\u00d6\u011fretmen",
+                "\u00f6\u011fretmen",
+                "Ogretmen",
+                "ogretmen",
+                "Teacher",
+                "teacher"
+            },
+            _ => new[] { roleKey }
+        };
     }
 
     public async Task<List<ClassOption>> LoadActiveClassesAsync()
