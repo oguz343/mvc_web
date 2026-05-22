@@ -1,5 +1,6 @@
 using Google.Cloud.Firestore;
 using Microsoft.AspNetCore.Mvc;
+using mvc_web.Filters;
 using mvc_web.Models;
 using mvc_web.Services;
 using System.Globalization;
@@ -7,6 +8,7 @@ using System.Text.RegularExpressions;
 
 namespace mvc_web.Controllers;
 
+[TeacherOnly]
 public class TeacherController : Controller
 {
     private readonly FirestoreDb _firestore;
@@ -227,6 +229,12 @@ public class TeacherController : Controller
             return RedirectToAction(nameof(CreateAssignment));
         }
 
+        if (title.Length > 150 || description.Length > 5000)
+        {
+            TempData["Error"] = "Odev basligi en fazla 150, aciklama en fazla 5000 karakter olabilir.";
+            return RedirectToAction(nameof(CreateAssignment));
+        }
+
         var selectedLessons = lessons
             .Where(x => selectedLessonIds.Contains(GetText(x, "Id", "id")))
             .ToList();
@@ -329,6 +337,7 @@ public class TeacherController : Controller
         if (dueDate.HasValue)
         {
             var dueTimestamp = Timestamp.FromDateTime(DateTime.SpecifyKind(dueDate.Value, DateTimeKind.Utc));
+            var dueText = dueDate.Value.ToString("dd.MM.yyyy HH:mm");
 
             data["dueDate"] = dueTimestamp;
             data["DueDate"] = dueTimestamp;
@@ -336,6 +345,8 @@ public class TeacherController : Controller
             data["Deadline"] = dueTimestamp;
             data["endDate"] = dueTimestamp;
             data["EndDate"] = dueTimestamp;
+            data["dueDateText"] = dueText;
+            data["DueDateText"] = dueText;
         }
 
         var homeworkRef = await _firestore.Collection("homeworks").AddAsync(data);
@@ -430,6 +441,13 @@ public class TeacherController : Controller
         var fileType = FirstNonEmpty(form["fileType"].ToString(), form["Type"].ToString());
         var dueDateRaw = FirstNonEmpty(form["dueDate"].ToString(), form["DueDate"].ToString());
         var status = FirstNonEmpty(form["status"].ToString(), form["Status"].ToString(), "Aktif");
+
+        if (title.Length > 150 || description.Length > 5000)
+        {
+            TempData["Error"] = "Odev basligi en fazla 150, aciklama en fazla 5000 karakter olabilir.";
+            return RedirectToAction(nameof(EditAssignment), new { id });
+        }
+
         Dictionary<string, object>? assignment = null;
         List<Dictionary<string, object>> lessons;
         string teacherNo;
@@ -532,6 +550,7 @@ public class TeacherController : Controller
         if (!string.IsNullOrWhiteSpace(dueDateRaw) && DateTime.TryParse(dueDateRaw, out var parsedDueDate))
         {
             var dueTimestamp = Timestamp.FromDateTime(DateTime.SpecifyKind(parsedDueDate, DateTimeKind.Utc));
+            var dueText = parsedDueDate.ToString("dd.MM.yyyy HH:mm");
 
             update["dueDate"] = dueTimestamp;
             update["DueDate"] = dueTimestamp;
@@ -539,6 +558,8 @@ public class TeacherController : Controller
             update["Deadline"] = dueTimestamp;
             update["endDate"] = dueTimestamp;
             update["EndDate"] = dueTimestamp;
+            update["dueDateText"] = dueText;
+            update["DueDateText"] = dueText;
         }
 
         await UpdateAssignmentEverywhere(id, update);
@@ -747,6 +768,12 @@ public class TeacherController : Controller
         if (!IsValidScore(score))
         {
             TempData["Error"] = "Not 0 ile 100 arasında olmalı.";
+            return RedirectToAction(nameof(Submissions));
+        }
+
+        if (feedback.Length > 2000)
+        {
+            TempData["Error"] = "Geri donus en fazla 2000 karakter olabilir.";
             return RedirectToAction(nameof(Submissions));
         }
 
@@ -1436,6 +1463,14 @@ public class TeacherController : Controller
                 data["branch"] = teacherBranch;
                 data["FileType"] = FirstNonEmpty(GetText(data, "fileType", "FileType"), GetText(data, "type", "Type"), "Metin / Link");
                 data["fileType"] = data["FileType"];
+                var normalizedDueDate = GetDate(data, "dueDate", "DueDate", "deadline", "Deadline", "endDate", "EndDate");
+
+                if (normalizedDueDate.HasValue)
+                {
+                    var dueText = normalizedDueDate.Value.ToString("dd.MM.yyyy HH:mm");
+                    data["dueDateText"] = dueText;
+                    data["DueDateText"] = dueText;
+                }
 
                 result.Add(data);
             }
@@ -1799,6 +1834,7 @@ public class TeacherController : Controller
             AssignmentTitle = FirstNonEmpty(GetText(x, "Title", "title"), GetText(x, "AssignmentTitle", "assignmentTitle"), "Ödev"),
             Lesson = FirstNonEmpty(GetText(x, "LessonName", "lessonName"), GetText(x, "Lesson", "lesson"), "-"),
             ClassName = FirstNonEmpty(GetText(x, "ClassName", "className"), "-"),
+            StudentName = FirstNonEmpty(GetText(x, "StudentName", "studentName"), GetText(x, "Name", "name"), "-"),
             StudentNo = FirstNonEmpty(GetText(x, "StudentNo", "studentNo"), "-"),
             Answer = FirstNonEmpty(GetText(x, "Answer", "answer"), GetText(x, "Content", "content")),
             Link = GetText(x, "Link", "link"),

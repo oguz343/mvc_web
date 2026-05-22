@@ -24,11 +24,100 @@ namespace mvc_web.Controllers
             _cache = cache;
         }
 
-        public async Task<IActionResult> Index()
+        [HttpGet("/Portal")]
+        public IActionResult Index()
         {
             if (!_session.IsStudent(HttpContext) && !_session.IsParent(HttpContext))
             {
                 return RedirectToAction("Login", "Auth");
+            }
+
+            return RedirectToAction(nameof(Overview));
+        }
+
+        [HttpGet("/Portal/Overview")]
+        public async Task<IActionResult> Overview()
+        {
+            var model = await BuildPortalViewModel();
+
+            if (model == null)
+            {
+                return RedirectToAction("Login", "Auth");
+            }
+
+            return View(model);
+        }
+
+        [HttpGet("/Portal/Homeworks")]
+        public async Task<IActionResult> Homeworks()
+        {
+            var model = await BuildPortalViewModel();
+
+            if (model == null)
+            {
+                return RedirectToAction("Login", "Auth");
+            }
+
+            return View(model);
+        }
+
+        [HttpGet("/Portal/Announcements")]
+        public async Task<IActionResult> Announcements()
+        {
+            var model = await BuildPortalViewModel();
+
+            if (model == null)
+            {
+                return RedirectToAction("Login", "Auth");
+            }
+
+            return View(model);
+        }
+
+        [HttpGet("/Portal/Grades")]
+        public async Task<IActionResult> Grades()
+        {
+            var model = await BuildPortalViewModel();
+
+            if (model == null)
+            {
+                return RedirectToAction("Login", "Auth");
+            }
+
+            return View(model);
+        }
+
+        [HttpGet("/Portal/Calendar")]
+        public async Task<IActionResult> Calendar()
+        {
+            var model = await BuildPortalViewModel();
+
+            if (model == null)
+            {
+                return RedirectToAction("Login", "Auth");
+            }
+
+            return View(model);
+        }
+
+        [HttpGet("/Portal/Profile")]
+        public async Task<IActionResult> Profile()
+        {
+            var model = await BuildPortalViewModel();
+
+            if (model == null)
+            {
+                return RedirectToAction("Login", "Auth");
+            }
+
+            return View(model);
+        }
+
+        private async Task<PortalViewModel?> BuildPortalViewModel()
+        {
+            if (!_session.IsStudent(HttpContext) && !_session.IsParent(HttpContext))
+            {
+                return null;
             }
 
             var userId = _session.GetUserId(HttpContext) ?? "";
@@ -41,7 +130,7 @@ namespace mvc_web.Controllers
             if (!userDoc.Exists)
             {
                 _session.Logout(HttpContext);
-                return RedirectToAction("Login", "Auth");
+                return null;
             }
 
             var userData = userDoc.ToDictionary();
@@ -53,7 +142,8 @@ namespace mvc_web.Controllers
                 Role = role,
                 Number = number,
                 ClassName = NormalizeClassName(GetString(userData, "className", "ClassName", "class", "Class")),
-                LinkedStudentNo = GetString(userData, "linkedStudentNo", "LinkedStudentNo")
+                LinkedStudentNo = GetString(userData, "linkedStudentNo", "LinkedStudentNo"),
+                LinkedStudentName = GetString(userData, "linkedStudentName", "LinkedStudentName")
             };
 
             var studentNumberForHomework = number;
@@ -78,6 +168,8 @@ namespace mvc_web.Controllers
                         studentClassForHomework = NormalizeClassName(
                             GetString(studentData, "className", "ClassName", "class", "Class")
                         );
+
+                        model.LinkedStudentName = GetString(studentData, new[] { "name", "Name" }, model.LinkedStudentName);
                     }
                 }
             }
@@ -90,7 +182,7 @@ namespace mvc_web.Controllers
             model.Announcements = announcementsTask.Result;
             model.Homeworks = homeworksTask.Result;
 
-            return View(model);
+            return model;
         }
 
         [HttpPost]
@@ -105,13 +197,13 @@ namespace mvc_web.Controllers
             if (!_session.IsStudent(HttpContext))
             {
                 TempData["Error"] = "Ödevi sadece öğrenci hesabı teslim edebilir.";
-                return RedirectToAction(nameof(Index));
+                return RedirectToAction(nameof(Homeworks));
             }
 
             if (string.IsNullOrWhiteSpace(homeworkId))
             {
                 TempData["Error"] = "Ödev bulunamadı.";
-                return RedirectToAction(nameof(Index));
+                return RedirectToAction(nameof(Homeworks));
             }
 
             homeworkCollection = NormalizeHomeworkCollection(homeworkCollection);
@@ -119,7 +211,7 @@ namespace mvc_web.Controllers
             if (string.IsNullOrWhiteSpace(homeworkCollection))
             {
                 TempData["Error"] = "Geçersiz ödev kaynağı.";
-                return RedirectToAction(nameof(Index));
+                return RedirectToAction(nameof(Homeworks));
             }
 
             var userId = _session.GetUserId(HttpContext) ?? "";
@@ -146,7 +238,7 @@ namespace mvc_web.Controllers
             if (!homeworkDoc.Exists)
             {
                 TempData["Error"] = "Ödev bulunamadı.";
-                return RedirectToAction(nameof(Index));
+                return RedirectToAction(nameof(Homeworks));
             }
 
             var homeworkData = homeworkDoc.ToDictionary();
@@ -155,7 +247,7 @@ namespace mvc_web.Controllers
             if (string.IsNullOrWhiteSpace(studentClass) || !HomeworkMatchesClass(homeworkData, studentClass, classIds))
             {
                 TempData["Error"] = "Bu ödeve teslim yapma yetkiniz yok.";
-                return RedirectToAction(nameof(Index));
+                return RedirectToAction(nameof(Homeworks));
             }
 
             string fileName = "";
@@ -168,7 +260,7 @@ namespace mvc_web.Controllers
                 if (file.Length > maxUploadBytes)
                 {
                     TempData["Error"] = "Dosya boyutu en fazla 10 MB olabilir.";
-                    return RedirectToAction(nameof(Index));
+                    return RedirectToAction(nameof(Homeworks));
                 }
 
                 var allowedContentTypes = new Dictionary<string, string[]>
@@ -188,7 +280,7 @@ namespace mvc_web.Controllers
                 if (!allowedContentTypes.ContainsKey(extension))
                 {
                     TempData["Error"] = "Dosya türü desteklenmiyor. PDF, Word, görsel, TXT veya ZIP yükleyin.";
-                    return RedirectToAction(nameof(Index));
+                    return RedirectToAction(nameof(Homeworks));
                 }
 
                 var contentType = (file.ContentType ?? "").Trim().ToLowerInvariant();
@@ -197,7 +289,7 @@ namespace mvc_web.Controllers
                     !allowedContentTypes[extension].Contains(contentType))
                 {
                     TempData["Error"] = "Dosya içeriği seçilen uzantıyla uyumlu değil.";
-                    return RedirectToAction(nameof(Index));
+                    return RedirectToAction(nameof(Homeworks));
                 }
 
                 var uploadsRoot = Path.Combine(
@@ -221,7 +313,7 @@ namespace mvc_web.Controllers
             if (string.IsNullOrWhiteSpace(answerText) && string.IsNullOrWhiteSpace(fileUrl))
             {
                 TempData["Error"] = "Teslim için açıklama yazın veya dosya yükleyin.";
-                return RedirectToAction(nameof(Index));
+                return RedirectToAction(nameof(Homeworks));
             }
 
             var studentNo = OnlyDigits(studentNumber);
@@ -242,6 +334,12 @@ namespace mvc_web.Controllers
             var teacherNo = GetString(homeworkData, "teacherNo", "TeacherNo", "teacherNumber", "TeacherNumber");
             var teacherId = GetString(homeworkData, "teacherId", "TeacherId", "teacherUid", "TeacherUid");
             var cleanAnswer = answerText?.Trim() ?? "";
+
+            if (cleanAnswer.Length > 5000)
+            {
+                TempData["Error"] = "Teslim aÃ§Ä±klamasÄ± en fazla 5000 karakter olabilir.";
+                return RedirectToAction(nameof(Homeworks));
+            }
 
             var submissionData = new Dictionary<string, object>
             {
@@ -295,7 +393,7 @@ namespace mvc_web.Controllers
                 .SetAsync(submissionData, SetOptions.MergeAll);
 
             TempData["Success"] = "Ödev teslim edildi.";
-            return RedirectToAction(nameof(Index));
+            return RedirectToAction(nameof(Homeworks));
         }
 
         private async Task<List<PortalAnnouncementItem>> LoadAnnouncements(string role)

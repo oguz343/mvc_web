@@ -1,0 +1,163 @@
+@model mvc_web.Models.PortalViewModel
+@using System.Globalization
+
+@{
+    Layout = "_Layout";
+
+    var isParent = (Model.Role ?? "").Trim().Equals("Veli", StringComparison.OrdinalIgnoreCase);
+    ViewData["Title"] = isParent ? "Veli Paneli" : "Öğrenci Paneli";
+
+    var now = DateTime.Now;
+    var total = Model.Homeworks.Count;
+    var submitted = Model.Homeworks.Count(x => x.IsSubmitted);
+    var pending = Model.Homeworks.Count(x => !x.IsSubmitted);
+    var late = Model.Homeworks.Count(x => !x.IsSubmitted && x.DueDate.HasValue && x.DueDate.Value < now);
+    var graded = Model.Homeworks.Count(x => !string.IsNullOrWhiteSpace(x.Grade) || !string.IsNullOrWhiteSpace(x.Feedback));
+    var progress = total == 0 ? 0 : Math.Round((double)submitted / total * 100);
+    var nextHomework = Model.Homeworks
+        .Where(x => !x.IsSubmitted)
+        .OrderBy(x => x.DueDate ?? DateTime.MaxValue)
+        .FirstOrDefault();
+    var latestAnnouncements = Model.Announcements
+        .OrderByDescending(x => x.CreatedAt ?? DateTime.MinValue)
+        .Take(3)
+        .ToList();
+}
+
+@functions {
+    private string SafeText(string value, string fallback = "-") => string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+    private string DateText(DateTime? date) => date?.ToString("dd.MM.yyyy HH:mm") ?? "-";
+    private string Initials(string value)
+    {
+        var parts = (value ?? "").Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return parts.Length >= 2 ? $"{parts[0][0]}{parts[1][0]}".ToUpperInvariant() : parts.Length == 1 ? parts[0][0].ToString().ToUpperInvariant() : "P";
+    }
+}
+
+<div class="portal-pro-dashboard @(isParent ? "parent-mode" : "student-mode")">
+    <section class="portal-pro-hero-grid">
+        <article class="portal-pro-welcome-card">
+            <div class="portal-pro-hero-avatar">@Initials(Model.Name)</div>
+            <div class="portal-pro-welcome-text">
+                <h1>@(isParent ? $"Hoş geldiniz, {SafeText(Model.Name, "Veli")}" : $"Hoş geldin, {SafeText(Model.Name, "Öğrenci")}")</h1>
+                <p>@(isParent ? "Çocuğunuzun okul durumunu parça parça takip edebilirsiniz." : "Ödevlerini, duyurularını ve notlarını ayrı sayfalardan daha rahat yönetebilirsin.")</p>
+                <div class="portal-pro-chip-row">
+                    <span>@(isParent ? "Veli" : "Öğrenci")</span>
+                    <span>No: @SafeText(Model.Number)</span>
+                    @if (!string.IsNullOrWhiteSpace(Model.ClassName))
+                    {
+                        <span>Sınıf: @Model.ClassName</span>
+                    }
+                    @if (isParent && !string.IsNullOrWhiteSpace(Model.LinkedStudentNo))
+                    {
+                        <span>Bağlı Öğrenci: @Model.LinkedStudentNo</span>
+                    }
+                    @if (isParent && !string.IsNullOrWhiteSpace(Model.LinkedStudentName))
+                    {
+                        <span>Öğrenci: @Model.LinkedStudentName</span>
+                    }
+                </div>
+            </div>
+        </article>
+
+        <article class="portal-pro-progress-card">
+            <div class="portal-pro-progress-top">
+                <span>Genel Tamamlama</span>
+                <div class="portal-pro-progress-icon">%</div>
+            </div>
+            <strong>%@progress</strong>
+            <p>@submitted / @total teslim</p>
+            <div class="portal-pro-progress-rail"><div style="width:@progress%"></div></div>
+            <div class="portal-pro-progress-foot">
+                <span>Bekleyen: @pending</span>
+                <span>Geciken: @late</span>
+            </div>
+        </article>
+    </section>
+
+    <section class="portal-pro-stat-grid">
+        <a class="portal-pro-stat-card" asp-controller="Portal" asp-action="Homeworks">
+            <div class="portal-pro-stat-icon blue">📋</div>
+            <div><strong>@total</strong><span>Toplam Ödev</span></div>
+        </a>
+        <a class="portal-pro-stat-card" asp-controller="Portal" asp-action="Homeworks">
+            <div class="portal-pro-stat-icon cyan">◷</div>
+            <div><strong>@pending</strong><span>Bekleyen Ödev</span></div>
+        </a>
+        <a class="portal-pro-stat-card" asp-controller="Portal" asp-action="Grades">
+            <div class="portal-pro-stat-icon amber">☆</div>
+            <div><strong>@graded</strong><span>Notlandırılan</span></div>
+        </a>
+        <a class="portal-pro-stat-card" asp-controller="Portal" asp-action="Calendar">
+            <div class="portal-pro-stat-icon red">⚠</div>
+            <div><strong>@late</strong><span>Süresi Geçen</span></div>
+        </a>
+    </section>
+
+    <section class="portal-pro-main-grid">
+        <aside class="portal-pro-panel announcements">
+            <div class="portal-pro-panel-head">
+                <div>
+                    <h2>Son Duyurular</h2>
+                    <p>Tüm duyurular ayrı sayfada listelenir.</p>
+                </div>
+                <a class="portal-pro-panel-link" asp-controller="Portal" asp-action="Announcements">Tümünü aç <span>›</span></a>
+            </div>
+            @if (!latestAnnouncements.Any())
+            {
+                <div class="portal-pro-empty">Henüz duyuru yok.</div>
+            }
+            else
+            {
+                <div class="portal-pro-announcement-list">
+                    @foreach (var item in latestAnnouncements)
+                    {
+                        <article class="portal-pro-announcement-card">
+                            <div class="portal-pro-ann-dot"></div>
+                            <div class="portal-pro-ann-body">
+                                <div class="portal-pro-ann-top"><h3>@SafeText(item.Title, "Duyuru")</h3><span>@SafeText(item.Target, "Genel")</span></div>
+                                <p>@SafeText(item.Content, "Duyuru içeriği bulunmuyor.")</p>
+                                <small>@SafeText(item.Author, "Admin") · @DateText(item.CreatedAt)</small>
+                            </div>
+                        </article>
+                    }
+                </div>
+            }
+        </aside>
+
+        <section class="portal-pro-panel homeworks">
+            <div class="portal-pro-panel-head">
+                <div>
+                    <h2>Sıradaki İş</h2>
+                    <p>@(isParent && !string.IsNullOrWhiteSpace(Model.LinkedStudentName) ? $"{Model.LinkedStudentName} için detay ve teslim durumu ödevler sayfasında." : "Detay ve teslim işlemleri ödevler sayfasında.")</p>
+                </div>
+                <a class="portal-pro-panel-link" asp-controller="Portal" asp-action="Homeworks">Ödevlere git <span>›</span></a>
+            </div>
+            @if (nextHomework == null)
+            {
+                <div class="portal-pro-empty">Bekleyen ödev yok.</div>
+            }
+            else
+            {
+                <article class="portal-pro-homework-card">
+                    <div class="portal-pro-homework-top">
+                        <div class="portal-pro-homework-icon">📖</div>
+                        <div class="portal-pro-homework-title">
+                            <h3>@SafeText(nextHomework.Title, "Ödev")</h3>
+                            <div class="portal-pro-mini-row">
+                                <span>@SafeText(nextHomework.LessonName, "Ders")</span>
+                                <span>Son teslim: @DateText(nextHomework.DueDate)</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="portal-pro-homework-detail-grid">
+                        <div class="portal-pro-homework-box teacher">
+                            <strong>Kısa Açıklama</strong>
+                            <p>@SafeText(nextHomework.Description, "Açıklama eklenmemiş.")</p>
+                        </div>
+                    </div>
+                </article>
+            }
+        </section>
+    </section>
+</div>

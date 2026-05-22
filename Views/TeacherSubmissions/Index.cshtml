@@ -611,6 +611,7 @@
                 var id = First(Get(item, "Id", "id"), Get(item, "DocId", "docId"));
                 var submissionCollection = First(Get(item, "SubmissionCollection", "submissionCollection"), "homework_submissions");
                 var title = First(Get(item, "AssignmentTitle", "assignmentTitle"), Get(item, "HomeworkTitle", "homeworkTitle"), Get(item, "Title", "title"), "Ödev");
+                var studentName = First(Get(item, "StudentName", "studentName"), Get(item, "Name", "name"), "-");
                 var studentNo = First(Get(item, "StudentNo", "studentNo"), Get(item, "Number", "number"), "-");
                 var className = First(Get(item, "ClassName", "className"), Get(item, "Class", "class"), "-");
                 var lesson = First(Get(item, "LessonName", "lessonName"), Get(item, "Lesson", "lesson"), "-");
@@ -622,7 +623,7 @@
 
                 <article class="ts-v2-card"
                          data-class="@className"
-                         data-search="@($"{title} {studentNo} {className} {lesson} {answer}")">
+                         data-search="@($"{title} {studentName} {studentNo} {className} {lesson} {answer}")">
 
                     <div class="ts-v2-top">
                         <div class="ts-v2-icon">📥</div>
@@ -638,6 +639,12 @@
                     </div>
 
                     <div class="ts-v2-info">
+                        <div class="ts-v2-row">
+                            <span>🎒</span>
+                            <strong>Öğrenci</strong>
+                            <b>@studentName</b>
+                        </div>
+
                         <div class="ts-v2-row">
                             <span>📚</span>
                             <strong>Ders</strong>

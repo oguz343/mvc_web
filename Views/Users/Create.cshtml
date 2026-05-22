@@ -331,10 +331,14 @@
                 <div id="parentFields" class="role-fields">
                     <div class="user-form-field">
                         <label>Bağlı Öğrenci No</label>
-                        <input asp-for="LinkedStudentNo"
-                               name="LinkedStudentNo"
-                               maxlength="20"
-                               placeholder="Örn: 1001" />
+                        <select asp-for="LinkedStudentNo" name="LinkedStudentNo">
+                            <option value="">Öğrenci seçin</option>
+
+                            @foreach (var student in students)
+                            {
+                                <option value="@student.Number">@student.DisplayName</option>
+                            }
+                        </select>
                     </div>
                 </div>
             </div>

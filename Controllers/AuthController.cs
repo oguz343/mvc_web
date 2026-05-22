@@ -151,6 +151,8 @@ public class AuthController : Controller
             SetOptions.MergeAll
         );
 
+        await CompletePasswordRequestsAsync(userId, role, number);
+
         HttpContext.Session.Clear();
         HttpContext.Session.SetString("UserId", userId);
         HttpContext.Session.SetString("UserDocId", userId);
@@ -292,6 +294,103 @@ public class AuthController : Controller
         TempData.Remove("SetPasswordName");
         TempData.Remove("SetPasswordRole");
         TempData.Remove("SetPasswordNumber");
+    }
+
+    private async Task CompletePasswordRequestsAsync(string userId, string role, string number)
+    {
+        var now = Timestamp.FromDateTime(DateTime.UtcNow);
+        var update = new Dictionary<string, object?>
+        {
+            ["status"] = "Tamamlandı",
+            ["Status"] = "Tamamlandı",
+            ["activationCode"] = "",
+            ["ActivationCode"] = "",
+            ["passwordChangedAt"] = now,
+            ["PasswordChangedAt"] = now,
+            ["completedAt"] = now,
+            ["CompletedAt"] = now,
+            ["updatedAt"] = now,
+            ["UpdatedAt"] = now
+        };
+
+        var collections = new[] { "passwordRequests", "password_requests" };
+        var refs = new Dictionary<string, DocumentReference>();
+
+        foreach (var collection in collections)
+        {
+            foreach (var doc in await FindPasswordRequestDocsAsync(collection, userId, role, number))
+            {
+                refs.TryAdd(doc.Reference.Path, doc.Reference);
+            }
+        }
+
+        await Task.WhenAll(refs.Values.Select(docRef => docRef.SetAsync(update, SetOptions.MergeAll)));
+    }
+
+    private async Task<List<DocumentSnapshot>> FindPasswordRequestDocsAsync(
+        string collection,
+        string userId,
+        string role,
+        string number)
+    {
+        var result = new List<DocumentSnapshot>();
+        var seen = new HashSet<string>();
+        var numberKey = OnlyDigits(number);
+
+        async Task AddQuery(string field, string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return;
+            }
+
+            try
+            {
+                var snapshot = await _firestore
+                    .Collection(collection)
+                    .WhereEqualTo(field, value)
+                    .Limit(25)
+                    .GetSnapshotAsync();
+
+                foreach (var doc in snapshot.Documents)
+                {
+                    if (seen.Add(doc.Reference.Path))
+                    {
+                        result.Add(doc);
+                    }
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        await AddQuery("userId", userId);
+        await AddQuery("UserId", userId);
+
+        foreach (var field in new[] { "number", "Number", "schoolNo", "SchoolNo", "studentNo", "StudentNo", "parentNo", "ParentNo", "userNumber", "UserNumber" })
+        {
+            await AddQuery(field, numberKey);
+        }
+
+        return result
+            .Where(doc =>
+            {
+                var data = doc.ToDictionary();
+                var docUserId = GetString(data, "userId", "UserId");
+                var docRole = GetString(data, "role", "Role");
+                var docNumber = OnlyDigits(FirstNonEmpty(
+                    GetString(data, "number", "Number"),
+                    GetString(data, "schoolNo", "SchoolNo"),
+                    GetString(data, "studentNo", "StudentNo"),
+                    GetString(data, "parentNo", "ParentNo"),
+                    GetString(data, "userNumber", "UserNumber")
+                ));
+
+                return (!string.IsNullOrWhiteSpace(userId) && docUserId == userId) ||
+                    (NormalizeRole(docRole) == NormalizeRole(role) && docNumber == numberKey);
+            })
+            .ToList();
     }
 
     private static bool UserCanSetInitialPassword(DocumentSnapshot userDoc)

@@ -35,6 +35,7 @@ namespace mvc_web.Controllers
             model.Name = model.Name?.Trim() ?? "";
             model.Number = OnlyDigits(model.Number);
             model.Note = model.Note?.Trim();
+            ValidateRequestHardening(model);
 
             if (string.IsNullOrWhiteSpace(model.Role))
             {
@@ -133,6 +134,32 @@ namespace mvc_web.Controllers
 
             TempData["Success"] = "Şifre talebiniz admin paneline gönderildi.";
             return RedirectToAction(nameof(Index));
+        }
+
+        private void ValidateRequestHardening(ForgotPasswordViewModel model)
+        {
+            var roleKey = NormalizeKey(model.Role);
+
+            if (!string.IsNullOrWhiteSpace(model.Role) &&
+                roleKey is not ("ogrenci" or "ogretmen" or "veli"))
+            {
+                ModelState.AddModelError("", "Gecersiz rol secimi.");
+            }
+
+            if (!string.IsNullOrWhiteSpace(model.Name) && model.Name.Length > 120)
+            {
+                ModelState.AddModelError("", "Ad Soyad en fazla 120 karakter olabilir.");
+            }
+
+            if (!string.IsNullOrWhiteSpace(model.Number) && model.Number.Length > 20)
+            {
+                ModelState.AddModelError("", "Numara en fazla 20 haneli olabilir.");
+            }
+
+            if (!string.IsNullOrWhiteSpace(model.Note) && model.Note.Length > 500)
+            {
+                ModelState.AddModelError("", "Not en fazla 500 karakter olabilir.");
+            }
         }
 
         private async Task<DocumentSnapshot?> FindMatchingUser(string role, string name, string number)

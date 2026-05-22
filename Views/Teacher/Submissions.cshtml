@@ -584,6 +584,7 @@
             {
                 var id = First(Get(item, "Id", "id"), Get(item, "docId", "DocId"));
                 var title = First(Get(item, "assignmentTitle", "AssignmentTitle"), Get(item, "homeworkTitle", "HomeworkTitle"), Get(item, "title", "Title"), Get(item, "name", "Name"), "Ödev");
+                var studentName = First(Get(item, "studentName", "StudentName"), Get(item, "name", "Name"), "-");
                 var studentNo = First(Get(item, "studentNo", "StudentNo"), Get(item, "studentNumber", "StudentNumber"), Get(item, "schoolNo", "SchoolNo"), Get(item, "number", "Number"), "-");
                 var lesson = First(Get(item, "lessonName", "LessonName"), Get(item, "lesson", "Lesson"), Get(item, "courseName", "CourseName"), Get(item, "course", "Course"), "-");
                 var className = First(Get(item, "className", "ClassName"), Get(item, "class", "Class"), Get(item, "targetClass", "TargetClass"), "-");
@@ -596,7 +597,7 @@
 
                 <article class="teacher-sub-card"
                          data-class="@className"
-                         data-search="@($"{title} {studentNo} {lesson} {className} {answer}")">
+                         data-search="@($"{title} {studentName} {studentNo} {lesson} {className} {answer}")">
 
                     <div class="teacher-sub-top">
                         <div class="teacher-sub-icon">📥</div>
@@ -612,6 +613,12 @@
                     </div>
 
                     <div class="teacher-sub-info">
+                        <div class="teacher-sub-row">
+                            <span>🎒</span>
+                            <strong>Öğrenci</strong>
+                            <b>@studentName</b>
+                        </div>
+
                         <div class="teacher-sub-row">
                             <span>📚</span>
                             <strong>Ders</strong>

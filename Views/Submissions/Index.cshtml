@@ -704,6 +704,7 @@
                 var lesson = FirstNonEmpty(GetText(item, "Lesson"), GetText(item, "LessonName"), "-");
                 var className = FirstNonEmpty(GetText(item, "ClassName"), "-");
                 var teacherName = FirstNonEmpty(GetText(item, "TeacherName"), "-");
+                var studentName = FirstNonEmpty(GetText(item, "StudentName"), "-");
                 var studentNo = FirstNonEmpty(GetText(item, "StudentNo"), GetText(item, "Number"), "-");
                 var answer = FirstNonEmpty(GetText(item, "Answer"), GetText(item, "SubmissionText"), "Öğrenci açıklama yazmamış.");
                 var link = FirstNonEmpty(GetText(item, "Link"), GetText(item, "FileUrl"), GetText(item, "SubmissionFileUrl"));
@@ -713,7 +714,7 @@
                 var evaluated = IsEvaluated(item);
 
                 <article class="submissions-v2-card"
-                         data-search="@($"{studentNo} {assignmentTitle} {lesson} {className} {teacherName} {answer}")">
+                         data-search="@($"{studentName} {studentNo} {assignmentTitle} {lesson} {className} {teacherName} {answer}")">
 
                     <div class="submissions-v2-top">
                         <div class="submissions-v2-icon">
@@ -731,6 +732,12 @@
                     </div>
 
                     <div class="submissions-v2-details">
+                        <div class="submissions-v2-detail-row">
+                            <span>🎒</span>
+                            <strong>Öğrenci</strong>
+                            <b>@studentName</b>
+                        </div>
+
                         <div class="submissions-v2-detail-row">
                             <span>📚</span>
                             <strong>Ders</strong>

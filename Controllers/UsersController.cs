@@ -16,6 +16,16 @@ public class UsersController : Controller
 
     private readonly FirestoreDb _firestore;
 
+    public sealed class StudentOption
+    {
+        public string Name { get; set; } = "";
+        public string Number { get; set; } = "";
+        public string ClassName { get; set; } = "";
+        public string DisplayName => string.IsNullOrWhiteSpace(ClassName)
+            ? $"{Name} - No: {Number}"
+            : $"{Name} - No: {Number} - {ClassName}";
+    }
+
     public UsersController(FirestoreDb firestore)
     {
         _firestore = firestore;
@@ -29,10 +39,16 @@ public class UsersController : Controller
             .GetSnapshotAsync();
 
         var users = new List<UserViewModel>();
+        var studentNamesByNumber = new Dictionary<string, string>();
 
         foreach (var doc in snapshot.Documents)
         {
             var data = doc.ToDictionary();
+
+            if (IsDeleted(data))
+            {
+                continue;
+            }
 
             var user = new UserViewModel
             {
@@ -44,11 +60,17 @@ public class UsersController : Controller
                 Role = GetString(data, "role", "Role"),
                 ClassName = NormalizeClassName(GetString(data, "className", "ClassName", "class", "Class")),
                 LinkedStudentNo = GetString(data, "linkedStudentNo", "LinkedStudentNo"),
+                LinkedStudentName = GetString(data, "linkedStudentName", "LinkedStudentName"),
                 Branch = GetString(data, "branch", "Branch"),
                 ActivationCode = GetString(data, "activationCode", "ActivationCode"),
                 MustChangePassword = GetBool(data, "mustChangePassword", "MustChangePassword"),
                 CreatedAt = GetDate(data, "createdAt", "CreatedAt")
             };
+
+            if (user.Role == "Öğrenci" && !string.IsNullOrWhiteSpace(user.SchoolNo))
+            {
+                studentNamesByNumber[OnlyDigits(user.SchoolNo)] = user.Name;
+            }
 
             if (!string.IsNullOrWhiteSpace(search))
             {
@@ -61,6 +83,17 @@ public class UsersController : Controller
             }
 
             users.Add(user);
+        }
+
+        foreach (var parent in users.Where(x => x.Role == "Veli"))
+        {
+            var linkedNo = OnlyDigits(parent.LinkedStudentNo);
+
+            if (!string.IsNullOrWhiteSpace(linkedNo) &&
+                studentNamesByNumber.TryGetValue(linkedNo, out var studentName))
+            {
+                parent.LinkedStudentName = studentName;
+            }
         }
 
         ViewBag.Search = search ?? "";
@@ -87,11 +120,14 @@ public class UsersController : Controller
 
         NormalizeModel(model);
         ValidateUser(model);
+        ValidateUserHardening(model);
 
         if (await NumberExistsAsync(model.SchoolNo))
         {
             ModelState.AddModelError(nameof(model.SchoolNo), "Bu numara zaten kayıtlı. Lütfen farklı bir numara girin.");
         }
+
+        var linkedStudent = await ValidateParentStudentAsync(model);
 
         if (!ModelState.IsValid)
         {
@@ -133,14 +169,16 @@ public class UsersController : Controller
 
             { "linkedStudentNo", model.Role == "Veli" ? model.LinkedStudentNo : "" },
             { "LinkedStudentNo", model.Role == "Veli" ? model.LinkedStudentNo : "" },
+            { "linkedStudentName", model.Role == "Veli" ? linkedStudent?.Name ?? "" : "" },
+            { "LinkedStudentName", model.Role == "Veli" ? linkedStudent?.Name ?? "" : "" },
 
             { "branch", model.Role == "Öğretmen" ? model.Branch : "" },
             { "Branch", model.Role == "Öğretmen" ? model.Branch : "" },
             { "teacherBranch", model.Role == "Öğretmen" ? model.Branch : "" },
             { "TeacherBranch", model.Role == "Öğretmen" ? model.Branch : "" },
 
-            { "activationCode", "" },
-            { "ActivationCode", "" },
+            { "activationCode", activationCode },
+            { "ActivationCode", activationCode },
 
             { "mustChangePassword", true },
             { "MustChangePassword", true },
@@ -195,6 +233,7 @@ public class UsersController : Controller
             Role = GetString(data, "role", "Role"),
             ClassName = NormalizeClassName(GetString(data, "className", "ClassName", "class", "Class")),
             LinkedStudentNo = GetString(data, "linkedStudentNo", "LinkedStudentNo"),
+            LinkedStudentName = GetString(data, "linkedStudentName", "LinkedStudentName"),
             Branch = GetString(data, "branch", "Branch"),
             ActivationCode = GetString(data, "activationCode", "ActivationCode"),
             MustChangePassword = GetBool(data, "mustChangePassword", "MustChangePassword")
@@ -223,11 +262,14 @@ public class UsersController : Controller
 
         NormalizeModel(model);
         ValidateUser(model);
+        ValidateUserHardening(model);
 
         if (await NumberExistsAsync(model.SchoolNo, model.Id))
         {
             ModelState.AddModelError(nameof(model.SchoolNo), "Bu numara başka bir kullanıcıda kayıtlı. Lütfen farklı bir numara girin.");
         }
+
+        var linkedStudent = await ValidateParentStudentAsync(model);
 
         if (!ModelState.IsValid)
         {
@@ -267,6 +309,8 @@ public class UsersController : Controller
 
             { "linkedStudentNo", model.Role == "Veli" ? model.LinkedStudentNo : "" },
             { "LinkedStudentNo", model.Role == "Veli" ? model.LinkedStudentNo : "" },
+            { "linkedStudentName", model.Role == "Veli" ? linkedStudent?.Name ?? "" : "" },
+            { "LinkedStudentName", model.Role == "Veli" ? linkedStudent?.Name ?? "" : "" },
 
             { "branch", model.Role == "Öğretmen" ? model.Branch : "" },
             { "Branch", model.Role == "Öğretmen" ? model.Branch : "" },
@@ -296,7 +340,16 @@ public class UsersController : Controller
             return RedirectToAction(nameof(Index));
         }
 
-        await _firestore.Collection("users").Document(id).SetAsync(
+        var userRef = _firestore.Collection("users").Document(id);
+        var userDoc = await userRef.GetSnapshotAsync();
+
+        if (!userDoc.Exists)
+        {
+            TempData["Error"] = "Kullanıcı bulunamadı.";
+            return RedirectToAction(nameof(Index));
+        }
+
+        await userRef.SetAsync(
             new Dictionary<string, object>
             {
                 { "isDeleted", true },
@@ -518,8 +571,8 @@ public class UsersController : Controller
                     { "userRole", role },
                     { "UserRole", role },
 
-                    { "activationCode", "" },
-                    { "ActivationCode", "" },
+                    { "activationCode", activationCode },
+                    { "ActivationCode", activationCode },
 
                     { "mustChangePassword", true },
                     { "MustChangePassword", true },
@@ -637,6 +690,36 @@ public class UsersController : Controller
         }
     }
 
+    private void ValidateUserHardening(UserViewModel model)
+    {
+        var allowedRoles = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "Ã–ÄŸrenci",
+            "Ã–ÄŸretmen",
+            "Veli"
+        };
+
+        if (!string.IsNullOrWhiteSpace(model.Role) && !allowedRoles.Contains(model.Role))
+        {
+            ModelState.AddModelError(nameof(model.Role), "Gecersiz rol secimi.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(model.Name) && model.Name.Length > 120)
+        {
+            ModelState.AddModelError(nameof(model.Name), "Ad soyad en fazla 120 karakter olabilir.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(model.SchoolNo) && model.SchoolNo.Length > 20)
+        {
+            ModelState.AddModelError(nameof(model.SchoolNo), "Numara en fazla 20 haneli olabilir.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(model.Branch) && model.Branch.Length > 80)
+        {
+            ModelState.AddModelError(nameof(model.Branch), "Brans en fazla 80 karakter olabilir.");
+        }
+    }
+
     private async Task<bool> NumberExistsAsync(string number, string? excludedUserId = null)
     {
         var cleanNumber = OnlyDigits(number);
@@ -663,7 +746,23 @@ public class UsersController : Controller
             }
 
             var existingNumber = OnlyDigits(
-                GetString(data, "schoolNo", "SchoolNo", "number", "Number")
+                GetString(
+                    data,
+                    "schoolNo",
+                    "SchoolNo",
+                    "number",
+                    "Number",
+                    "studentNo",
+                    "StudentNo",
+                    "teacherNo",
+                    "TeacherNo",
+                    "parentNo",
+                    "ParentNo",
+                    "userNumber",
+                    "UserNumber",
+                    "adminNo",
+                    "AdminNo"
+                )
             );
 
             if (existingNumber == cleanNumber)
@@ -675,10 +774,110 @@ public class UsersController : Controller
         return false;
     }
 
+    private async Task<StudentOption?> ValidateParentStudentAsync(UserViewModel model)
+    {
+        if (model.Role != "Veli" || string.IsNullOrWhiteSpace(model.LinkedStudentNo))
+        {
+            return null;
+        }
+
+        var student = await FindStudentByNumberAsync(model.LinkedStudentNo);
+
+        if (student == null)
+        {
+            ModelState.AddModelError(
+                nameof(model.LinkedStudentNo),
+                "Bağlı öğrenci numarası kayıtlı bir öğrenciye ait olmalıdır."
+            );
+        }
+
+        return student;
+    }
+
+    private async Task<StudentOption?> FindStudentByNumberAsync(string number)
+    {
+        var cleanNumber = OnlyDigits(number);
+
+        if (string.IsNullOrWhiteSpace(cleanNumber))
+        {
+            return null;
+        }
+
+        var snapshot = await _firestore.Collection("users").GetSnapshotAsync();
+
+        foreach (var doc in snapshot.Documents)
+        {
+            var data = doc.ToDictionary();
+
+            if (IsDeleted(data))
+            {
+                continue;
+            }
+
+            var role = Normalize(GetString(data, "role", "Role", "userRole", "UserRole"));
+            var currentNumber = OnlyDigits(GetString(data, "schoolNo", "SchoolNo", "number", "Number", "studentNo", "StudentNo"));
+
+            if (role == "ogrenci" && currentNumber == cleanNumber)
+            {
+                return new StudentOption
+                {
+                    Name = GetString(data, "name", "Name"),
+                    Number = currentNumber,
+                    ClassName = NormalizeClassName(GetString(data, "className", "ClassName", "class", "Class"))
+                };
+            }
+        }
+
+        return null;
+    }
+
     private async Task PrepareUserFormOptionsAsync()
     {
         var integrity = new DataIntegrityService(_firestore);
         ViewBag.Classes = await integrity.LoadActiveClassesAsync();
+        ViewBag.Students = await LoadStudentOptionsAsync();
+    }
+
+    private async Task<List<StudentOption>> LoadStudentOptionsAsync()
+    {
+        var result = new List<StudentOption>();
+        var snapshot = await _firestore.Collection("users").GetSnapshotAsync();
+
+        foreach (var doc in snapshot.Documents)
+        {
+            var data = doc.ToDictionary();
+
+            if (IsDeleted(data))
+            {
+                continue;
+            }
+
+            var role = Normalize(GetString(data, "role", "Role", "userRole", "UserRole"));
+
+            if (role != "ogrenci")
+            {
+                continue;
+            }
+
+            var number = OnlyDigits(GetString(data, "schoolNo", "SchoolNo", "number", "Number", "studentNo", "StudentNo"));
+
+            if (string.IsNullOrWhiteSpace(number))
+            {
+                continue;
+            }
+
+            result.Add(new StudentOption
+            {
+                Name = GetString(data, "name", "Name"),
+                Number = number,
+                ClassName = NormalizeClassName(GetString(data, "className", "ClassName", "class", "Class"))
+            });
+        }
+
+        return result
+            .OrderBy(x => x.Name)
+            .ThenBy(x => x.Number)
+            .ToList();
     }
 
     private static bool IsDeleted(Dictionary<string, object> data)

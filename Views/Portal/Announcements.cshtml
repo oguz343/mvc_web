@@ -1,0 +1,48 @@
+@model mvc_web.Models.PortalViewModel
+
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = "Duyurular";
+    var items = Model.Announcements.OrderByDescending(x => x.CreatedAt ?? DateTime.MinValue).ToList();
+}
+
+@functions {
+    private string SafeText(string value, string fallback = "-") => string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+    private string DateText(DateTime? date) => date?.ToString("dd.MM.yyyy HH:mm") ?? "-";
+}
+
+<div class="portal-pro-dashboard">
+    <section class="portal-pro-panel announcements">
+        <div class="portal-pro-panel-head">
+            <div>
+                <h2>Duyurular</h2>
+                <p>Okuldan ve öğretmenlerden gelen bilgilendirmeler burada ayrı listelenir.</p>
+            </div>
+            <span>@items.Count kayıt</span>
+        </div>
+
+        @if (!items.Any())
+        {
+            <div class="portal-pro-empty">Henüz duyuru bulunmuyor.</div>
+        }
+        else
+        {
+            <div class="portal-pro-announcement-list">
+                @foreach (var item in items)
+                {
+                    <article class="portal-pro-announcement-card">
+                        <div class="portal-pro-ann-dot"></div>
+                        <div class="portal-pro-ann-body">
+                            <div class="portal-pro-ann-top">
+                                <h3>@SafeText(item.Title, "Duyuru")</h3>
+                                <span>@SafeText(item.Target, "Genel")</span>
+                            </div>
+                            <p>@SafeText(item.Content, "Duyuru içeriği bulunmuyor.")</p>
+                            <small>@SafeText(item.Author, "Admin") · @DateText(item.CreatedAt)</small>
+                        </div>
+                    </article>
+                }
+            </div>
+        }
+    </section>
+</div>

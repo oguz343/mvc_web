@@ -1,9 +1,11 @@
 using Google.Cloud.Firestore;
 using Microsoft.AspNetCore.Mvc;
+using mvc_web.Filters;
 using mvc_web.Models;
 
 namespace mvc_web.Controllers
 {
+    [TeacherOnly]
     public class TeacherAnnouncementsController : Controller
     {
         private readonly FirestoreDb _firestore;

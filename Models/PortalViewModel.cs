@@ -8,6 +8,7 @@ namespace mvc_web.Models
         public string Number { get; set; } = "";
         public string ClassName { get; set; } = "";
         public string LinkedStudentNo { get; set; } = "";
+        public string LinkedStudentName { get; set; } = "";
 
         public List<PortalAnnouncementItem> Announcements { get; set; } = new();
         public List<PortalHomeworkItem> Homeworks { get; set; } = new();

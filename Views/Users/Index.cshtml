@@ -847,6 +847,12 @@
                         @if (user.Role == "Veli")
                         {
                             <div class="users-v2-detail-row">
+                                <span>🎒</span>
+                                <strong>Öğrenci Adı</strong>
+                                <b>@SafeText(user.LinkedStudentName)</b>
+                            </div>
+
+                            <div class="users-v2-detail-row">
                                 <span>👪</span>
                                 <strong>Bağlı Öğrenci</strong>
                                 <b>@SafeText(user.LinkedStudentNo)</b>
@@ -859,11 +865,14 @@
                             <b>@SafeText(user.Phone)</b>
                         </div>
 
-                        <div class="users-v2-detail-row">
-                            <span>🔑</span>
-                            <strong>Aktivasyon</strong>
-                            <b>@SafeText(user.ActivationCode)</b>
-                        </div>
+                        @if (user.MustChangePassword && !string.IsNullOrWhiteSpace(user.ActivationCode))
+                        {
+                            <div class="users-v2-detail-row">
+                                <span>🔑</span>
+                                <strong>Aktivasyon</strong>
+                                <b>@SafeText(user.ActivationCode)</b>
+                            </div>
+                        }
                     </div>
 
                     <div class="users-v2-actions-row">

@@ -15,7 +15,7 @@
     var lessonName = First(Get(data, "lessonName", "LessonName"), Get(data, "lesson", "Lesson"), Get(data, "courseName", "CourseName"), Get(data, "course", "Course"));
     var className = First(Get(data, "className", "ClassName"), Get(data, "class", "Class"), Get(data, "targetClass", "TargetClass"));
     var fileType = First(Get(data, "fileType", "FileType"), Get(data, "type", "Type"), Get(data, "submissionType", "SubmissionType"), "Dosya");
-    var dueDate = HtmlDateValue(First(Get(data, "dueDate", "DueDate"), Get(data, "deadline", "Deadline"), Get(data, "endDate", "EndDate"), Get(data, "dueDateText", "DueDateText")));
+    var dueDate = HtmlDateValue(First(Get(data, "dueDateText", "DueDateText"), Get(data, "dueDate", "DueDate"), Get(data, "deadline", "Deadline"), Get(data, "endDate", "EndDate")));
 }
 
 @functions {

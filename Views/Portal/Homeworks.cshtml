@@ -1,0 +1,277 @@
+@model mvc_web.Models.PortalViewModel
+
+@{
+    Layout = "_Layout";
+    var isParent = (Model.Role ?? "").Trim().Equals("Veli", StringComparison.OrdinalIgnoreCase);
+    var isStudent = !isParent;
+    ViewData["Title"] = isParent ? "Çocuğunuzun Ödevleri" : "Ödevlerim";
+    var now = DateTime.Now;
+    var items = Model.Homeworks
+        .OrderBy(x => x.IsSubmitted)
+        .ThenBy(x => x.DueDate ?? DateTime.MaxValue)
+        .ThenBy(x => x.Title)
+        .ToList();
+    var lessons = items.Select(x => x.LessonName).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x).ToList();
+}
+
+@functions {
+    private string SafeText(string value, string fallback = "-") => string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+    private string DateText(DateTime? date) => date?.ToString("dd.MM.yyyy HH:mm") ?? "-";
+    private bool IsGraded(mvc_web.Models.PortalHomeworkItem item) => !string.IsNullOrWhiteSpace(item.Grade) || !string.IsNullOrWhiteSpace(item.Feedback);
+    private string StatusClass(mvc_web.Models.PortalHomeworkItem item)
+    {
+        if (IsGraded(item)) return "graded";
+        if (item.IsSubmitted) return "done";
+        if (item.DueDate.HasValue && item.DueDate.Value < DateTime.Now) return "late";
+        if (item.DueDate.HasValue && item.DueDate.Value <= DateTime.Now.AddDays(2)) return "soon";
+        return "normal";
+    }
+    private string StatusText(mvc_web.Models.PortalHomeworkItem item)
+    {
+        if (IsGraded(item)) return "Notlandırıldı";
+        if (item.IsSubmitted) return "Teslim Edildi";
+        if (item.DueDate.HasValue && item.DueDate.Value < DateTime.Now) return "Süresi Geçti";
+        if (item.DueDate.HasValue && item.DueDate.Value <= DateTime.Now.AddDays(2)) return "Yaklaşıyor";
+        return "Bekliyor";
+    }
+    private string FilterStatus(mvc_web.Models.PortalHomeworkItem item)
+    {
+        if (IsGraded(item)) return "graded";
+        if (item.IsSubmitted) return "submitted";
+        return "pending";
+    }
+}
+
+<div class="portal-pro-dashboard">
+    @if (TempData["Success"] != null)
+    {
+        <div class="portal-pro-alert success">@TempData["Success"]</div>
+    }
+    @if (TempData["Error"] != null)
+    {
+        <div class="portal-pro-alert error">@TempData["Error"]</div>
+    }
+
+    <section class="portal-pro-panel homeworks">
+        <div class="portal-pro-panel-head">
+            <div>
+                <h2>@(isParent ? "Çocuğunuzun Ödevleri" : "Ödevlerim")</h2>
+                <p>@(isParent ? $"{SafeText(Model.LinkedStudentName, "Öğrenciniz")} için teslim durumu, yönergeler ve değerlendirme bilgileri bu sayfada." : "Ödev detaylarını incele, teslimini yap ve durumunu takip et.")</p>
+            </div>
+            <span>@items.Count kayıt</span>
+        </div>
+
+        <div class="portal-pro-homework-tools">
+            <div class="portal-pro-search">
+                <span>⌕</span>
+                <input id="portalHomeworkSearch" type="search" placeholder="Ödevlerde ara..." autocomplete="off" />
+            </div>
+
+            <div class="portal-pro-filters">
+                <button type="button" class="portal-pro-filter active" data-filter="all">Tümü</button>
+                <button type="button" class="portal-pro-filter" data-filter="pending">Bekleyen</button>
+                <button type="button" class="portal-pro-filter" data-filter="submitted">Teslim Edilen</button>
+                <button type="button" class="portal-pro-filter" data-filter="graded">Notlandırılan</button>
+                <button type="button" class="portal-pro-filter" data-filter="late">Süresi Geçen</button>
+            </div>
+
+            <div class="portal-pro-selects">
+                <select id="portalHomeworkLesson" aria-label="Ders filtresi">
+                    <option value="">Tüm dersler</option>
+                    @foreach (var lesson in lessons)
+                    {
+                        <option value="@lesson">@lesson</option>
+                    }
+                </select>
+            </div>
+        </div>
+
+        @if (!items.Any())
+        {
+            <div class="portal-pro-empty">Henüz görüntülenecek ödev yok.</div>
+        }
+        else
+        {
+            <div class="portal-pro-homework-list">
+                @foreach (var item in items)
+                {
+                    var statusClass = StatusClass(item);
+                    var statusText = StatusText(item);
+                    var searchable = $"{item.Title} {item.Description} {item.LessonName} {item.TeacherName} {statusText}";
+
+                    <article class="portal-pro-homework-card"
+                             data-status="@FilterStatus(item)"
+                             data-urgency="@statusClass"
+                             data-lesson="@item.LessonName"
+                             data-search="@searchable">
+                        <div class="portal-pro-homework-top">
+                            <div class="portal-pro-homework-icon">📖</div>
+                            <div class="portal-pro-homework-title">
+                                <h3>@SafeText(item.Title, "Ödev")</h3>
+                                <div class="portal-pro-mini-row">
+                                    <span>@SafeText(item.LessonName, "Ders")</span>
+                                    <span>@SafeText(item.TeacherName, "Öğretmen")</span>
+                                    <span>Son teslim: @DateText(item.DueDate)</span>
+                                </div>
+                            </div>
+                            <span class="portal-pro-status @statusClass">@statusText</span>
+                        </div>
+
+                        <div class="portal-pro-homework-detail-grid">
+                            <div class="portal-pro-homework-box teacher">
+                                <strong>Öğretmen Yönergesi</strong>
+                                <p>@SafeText(item.Description, "Bu ödev için açıklama eklenmemiş.")</p>
+                                @if (!string.IsNullOrWhiteSpace(item.AttachmentFileUrl))
+                                {
+                                    <a href="@item.AttachmentFileUrl" target="_blank" rel="noopener noreferrer">Öğretmen ekini aç</a>
+                                }
+                            </div>
+
+                            <div class="portal-pro-homework-box submit">
+                                <strong>@(isParent ? "Çocuğunuzun Teslimi" : "Senin Teslimin")</strong>
+                                @if (item.IsSubmitted)
+                                {
+                                    <p>@SafeText(item.SubmissionText, "Teslim açıklaması yazılmamış.")</p>
+                                    <small>@DateText(item.SubmittedAt)</small>
+                                    @if (!string.IsNullOrWhiteSpace(item.SubmissionFileUrl))
+                                    {
+                                        <a href="@item.SubmissionFileUrl" target="_blank" rel="noopener noreferrer">Teslim dosyasını aç</a>
+                                    }
+                                }
+                                else
+                                {
+                                    <p>@(isParent ? "Çocuğunuz bu ödevi henüz teslim etmedi." : "Henüz teslim edilmedi.")</p>
+                                    <small>@(statusClass == "late" ? "Teslim süresi geçti." : "Teslim bekleniyor.")</small>
+                                }
+                            </div>
+
+                            <div class="portal-pro-homework-box grade">
+                                <strong>Değerlendirme</strong>
+                                @if (IsGraded(item))
+                                {
+                                    <p><b>Not: @SafeText(item.Grade)</b></p>
+                                    <small>@SafeText(item.Feedback, "Geri bildirim yok.")</small>
+                                }
+                                else
+                                {
+                                    <p>Henüz değerlendirilmedi.</p>
+                                    <small>Not girildiğinde notlar sayfasında da görünür.</small>
+                                }
+                            </div>
+                        </div>
+
+                        @if (isStudent)
+                        {
+                            <details class="portal-pro-submit-details">
+                                <summary>@(item.IsSubmitted ? "Teslimini düzenle" : "Teslim alanını aç")</summary>
+                                <form asp-controller="Portal" asp-action="SubmitHomework" method="post" enctype="multipart/form-data" class="portal-pro-submit-form">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="homeworkId" value="@item.Id" />
+                                    <input type="hidden" name="homeworkCollection" value="@item.CollectionName" />
+
+                                    <label>Cevabın / açıklaman</label>
+                                    <textarea name="answerText" placeholder="Teslim açıklamanı veya cevabını yaz...">@item.SubmissionText</textarea>
+
+                                    <label>Teslim dosyan</label>
+                                    <div class="portal-pro-file-box">
+                                        <label class="portal-pro-file-label">
+                                            <input type="file" name="file" class="portal-pro-file-input" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.txt,.zip" />
+                                            <span>Dosya seç</span>
+                                            <small>PDF, Word, görsel, TXT veya ZIP</small>
+                                        </label>
+                                        <div class="portal-pro-file-selected">
+                                            <span class="portal-pro-file-name">Henüz dosya seçilmedi</span>
+                                            <button type="button" class="portal-pro-file-clear">Kaldır</button>
+                                        </div>
+                                    </div>
+
+                                    <button type="submit" class="portal-pro-submit-button">@(item.IsSubmitted ? "Teslimi Güncelle" : "Ödevi Teslim Et")</button>
+                                </form>
+                            </details>
+                        }
+                    </article>
+                }
+            </div>
+
+            <div id="portalHomeworkNoResult" class="portal-pro-empty" style="display:none;">Aradığınız kritere uygun ödev bulunamadı.</div>
+        }
+    </section>
+</div>
+
+@section Scripts {
+    <script>
+        document.addEventListener("change", function (event) {
+            const input = event.target.closest(".portal-pro-file-input");
+            if (!input) return;
+
+            const box = input.closest(".portal-pro-file-box");
+            const selected = box?.querySelector(".portal-pro-file-selected");
+            const name = box?.querySelector(".portal-pro-file-name");
+            if (!selected || !name) return;
+
+            if (input.files && input.files.length > 0) {
+                name.textContent = input.files[0].name;
+                selected.classList.add("active");
+            } else {
+                name.textContent = "Henüz dosya seçilmedi";
+                selected.classList.remove("active");
+            }
+        });
+
+        document.addEventListener("click", function (event) {
+            const clearButton = event.target.closest(".portal-pro-file-clear");
+            if (!clearButton) return;
+
+            const box = clearButton.closest(".portal-pro-file-box");
+            const input = box?.querySelector(".portal-pro-file-input");
+            const selected = box?.querySelector(".portal-pro-file-selected");
+            const name = box?.querySelector(".portal-pro-file-name");
+
+            if (input) input.value = "";
+            if (name) name.textContent = "Henüz dosya seçilmedi";
+            selected?.classList.remove("active");
+        });
+
+        const search = document.getElementById("portalHomeworkSearch");
+        const lessonSelect = document.getElementById("portalHomeworkLesson");
+        const cards = Array.from(document.querySelectorAll(".portal-pro-homework-card"));
+        const filters = Array.from(document.querySelectorAll(".portal-pro-filter"));
+        const noResult = document.getElementById("portalHomeworkNoResult");
+        let filter = "all";
+
+        function normalize(value) {
+            return (value || "").toString().toLocaleLowerCase("tr-TR")
+                .replaceAll("ı", "i").replaceAll("ğ", "g").replaceAll("ü", "u")
+                .replaceAll("ş", "s").replaceAll("ö", "o").replaceAll("ç", "c").trim();
+        }
+
+        function applyFilters() {
+            const query = normalize(search?.value || "");
+            const lesson = normalize(lessonSelect?.value || "");
+            let visible = 0;
+
+            cards.forEach(card => {
+                const matchesQuery = query === "" || normalize(card.dataset.search || "").includes(query);
+                const matchesLesson = lesson === "" || normalize(card.dataset.lesson || "") === lesson;
+                const matchesStatus = filter === "all" || card.dataset.status === filter || (filter === "late" && card.dataset.urgency === "late");
+                const show = matchesQuery && matchesLesson && matchesStatus;
+                card.style.display = show ? "" : "none";
+                if (show) visible++;
+            });
+
+            if (noResult) noResult.style.display = visible === 0 ? "grid" : "none";
+        }
+
+        search?.addEventListener("input", applyFilters);
+        lessonSelect?.addEventListener("change", applyFilters);
+        filters.forEach(button => {
+            button.addEventListener("click", function () {
+                filter = button.dataset.filter || "all";
+                filters.forEach(item => item.classList.toggle("active", item === button));
+                applyFilters();
+            });
+        });
+
+        applyFilters();
+    </script>
+}

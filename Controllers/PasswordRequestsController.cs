@@ -98,8 +98,8 @@ namespace mvc_web.Controllers
             await userDoc.Reference.SetAsync(
                 new Dictionary<string, object>
                 {
-                    { "activationCode", "" },
-                    { "ActivationCode", "" },
+                    { "activationCode", activationCode },
+                    { "ActivationCode", activationCode },
                     { "passwordHash", activationHash },
                     { "PasswordHash", activationHash },
                     { "mustChangePassword", true },

@@ -1,0 +1,78 @@
+@model mvc_web.Models.PortalViewModel
+
+@{
+    Layout = "_Layout";
+    var isParent = (Model.Role ?? "").Trim().Equals("Veli", StringComparison.OrdinalIgnoreCase);
+    ViewData["Title"] = isParent ? "Veli Bilgisi" : "Öğrenci Bilgisi";
+    var submitted = Model.Homeworks.Count(x => x.IsSubmitted);
+    var pending = Model.Homeworks.Count(x => !x.IsSubmitted);
+    var lastSubmission = Model.Homeworks
+        .Where(x => x.SubmittedAt.HasValue)
+        .OrderByDescending(x => x.SubmittedAt)
+        .FirstOrDefault();
+}
+
+@functions {
+    private string SafeText(string value, string fallback = "-") => string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+    private string DateText(DateTime? date) => date?.ToString("dd.MM.yyyy HH:mm") ?? "-";
+}
+
+<div class="portal-pro-dashboard">
+    <section class="portal-pro-profile-strip">
+        <div>
+            <strong>@(isParent ? "Veli" : "Öğrenci")</strong>
+            <span>@SafeText(Model.Name)</span>
+        </div>
+        <div>
+            <strong>Numara</strong>
+            <span>@SafeText(Model.Number)</span>
+        </div>
+        <div>
+            <strong>Sınıf</strong>
+            <span>@SafeText(Model.ClassName)</span>
+        </div>
+        @if (isParent)
+        {
+            <div>
+                <strong>Öğrenci Adı</strong>
+                <span>@SafeText(Model.LinkedStudentName)</span>
+            </div>
+            <div>
+                <strong>Bağlı Öğrenci</strong>
+                <span>@SafeText(Model.LinkedStudentNo)</span>
+            </div>
+        }
+    </section>
+
+    <section class="portal-pro-stat-grid">
+        <article class="portal-pro-stat-card">
+            <div class="portal-pro-stat-icon indigo">✓</div>
+            <div><strong>@submitted</strong><span>Teslim Edilen</span></div>
+        </article>
+        <article class="portal-pro-stat-card">
+            <div class="portal-pro-stat-icon cyan">◷</div>
+            <div><strong>@pending</strong><span>Bekleyen</span></div>
+        </article>
+    </section>
+
+    <section class="portal-pro-panel homeworks">
+        <div class="portal-pro-panel-head">
+            <div>
+                <h2>Hesap Özeti</h2>
+                <p>Kişisel bilgiler ve son hareketler burada sade şekilde gösterilir.</p>
+            </div>
+        </div>
+
+        <div class="portal-pro-homework-detail-grid">
+            <div class="portal-pro-homework-box teacher">
+                <strong>Son Teslim</strong>
+                <p>@(lastSubmission == null ? "Henüz teslim bulunmuyor." : SafeText(lastSubmission.Title, "Ödev"))</p>
+                <small>@(lastSubmission == null ? "-" : DateText(lastSubmission.SubmittedAt))</small>
+            </div>
+            <div class="portal-pro-homework-box grade">
+                <strong>Portal Durumu</strong>
+                <p>Ödev, not, duyuru ve takvim artık ayrı sayfalarda takip ediliyor.</p>
+            </div>
+        </div>
+    </section>
+</div>

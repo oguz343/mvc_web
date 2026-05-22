@@ -1,5 +1,6 @@
 using Google.Cloud.Firestore;
 using Microsoft.AspNetCore.Mvc;
+using mvc_web.Filters;
 using mvc_web.Models;
 using mvc_web.Services;
 using System.Globalization;
@@ -8,6 +9,7 @@ using System.Text.RegularExpressions;
 namespace mvc_web.Controllers
 {
     [Route("Teacher/Submissions")]
+    [TeacherOnly]
     public class TeacherSubmissionsController : Controller
     {
         private readonly FirestoreDb _firestore;
@@ -128,6 +130,12 @@ namespace mvc_web.Controllers
             if (!IsValidScore(grade))
             {
                 TempData["Error"] = "Not 0 ile 100 arasında olmalı.";
+                return RedirectToAction(nameof(Index));
+            }
+
+            if (feedback.Length > 2000)
+            {
+                TempData["Error"] = "Geri donus en fazla 2000 karakter olabilir.";
                 return RedirectToAction(nameof(Index));
             }
 

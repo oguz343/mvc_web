@@ -13,6 +13,7 @@ public class SubmissionViewModel
     public string TeacherId { get; set; } = "";
     public string TeacherName { get; set; } = "";
 
+    public string StudentName { get; set; } = "";
     public string StudentNo { get; set; } = "";
 
     public string Answer { get; set; } = "";

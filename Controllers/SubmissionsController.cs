@@ -64,6 +64,7 @@ public class SubmissionsController : Controller
                     ClassName = FirstValueOrDefault(data, "-", "className", "ClassName", "class", "Class", "targetClass", "TargetClass"),
                     TeacherId = FirstValue(data, "teacherId", "TeacherId"),
                     TeacherName = FirstValueOrDefault(data, "-", "teacherName", "TeacherName", "teacher", "Teacher"),
+                    StudentName = FirstValueOrDefault(data, "-", "studentName", "StudentName", "studentFullName", "StudentFullName", "name", "Name"),
                     StudentNo = string.IsNullOrWhiteSpace(studentNo) ? "-" : studentNo,
                     Answer = FirstValue(data, "answer", "Answer", "answerText", "AnswerText", "content", "Content", "text", "Text"),
                     Link = FirstValue(data, "link", "Link", "answerLink", "AnswerLink", "fileUrl", "FileUrl", "url", "Url"),

@@ -16,7 +16,7 @@
     }
 
     var activeCount = assignments.Count;
-    var withDueDateCount = assignments.Count(x => !string.IsNullOrWhiteSpace(First(Get(x, "dueDate", "DueDate"), Get(x, "deadline", "Deadline"), Get(x, "endDate", "EndDate"), Get(x, "dueDateText", "DueDateText"))));
+    var withDueDateCount = assignments.Count(x => !string.IsNullOrWhiteSpace(First(Get(x, "dueDateText", "DueDateText"), Get(x, "dueDate", "DueDate"), Get(x, "deadline", "Deadline"), Get(x, "endDate", "EndDate"))));
     var classCount = assignments.Select(x => First(Get(x, "className", "ClassName"), Get(x, "class", "Class"), Get(x, "targetClass", "TargetClass"))).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase).Count();
     var lessonCount = assignments.Select(x => First(Get(x, "lessonName", "LessonName"), Get(x, "lesson", "Lesson"), Get(x, "courseName", "CourseName"), Get(x, "course", "Course"))).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase).Count();
 }
@@ -607,7 +607,7 @@
                 var title = First(Get(item, "title", "Title"), Get(item, "name", "Name"), Get(item, "homeworkTitle", "HomeworkTitle"), Get(item, "assignmentTitle", "AssignmentTitle"), "Ödev");
                 var lesson = First(Get(item, "lessonName", "LessonName"), Get(item, "lesson", "Lesson"), Get(item, "courseName", "CourseName"), Get(item, "course", "Course"), "-");
                 var className = First(Get(item, "className", "ClassName"), Get(item, "class", "Class"), Get(item, "targetClass", "TargetClass"), "-");
-                var dueDate = First(Get(item, "dueDate", "DueDate"), Get(item, "deadline", "Deadline"), Get(item, "endDate", "EndDate"), Get(item, "dueDateText", "DueDateText"));
+                var dueDate = First(Get(item, "dueDateText", "DueDateText"), Get(item, "dueDate", "DueDate"), Get(item, "deadline", "Deadline"), Get(item, "endDate", "EndDate"));
                 var fileType = First(Get(item, "fileType", "FileType"), Get(item, "type", "Type"), Get(item, "submissionType", "SubmissionType"), "Dosya");
                 var description = First(Get(item, "description", "Description"), Get(item, "content", "Content"), Get(item, "text", "Text"), "Açıklama girilmemiş.");
                 var icon = LessonIcon(lesson);

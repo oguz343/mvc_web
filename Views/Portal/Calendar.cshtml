@@ -1,0 +1,63 @@
+@model mvc_web.Models.PortalViewModel
+
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = "Takvim";
+    var now = DateTime.Now;
+    var dated = Model.Homeworks
+        .Where(x => x.DueDate.HasValue)
+        .OrderBy(x => x.DueDate)
+        .ToList();
+}
+
+@functions {
+    private string SafeText(string value, string fallback = "-") => string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+    private string DateText(DateTime? date) => date?.ToString("dd.MM.yyyy HH:mm") ?? "-";
+    private string Status(mvc_web.Models.PortalHomeworkItem item)
+    {
+        if (item.IsSubmitted) return "Teslim Edildi";
+        if (item.DueDate.HasValue && item.DueDate.Value < DateTime.Now) return "Süresi Geçti";
+        if (item.DueDate.HasValue && item.DueDate.Value <= DateTime.Now.AddDays(2)) return "Yaklaşıyor";
+        return "Bekliyor";
+    }
+}
+
+<div class="portal-pro-dashboard">
+    <section class="portal-pro-panel homeworks">
+        <div class="portal-pro-panel-head">
+            <div>
+                <h2>Ödev Takvimi</h2>
+                <p>Son teslim tarihleri tek yerde; teslim işlemleri ödevler sayfasında yapılır.</p>
+            </div>
+            <span>@dated.Count tarihli ödev</span>
+        </div>
+
+        @if (!dated.Any())
+        {
+            <div class="portal-pro-empty">Tarihli ödev bulunmuyor.</div>
+        }
+        else
+        {
+            <div class="portal-pro-homework-list">
+                @foreach (var item in dated)
+                {
+                    var statusClass = item.IsSubmitted ? "done" : item.DueDate < now ? "late" : item.DueDate <= now.AddDays(2) ? "soon" : "normal";
+                    <article class="portal-pro-homework-card">
+                        <div class="portal-pro-homework-top">
+                            <div class="portal-pro-homework-icon">📅</div>
+                            <div class="portal-pro-homework-title">
+                                <h3>@SafeText(item.Title, "Ödev")</h3>
+                                <div class="portal-pro-mini-row">
+                                    <span>@SafeText(item.LessonName, "Ders")</span>
+                                    <span>@SafeText(item.TeacherName, "Öğretmen")</span>
+                                    <span>Son teslim: @DateText(item.DueDate)</span>
+                                </div>
+                            </div>
+                            <span class="portal-pro-status @statusClass">@Status(item)</span>
+                        </div>
+                    </article>
+                }
+            </div>
+        }
+    </section>
+</div>

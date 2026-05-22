@@ -50,6 +50,20 @@
 
         return parts[0][0].ToString().ToUpperInvariant();
     }
+
+    var roleLabel = RoleLabel(role);
+    var isParentPortal = roleLabel == "Veli";
+    var currentAction = ViewContext.RouteData.Values["action"]?.ToString() ?? "";
+
+    var homeworkMenuText = isParentPortal ? "Çocuğumun Ödevleri" : "Ödevlerim";
+    var gradesMenuText = isParentPortal ? "Not Takibi" : "Notlarım";
+    var calendarMenuText = isParentPortal ? "Teslim Takvimi" : "Takvim";
+    var profileMenuText = isParentPortal ? "Veli Bilgisi" : "Profilim";
+
+    string ActivePortalLink(string action)
+    {
+        return string.Equals(currentAction, action, StringComparison.OrdinalIgnoreCase) ? " active" : "";
+    }
 }
 
 <!DOCTYPE html>
@@ -64,68 +78,142 @@
     <link rel="stylesheet" href="~/css/dashboard.css" asp-append-version="true" />
 </head>
 
-<body class="midnight-body public-midnight-body">
+<body class="midnight-body public-midnight-body portal-pro-body">
     <div class="midnight-background">
         <div class="midnight-orb orb-a"></div>
         <div class="midnight-orb orb-b"></div>
         <div class="midnight-orb orb-c"></div>
     </div>
 
-    <main class="public-main midnight-public-main">
-        <header class="portal-shell-header">
-            <div class="portal-brand">
-                <div class="brand-icon">
-                    🎓
+    <main class="portal-pro-shell">
+        <aside class="portal-pro-sidebar">
+            <div class="portal-pro-brand">
+                <div class="portal-pro-brand-icon">
+                    📘
+                </div>
+
+                <div class="portal-pro-brand-text">
+                    <strong>Ödev Sistemi</strong>
+                    <span>@roleLabel Paneli</span>
+                </div>
+            </div>
+
+            <nav class="portal-pro-nav" aria-label="Portal menüsü">
+                <a class="portal-pro-nav-link@(ActivePortalLink("Overview"))"
+                   asp-controller="Portal"
+                   asp-action="Overview">
+                    <span>📋</span>
+                    <strong>Ana Sayfa</strong>
+                </a>
+
+                <a class="portal-pro-nav-link@(ActivePortalLink("Homeworks"))"
+                   asp-controller="Portal"
+                   asp-action="Homeworks">
+                    <span>✅</span>
+                    <strong>@homeworkMenuText</strong>
+                </a>
+
+                <a class="portal-pro-nav-link@(ActivePortalLink("Announcements"))"
+                   asp-controller="Portal"
+                   asp-action="Announcements">
+                    <span>📣</span>
+                    <strong>Duyurular</strong>
+                </a>
+
+                <a class="portal-pro-nav-link@(ActivePortalLink("Grades"))"
+                   asp-controller="Portal"
+                   asp-action="Grades">
+                    <span>🧾</span>
+                    <strong>@gradesMenuText</strong>
+                </a>
+
+                <a class="portal-pro-nav-link@(ActivePortalLink("Calendar"))"
+                   asp-controller="Portal"
+                   asp-action="Calendar">
+                    <span>📅</span>
+                    <strong>@calendarMenuText</strong>
+                </a>
+
+                <a class="portal-pro-nav-link@(ActivePortalLink("Profile"))"
+                   asp-controller="Portal"
+                   asp-action="Profile">
+                    <span>👤</span>
+                    <strong>@profileMenuText</strong>
+                </a>
+            </nav>
+
+            <div class="portal-pro-sidebar-user">
+                <div class="portal-pro-avatar small">
+                    @Initials(name)
                 </div>
 
                 <div>
-                    <div class="brand-title">
-                        Ödev Sistemi
-                    </div>
-
-                    <div class="brand-subtitle">
-                        @RoleLabel(role) Paneli
-                    </div>
+                    <strong>@name</strong>
+                    <span>@roleLabel · No: @number</span>
                 </div>
             </div>
 
-            <div class="portal-header-actions">
-                <div class="system-pill">
-                    <span></span>
-                    Sistem Aktif
-                </div>
+            <a class="portal-pro-sidebar-logout"
+               asp-controller="Auth"
+               asp-action="Logout">
+                <span>🚪</span>
+                <strong>Çıkış</strong>
+            </a>
+        </aside>
 
-                <div class="user-chip">
-                    <div class="user-avatar">
-                        @Initials(name)
+        <section class="portal-pro-main">
+            <header class="portal-pro-topbar">
+                <div class="portal-pro-top-spacer"></div>
+
+                <div class="portal-pro-top-actions">
+                    <div class="portal-pro-system-pill">
+                        <span></span>
+                        Sistem Aktif
                     </div>
 
-                    <div>
-                        <div class="user-name">
-                            @name
+                    <div class="portal-pro-user-chip">
+                        <div class="portal-pro-avatar mini">
+                            @Initials(name)
                         </div>
 
-                        <div class="user-role">
-                            @RoleLabel(role) · No: @number
+                        <div>
+                            <strong>@name</strong>
+                            <span>@roleLabel No: @number</span>
                         </div>
                     </div>
+
+                    <a class="portal-pro-logout"
+                       asp-controller="Auth"
+                       asp-action="Logout">
+                        <span>🚪</span>
+                        <strong>Çıkış</strong>
+                    </a>
                 </div>
+            </header>
 
-                <a class="logout-link public-logout"
-                   asp-controller="Auth"
-                   asp-action="Logout">
-                    <span>🚪</span>
-                    <strong>Çıkış</strong>
-                </a>
-            </div>
-        </header>
-
-        <section class="public-content-area">
-            @RenderBody()
+            <section class="portal-pro-content">
+                @RenderBody()
+            </section>
         </section>
     </main>
 
     <script src="~/js/site.js" asp-append-version="true"></script>
+
+    <script>
+        document.addEventListener("click", function (event) {
+            const link = event.target.closest(".portal-pro-nav-link");
+
+            if (!link) {
+                return;
+            }
+
+            document.querySelectorAll(".portal-pro-nav-link").forEach(item => {
+                item.classList.remove("active");
+            });
+
+            link.classList.add("active");
+        });
+    </script>
 
     @await RenderSectionAsync("Scripts", required: false)
 </body>

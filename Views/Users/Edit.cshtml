@@ -7,11 +7,13 @@
     ViewData["PageSubtitle"] = "Kullanıcı bilgilerini, rolünü, sınıf/branş/veli bağlantısını ve iletişim bilgisini güncelleyin.";
 
     var classes = ViewBag.Classes as IEnumerable<dynamic> ?? Enumerable.Empty<dynamic>();
+    var students = ViewBag.Students as IEnumerable<dynamic> ?? Enumerable.Empty<dynamic>();
     var userId = Model?.Id ?? "";
     var userName = Model?.Name ?? "";
     var selectedClassName = Model?.ClassName ?? "";
     var userRole = Model?.Role ?? "";
     var userSchoolNo = Model?.SchoolNo ?? "";
+    var linkedStudentNo = Model?.LinkedStudentNo ?? "";
     var userActivationCode = Model?.ActivationCode ?? "";
     var userMustChangePassword = Model?.MustChangePassword ?? true;
 }
@@ -341,10 +343,16 @@
                 <div id="parentFields" class="role-fields">
                     <div class="user-edit-field">
                         <label>Bağlı Öğrenci No</label>
-                        <input asp-for="LinkedStudentNo"
-                               name="LinkedStudentNo"
-                               maxlength="20"
-                               placeholder="Örn: 1001" />
+                        <select asp-for="LinkedStudentNo" name="LinkedStudentNo">
+                            <option value="">Öğrenci seçin</option>
+
+                            @foreach (var student in students)
+                            {
+                                <option value="@student.Number" selected="@(linkedStudentNo == student.Number ? "selected" : null)">
+                                    @student.DisplayName
+                                </option>
+                            }
+                        </select>
                     </div>
                 </div>
             </div>
@@ -372,7 +380,10 @@
             <div class="user-edit-info-list">
                 <div class="user-edit-info">👤 Rol: @(string.IsNullOrWhiteSpace(userRole) ? "-" : userRole)</div>
                 <div class="user-edit-info">🔢 No: @(string.IsNullOrWhiteSpace(userSchoolNo) ? "-" : userSchoolNo)</div>
-                <div class="user-edit-info">🔑 Aktivasyon: @(string.IsNullOrWhiteSpace(userActivationCode) ? "-" : userActivationCode)</div>
+                @if (userMustChangePassword && !string.IsNullOrWhiteSpace(userActivationCode))
+                {
+                    <div class="user-edit-info">🔑 Aktivasyon: @userActivationCode</div>
+                }
                 <div class="user-edit-info">🛡️ Durum: @(userMustChangePassword ? "Aktivasyon Bekliyor" : "Aktif")</div>
             </div>
         </aside>

@@ -1,0 +1,83 @@
+@model mvc_web.Models.PortalViewModel
+@using System.Globalization
+
+@{
+    Layout = "_Layout";
+    var isParent = (Model.Role ?? "").Trim().Equals("Veli", StringComparison.OrdinalIgnoreCase);
+    ViewData["Title"] = isParent ? "Not Takibi" : "Notlarım";
+    var graded = Model.Homeworks
+        .Where(x => !string.IsNullOrWhiteSpace(x.Grade) || !string.IsNullOrWhiteSpace(x.Feedback))
+        .OrderByDescending(x => x.EvaluatedAt ?? x.SubmittedAt ?? DateTime.MinValue)
+        .ToList();
+    var average = graded
+        .Select(x => double.TryParse((x.Grade ?? "").Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var grade) ? grade : (double?)null)
+        .Where(x => x.HasValue)
+        .Select(x => x!.Value)
+        .ToList();
+}
+
+@functions {
+    private string SafeText(string value, string fallback = "-") => string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+    private string DateText(DateTime? date) => date?.ToString("dd.MM.yyyy HH:mm") ?? "-";
+}
+
+<div class="portal-pro-dashboard">
+    <section class="portal-pro-stat-grid">
+        <article class="portal-pro-stat-card">
+            <div class="portal-pro-stat-icon amber">☆</div>
+            <div><strong>@graded.Count</strong><span>Notlandırılan</span></div>
+        </article>
+        <article class="portal-pro-stat-card">
+            <div class="portal-pro-stat-icon green">▥</div>
+            <div><strong>@(average.Any() ? average.Average().ToString("0.#", CultureInfo.InvariantCulture) : "-")</strong><span>Ortalama</span></div>
+        </article>
+    </section>
+
+    <section class="portal-pro-panel homeworks">
+        <div class="portal-pro-panel-head">
+            <div>
+                <h2>@(isParent ? "Not Takibi" : "Notlar ve Geri Bildirimler")</h2>
+                <p>@(isParent ? $"{SafeText(Model.LinkedStudentName, "Öğrenciniz")} için öğretmen değerlendirmeleri burada." : "Öğretmen değerlendirmeleri ödevlerden ayrı, daha okunur şekilde burada.")</p>
+            </div>
+            <span>@graded.Count kayıt</span>
+        </div>
+
+        @if (!graded.Any())
+        {
+            <div class="portal-pro-empty">Henüz notlandırılmış ödev yok.</div>
+        }
+        else
+        {
+            <div class="portal-pro-homework-list">
+                @foreach (var item in graded)
+                {
+                    <article class="portal-pro-homework-card">
+                        <div class="portal-pro-homework-top">
+                            <div class="portal-pro-homework-icon">🧾</div>
+                            <div class="portal-pro-homework-title">
+                                <h3>@SafeText(item.Title, "Ödev")</h3>
+                                <div class="portal-pro-mini-row">
+                                    <span>@SafeText(item.LessonName, "Ders")</span>
+                                    <span>@SafeText(item.TeacherName, "Öğretmen")</span>
+                                    <span>@DateText(item.EvaluatedAt)</span>
+                                </div>
+                            </div>
+                            <span class="portal-pro-status graded">Not: @SafeText(item.Grade)</span>
+                        </div>
+                        <div class="portal-pro-homework-detail-grid">
+                            <div class="portal-pro-homework-box grade">
+                                <strong>Geri Bildirim</strong>
+                                <p>@SafeText(item.Feedback, "Geri bildirim yazılmamış.")</p>
+                            </div>
+                            <div class="portal-pro-homework-box submit">
+                                <strong>Teslim Bilgisi</strong>
+                                <p>@SafeText(item.SubmissionText, "Teslim açıklaması yok.")</p>
+                                <small>@DateText(item.SubmittedAt)</small>
+                            </div>
+                        </div>
+                    </article>
+                }
+            </div>
+        }
+    </section>
+</div>
